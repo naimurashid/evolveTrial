@@ -9,7 +9,7 @@
 Helpers for Bayesian adaptive platform/umbrella clinical trials, including simulation, decision rules, and reporting.
 }
 \author{
-\strong{Maintainer}: Naim Rashid
+\strong{Maintainer}: Naim Rashid \email{naim@unc.edu}
 
 }
 \keyword{internal}

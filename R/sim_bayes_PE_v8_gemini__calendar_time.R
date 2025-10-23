@@ -1,7 +1,7 @@
-library(survminer)
-library(survival)
-library(data.table)
-library(progress)
+
+
+
+
 
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 
@@ -1367,7 +1367,7 @@ pretty_scenario_matrix <- function(results_df) {
 }
 
 export_scenario_table_to_excel <- function(pretty_tbl, file_path = "scenario_summary.xlsx") {
-  library(openxlsx)
+
   wb <- createWorkbook()
   addWorksheet(wb, "Scenario Summary")
   writeDataTable(wb, sheet = 1, x = pretty_tbl, tableStyle = "TableStyleMedium9")
@@ -1405,8 +1405,8 @@ export_scenario_table_to_png <- function(results_df,
   tbl <- pretty_scenario_matrix(results_df)
 
   # minimal formatting
-  library(gt)
-  library(dplyr)
+
+
 
   tbl <- tbl %>% dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 2)))
 
@@ -1500,7 +1500,7 @@ calibrate_alpha <- function(base_args, scens_null, thr_grid_interim = c(0.9, 0.9
 # - Evaluates Type I under all-null (Doublet=6, Triplet=6) and Power under alt (Doublet=6, Triplet=9)
 # - Ranks designs that satisfy alpha <= target_alpha by highest power, then lowest Exp_N under alt
 
-library(data.table)
+
 
 grid_calibrate <- function(base_args,
                            null_med = 6,
@@ -1594,8 +1594,8 @@ grid_calibrate <- function(base_args,
 # Requires: data.table, ggplot2
 # Optional: ggrepel (for nicer labels), scales (percent axes)
 
-library(data.table)
-library(ggplot2)
+
+
 
 plot_calibration <- function(cal,
                              target_alpha = 0.10,

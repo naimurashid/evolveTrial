@@ -16,16 +16,18 @@ knitr::opts_chunk$set(
 # evolveTrial
 
 <!-- badges: start -->
+[![R-CMD-check](https://github.com/naimurashid/evolveTrial/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/naimurashid/evolveTrial/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 The goal of evolveTrial is to ...
 
 ## Installation
 
-You can install the development version of evolveTrial like so:
+You can install the development version of evolveTrial from [GitHub](https://github.com/) with:
 
 ``` r
-# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+# install.packages("pak")
+pak::pak("naimurashid/evolveTrial")
 ```
 
 ## Example
