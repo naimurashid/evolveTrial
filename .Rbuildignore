@@ -3,3 +3,6 @@
 ^CODE_OF_CONDUCT\.md$
 ^evolveTrial\.Rproj$
 ^\.Rproj\.user$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
