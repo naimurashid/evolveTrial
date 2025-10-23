@@ -1,3 +1,5 @@
 ^LICENSE\.md$
 ^README\.Rmd$
 ^CODE_OF_CONDUCT\.md$
+^evolveTrial\.Rproj$
+^\.Rproj\.user$

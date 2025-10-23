@@ -2,17 +2,10 @@ Package: evolveTrial
 Title: Adaptive Clinical Trial Utilities
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
+    person("Naim Rashid", role = c("aut", "cre"))
 Description: Helpers for Bayesian adaptive platform/umbrella clinical
     trials, including simulation, decision rules, and reporting.
-License: MIT + file LICENSE
-Authors: person(given = "Naim Rashid", role = c("aut","cre"), email =
-    NA_character_)
+License: MIT
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Imports: 
-    lifecycle
-Suggests: 
-    testthat (>= 3.0.0)
-Config/testthat/edition: 3
