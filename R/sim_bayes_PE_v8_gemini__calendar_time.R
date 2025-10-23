@@ -172,6 +172,7 @@ calculate_median_survival_piecewise <- function(hazard_rates, interval_lengths) 
 }
 
 
+
 # --- HELPER FUNCTION: Draw Posterior Hazard Samples ---
 draw_posterior_hazard_samples <- function(
   num_intervals,
@@ -1290,6 +1291,7 @@ calculate_predicted_success_prob_vs_hc_fast <- function(
 
   hit / num_posterior_draws
 }
+
 
 
 near_boundary <- function(prob_now, target, band = 0.10) {
