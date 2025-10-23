@@ -5,7 +5,7 @@ Authors@R:
     person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
 Description: Helpers for Bayesian adaptive platform/umbrella clinical
     trials, including simulation, decision rules, and reporting.
-License: MIT
+License: MIT + file LICENSE
 Authors: person(given = "Naim Rashid", role = c("aut","cre"), email =
     NA_character_)
 Encoding: UTF-8
