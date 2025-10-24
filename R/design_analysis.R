@@ -1,0 +1,693 @@
+pretty_scenario_matrix <- function(results_df) {
+  # Validate
+  if (!"scenario" %in% names(results_df)) stop("results_df must include 'scenario'")
+  if (!"Arm_Name" %in% names(results_df)) stop("results_df must include 'Arm_Name'")
+  
+  # Aggregate summary by scenario + arm
+  tbl <- data.table::as.data.table(results_df)[, .(
+    True_Median         = mean(True_Median, na.rm = TRUE),
+    Max_Planned_N       = max(Exp_N, na.rm = TRUE),
+    Exp_N               = mean(Exp_N, na.rm = TRUE),
+    Pr_Reach_Max_N      = mean(Pr_Reach_Max_N, na.rm = TRUE),
+    Type_I_Error_or_Power = mean(Type_I_Error_or_Power, na.rm = TRUE),
+    PET_Efficacy        = mean(PET_Efficacy, na.rm = TRUE),
+    PET_Futility        = mean(PET_Futility, na.rm = TRUE),
+    Pr_Final_Efficacy   = mean(Pr_Final_Efficacy, na.rm = TRUE),
+    Pr_Final_Futility   = mean(Pr_Final_Futility, na.rm = TRUE)
+  ), by = .(scenario, Arm_Name)]
+  
+  # Pivot wide: one row per scenario, arms side-by-side
+  wide <- data.table::dcast(
+    tbl,
+    scenario ~ Arm_Name,
+    value.var = c("True_Median", "Exp_N", "Pr_Reach_Max_N",
+                  "Type_I_Error_or_Power", "PET_Efficacy", "PET_Futility",
+                  "Pr_Final_Efficacy", "Pr_Final_Futility"),
+    fun.aggregate = mean
+  )
+  
+  # Optional rounding for cleaner display
+  num_cols <- names(wide)[sapply(wide, is.numeric)]
+  wide[, (num_cols) := lapply(.SD, function(x) round(x, 2)), .SDcols = num_cols]
+  
+  # Return formatted data.frame (for printing)
+  as.data.frame(wide)
+}
+
+export_scenario_table_to_excel <- function(pretty_tbl, file_path = "scenario_summary.xlsx") {
+  library(openxlsx)
+  wb <- createWorkbook()
+  addWorksheet(wb, "Scenario Summary")
+  writeDataTable(wb, sheet = 1, x = pretty_tbl, tableStyle = "TableStyleMedium9")
+  setColWidths(wb, sheet = 1, cols = 1:ncol(pretty_tbl), widths = "auto")
+  saveWorkbook(wb, file_path, overwrite = TRUE)
+  message("✅ Exported formatted table to: ", normalizePath(file_path))
+}
+
+export_scenario_table_to_png <- function(results_df,
+                                         file_path = "scenario_summary.png",
+                                         title = "Bayesian Adaptive Design Summary",
+                                         subtitle = NULL,
+                                         highlight_arm = "Triplet",
+                                         snapshot_engine = c("auto", "webshot2", "webshot"),
+                                         vwidth = 1400,
+                                         vheight = 600,
+                                         zoom = 1) {
+  if (!requireNamespace("gt", quietly = TRUE)) stop("Please install.packages('gt')")
+  if (!requireNamespace("dplyr", quietly = TRUE)) stop("Please install.packages('dplyr')")
+  
+  snapshot_engine <- match.arg(snapshot_engine)
+  
+  # engine auto-detect
+  if (snapshot_engine == "auto") {
+    if (requireNamespace("webshot2", quietly = TRUE)) {
+      snapshot_engine <- "webshot2"
+    } else if (requireNamespace("webshot", quietly = TRUE)) {
+      snapshot_engine <- "webshot"
+    } else {
+      stop("Install either 'webshot2' (Chrome/Chromium) or 'webshot' (PhantomJS).")
+    }
+  }
+  
+  # build table data (expects you already defined pretty_scenario_matrix)
+  tbl <- pretty_scenario_matrix(results_df)
+  
+  # minimal formatting
+  library(gt)
+  library(dplyr)
+  
+  tbl <- tbl %>% dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 2)))
+  
+  gt_tbl <- gt::gt(tbl) %>%
+    gt::tab_header(
+      title = gt::md(paste0("**", title, "**")),
+      subtitle = subtitle
+    ) %>%
+    gt::fmt_number(columns = where(is.numeric), decimals = 2) %>%
+    gt::opt_align_table_header("left") %>%
+    gt::tab_options(
+      table.font.size = 12,
+      data_row.padding = gt::px(4),
+      heading.background.color = "#f0f0f0",
+      column_labels.background.color = "#f7f7f7",
+      table.border.top.width = gt::px(1),
+      table.border.bottom.width = gt::px(1),
+      table.border.bottom.color = "gray"
+    )
+  
+  if (!is.null(highlight_arm)) {
+    highlight_cols <- grep(highlight_arm, names(tbl), value = TRUE)
+    if (length(highlight_cols) > 0) {
+      gt_tbl <- gt_tbl %>%
+        gt::tab_style(
+          style = gt::cell_fill(color = "#e8f4f8"),
+          locations = gt::cells_body(columns = dplyr::all_of(highlight_cols))
+        )
+    }
+  }
+  
+  # branch by engine
+  if (snapshot_engine == "webshot2") {
+    # Directly save PNG (gt uses webshot2/chromote internally)
+    gt::gtsave(
+      data = gt_tbl,
+      filename = file_path,
+      vwidth = vwidth,
+      vheight = vheight,
+      zoom = zoom
+    )
+  } else {
+    # Save HTML then rasterize with webshot (PhantomJS)
+    if (!requireNamespace("webshot", quietly = TRUE)) {
+      stop("snapshot_engine='webshot' requires the 'webshot' package.")
+    }
+    html_tmp <- sub("\\.png$", ".html", file_path, ignore.case = TRUE)
+    gt::gtsave(
+      data = gt_tbl,
+      filename = html_tmp,
+      vwidth = vwidth,
+      vheight = vheight,
+      zoom = zoom
+    )
+    webshot::webshot(
+      url = html_tmp,
+      file = file_path,
+      vwidth = vwidth,
+      vheight = vheight,
+      zoom = zoom
+    )
+  }
+  
+  message("✅ Image saved: ", normalizePath(file_path))
+}
+
+calibrate_alpha <- function(base_args, scens_null, thr_grid_interim = c(0.9, 0.95, 0.975),
+                            thr_grid_final = c(0.95, 0.975, 0.99), sims = 300) {
+  best <- NULL
+  base_args$num_simulations <- sims
+  for (ti in thr_grid_interim) for (tf in thr_grid_final) {
+    args <- base_args
+    args$efficacy_threshold_current_prob_hc <- ti
+    args$final_success_posterior_prob_threshold <- tf
+    res <- run_scenarios(args, scens_null, parallel = TRUE, seed = 123)
+    # Type I = early+final efficacy for the experimental arm(s) under null scenario
+    typeI <- res[res$Arm_Name != args$reference_arm_name & res$scenario == 1, "Type_I_Error_or_Power"]
+    alpha_hat <- mean(typeI)
+    cand <- list(ti = ti, tf = tf, alpha = alpha_hat)
+    if (is.null(best) || (alpha_hat < best$alpha && alpha_hat <= 0.10)) best <- cand
+    cat(sprintf("Interim=%.3f Final=%.3f => alpha=%.3f\n", ti, tf, alpha_hat))
+  }
+  best
+}
+
+# === Grid search for Type I / Power vs thresholds & margin ===
+# - Sweeps interim success threshold (vs HC), final success threshold, and Triplet success margin
+# - Evaluates Type I under all-null (Doublet=6, Triplet=6) and Power under alt (Doublet=6, Triplet=9)
+# - Ranks designs that satisfy alpha <= target_alpha by highest power, then lowest Exp_N under alt
+
+library(data.table)
+
+grid_calibrate <- function(base_args,
+                           null_med = 6,
+                           alt_med  = 9,
+                           margins_abs = c(1, 2, 3),          # success margin for Triplet in months
+                           interim_thr_grid = c(0.90, 0.95),  # Pr(success|data) at interim vs HC
+                           final_thr_grid   = c(0.95, 0.975, 0.99), # Pr(success|final posterior)
+                           sims = 400,                         # increase for stability
+                           target_alpha = 0.10,
+                           seed = 123,
+                           parallel = TRUE) {
+  
+  # Build two scenarios: (1) all-null, (2) Triplet=alt
+  scens <- scenarios_from_grid(list(
+    weibull_median_true_arms = list(
+      c(Doublet = null_med, Triplet = null_med),
+      c(Doublet = null_med, Triplet = alt_med)
+    )
+  ))
+  
+  combos <- CJ(margin = margins_abs,
+               interim_thr = interim_thr_grid,
+               final_thr   = final_thr_grid)
+  
+  results <- vector("list", nrow(combos))
+  
+  for (i in seq_len(nrow(combos))) {
+    m  <- combos$margin[i]
+    ti <- combos$interim_thr[i]
+    tf <- combos$final_thr[i]
+    
+    args_i <- base_args
+    
+    # --- thresholds being calibrated ---
+    args_i$efficacy_threshold_current_prob_hc <- ti
+    args_i$final_success_posterior_prob_threshold <- tf
+    
+    # --- require superiority margin for Triplet only (Doublet stays at null) ---
+    args_i$median_pfs_success_threshold_arms <- c(Doublet = null_med, Triplet = null_med + m)
+    
+    # --- keep predictive disabled during calibration (safer for Type I) ---
+    args_i$predictive_fast <- FALSE
+    
+    # --- set sims & seed ---
+    args_i$num_simulations <- sims
+    
+    # run
+    res <- run_scenarios(args_i, scens, parallel = parallel, seed = seed)
+    
+    # Pull alpha (scenario 1, Triplet arm) & power (scenario 2, Triplet arm)
+    r_null <- res[res$scenario == 1 & res$Arm_Name == "Triplet", ]
+    r_alt  <- res[res$scenario == 2 & res$Arm_Name == "Triplet", ]
+    
+    alpha_hat <- mean(r_null$Type_I_Error_or_Power)
+    power_hat <- mean(r_alt$Type_I_Error_or_Power)
+    
+    out <- data.table(
+      margin_abs = m,
+      interim_thr = ti,
+      final_thr = tf,
+      alpha = alpha_hat,
+      power = power_hat,
+      ExpN_null = mean(r_null$Exp_N),
+      ExpN_alt  = mean(r_alt$Exp_N),
+      PET_Eff_null = mean(r_null$PET_Efficacy),
+      PET_Eff_alt  = mean(r_alt$PET_Efficacy),
+      PET_Fut_null = mean(r_null$PET_Futility),
+      PET_Fut_alt  = mean(r_alt$PET_Futility)
+    )
+    
+    results[[i]] <- out
+  }
+  
+  grid <- rbindlist(results)
+  
+  # Designs meeting the alpha target
+  ok <- grid[alpha <= target_alpha]
+  setorder(ok, -power, ExpN_alt, margin_abs, interim_thr, final_thr)
+  
+  list(all = grid[order(margin_abs, interim_thr, final_thr)],
+       feasible = ok,
+       top = head(ok, 10))
+}
+
+# =========================
+# Power vs Type I plots
+# =========================
+# Requires: data.table, ggplot2
+# Optional: ggrepel (for nicer labels), scales (percent axes)
+
+library(data.table)
+library(ggplot2)
+
+plot_calibration <- function(cal,
+                             target_alpha = 0.10,
+                             label_top_n = 3) {
+  stopifnot(is.list(cal), !is.null(cal$all))
+  df <- as.data.table(cal$all)
+  if (nrow(df) == 0L) stop("cal$all is empty")
+  
+  # Facet label helpers
+  df[, margin_lab := sprintf("Δ = %s", format(margin_abs, trim = TRUE))]
+  df[, final_lab  := paste0("Final thr = ", final_thr)]
+  df[, interim_lab := paste0("Interim thr=", interim_thr)]
+  
+  # Pareto frontier within each facet (margin x final_thr)
+  setorder(df, margin_abs, final_lab, alpha)
+  df[, frontier := power == cummax(power), by = .(margin_abs, final_lab)]
+  
+  # best feasible (alpha <= target) to annotate
+  best_tbl <- if (!is.null(cal$feasible) && nrow(cal$feasible) > 0L) {
+    bt <- as.data.table(cal$feasible)
+    setorder(bt, -power, ExpN_alt)
+    bt[, margin_lab := sprintf("Δ = %s", format(margin_abs, trim = TRUE))]
+    bt[, final_lab  := paste0("Final thr = ", final_thr)]
+    bt[1:min(label_top_n, .N)]
+  } else data.table()
+  
+  p <- ggplot(df, aes(x = alpha, y = power,
+                      color = margin_lab,
+                      shape = factor(interim_thr))) +
+    geom_hline(yintercept = 0, linewidth = 0.2, color = "grey70") +
+    geom_vline(xintercept = target_alpha, linetype = 2, linewidth = 0.4) +
+    geom_point(size = 2, alpha = 0.9) +
+    # frontier lines
+    geom_line(data = df[frontier == TRUE],
+              aes(group = interaction(margin_lab, final_lab)),
+              linewidth = 0.7, alpha = 0.8) +
+    facet_wrap(~ final_lab) +
+    labs(
+      x = "Type I error (alpha)",
+      y = "Power",
+      color = "Success margin",
+      shape = "Interim threshold",
+      title = "Design calibration: Power vs Type I",
+      subtitle = sprintf("Vertical dashed line = target alpha (%g)", target_alpha)
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(legend.position = "bottom")
+  
+  # Annotate top feasible designs (if any)
+  if (nrow(best_tbl) > 0L) {
+    if (requireNamespace("ggrepel", quietly = TRUE)) {
+      p <- p + ggrepel::geom_label_repel(
+        data = best_tbl,
+        aes(x = alpha, y = power,
+            label = paste0("Δ=", margin_abs,
+                           "; Int=", interim_thr,
+                           "; Fin=", final_thr,
+                           "; N~", round(ExpN_alt, 1))),
+        size = 3, label.size = 0.15, alpha = 0.9,
+        fill = "white", label.padding = unit(0.15, "lines"),
+        max.overlaps = Inf
+      )
+    } else {
+      p <- p + geom_text(
+        data = best_tbl,
+        aes(x = alpha, y = power,
+            label = paste0("Δ=", margin_abs,
+                           ", Int=", interim_thr,
+                           ", Fin=", final_thr)),
+        size = 3, vjust = -0.8
+      )
+    }
+  }
+  
+  # Optional percent formatting if 'scales' is available
+  if (requireNamespace("scales", quietly = TRUE)) {
+    p <- p +
+      scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                         limits = c(0, 1))
+  } else {
+    p <- p + coord_cartesian(ylim = c(0, 1))
+  }
+  
+  p
+}
+
+# --- Pick best calibration row and bake into args ---
+adopt_calibration <- function(cal, base_args, null_med, alt_med, which = 1L) {
+  stopifnot(is.list(cal), !is.null(cal$top), nrow(cal$top) >= which)
+  best <- data.table::as.data.table(cal$top)[which]
+  
+  args_star <- base_args
+  # success thresholds from calibration
+  args_star$efficacy_threshold_current_prob_hc     <- best$interim_thr
+  args_star$final_success_posterior_prob_threshold <- best$final_thr
+  # set Triplet superiority margin (absolute months)
+  args_star$median_pfs_success_threshold_arms <- c(
+    Doublet = null_med,
+    Triplet = null_med + best$margin_abs
+  )
+  # keep predictive off during calibration/exploration (safer for Type I)
+  args_star$predictive_fast <- FALSE
+  
+  # 2-scenario grid: all-null vs Triplet=alt
+  scens2 <- scenarios_from_grid(list(
+    weibull_median_true_arms = list(
+      c(Doublet = null_med, Triplet = null_med),
+      c(Doublet = null_med, Triplet = alt_med)
+    )
+  ))
+  
+  list(args_star = args_star, pick = best, scens2 = scens2)
+}
+
+# --- Explore early-stopping & information gates around a calibrated design ---
+# Sweeps: futility threshold, min events, min median FU, and calendar look beat
+# Explore early stopping while varying the futility comparator for *all* experimental arms
+# Comparator options:
+#   base = "null+delta": uses P(median < null + delta | data) >= fut_thr  => stop
+#   base = "alt"       : uses P(median < alt         | data) >= fut_thr  => stop
+#
+# Notes:
+# - Uses adopt_calibration() to import the calibrated success/margin from `cal` (your prior step).
+# - Keeps predictive_fast = FALSE while exploring early-stopping knobs (clean Type I accounting).
+#
+# --- Explore early-stopping & information gates around a calibrated design ---
+# Adds sweeps over:
+#   * per-arm gates (min_events_per_arm, min_median_followup_per_arm, min_person_time_frac_per_arm)
+#   * schedule type: "calendar" (beats) OR "persontime" (milestones with a calendar backstop)
+#
+# For person-time schedules, pass a LIST of milestone vectors via `pt_milestones_choices`,
+# e.g. list(c(0.30,0.45,0.60,0.80,1.00), c(0.30,0.60,0.90)).
+#
+explore_early_stopping_from_cal <- function(
+    cal,
+    base_args,
+    null_med,
+    alt_med,
+    base                  = c("null+delta","alt"),
+    futility_delta_grid   = c(0, 1, 2, 3),    # only used when base = "null+delta"
+    fut_thr_grid          = c(0.6, 0.7, 0.8, 0.9),
+    
+    # legacy/global gates
+    min_events_grid       = c(12, 18),
+    min_medFU_grid        = c(3, 4.5),
+    
+    # schedule sweep
+    schedule_modes        = c("calendar","persontime"),
+    beat_grid             = c(3, 6),          # used when schedule="calendar"
+    
+    # person-time schedule knobs
+    pt_milestones_choices = list(c(0.30,0.45,0.60,0.80,1.00)),
+    latest_calendar_look_grid = c(Inf),       # e.g., c(12, 18) months as a backstop
+    
+    # per-arm gates (NEW)
+    min_events_per_arm_grid          = c(8, 12),
+    min_median_followup_per_arm_grid = c(0, 4.5),
+    min_person_time_frac_per_arm_grid= c(0.00, 0.25),
+    
+    sims                 = 400,
+    seed                 = 123,
+    parallel             = (.Platform$OS.type == "unix")
+) {
+  base <- match.arg(base)
+  stopifnot(is.list(cal), !is.null(cal$top) || !is.null(cal$feasible))
+  
+  # 1) import calibrated success thresholds/margin & the two scenarios (null, alt)
+  adopted  <- adopt_calibration(cal, base_args, null_med = null_med, alt_med = alt_med, which = 1L)
+  args0    <- adopted$args_star
+  scens2   <- adopted$scens2
+  exp_arms <- exp_arms_from_args(args0)
+  
+  # helper to stringify milestone vectors for the output table
+  fmt_frac_vec <- function(x) if (is.null(x)) "NULL" else paste0(sprintf("%.2f", x), collapse = ",")
+  
+  # build the list of combinations manually (because milestones is a list-column)
+  combos <- list()
+  for (ft in fut_thr_grid) {
+    # choose the futility comparator set for exp arms
+    fut_deltas <- if (base == "null+delta") futility_delta_grid else 0
+    for (fd in fut_deltas) {
+      for (ev in min_events_grid) {
+        for (mu in min_medFU_grid) {
+          for (me in min_events_per_arm_grid) {
+            for (mfu in min_median_followup_per_arm_grid) {
+              for (mpt in min_person_time_frac_per_arm_grid) {
+                
+                # schedule: calendar beats
+                if ("calendar" %in% schedule_modes) {
+                  for (bt in beat_grid) {
+                    combos[[length(combos) + 1L]] <- data.table::data.table(
+                      schedule = "calendar",
+                      fut_base = base,
+                      fut_delta = fd,
+                      fut_thr = ft,
+                      min_events = ev,
+                      min_medFU = mu,
+                      beat = bt,
+                      pt_milestones = NA_character_,
+                      latest_calendar_look = NA_real_,
+                      min_events_per_arm = me,
+                      min_median_followup_per_arm = mfu,
+                      min_person_time_frac_per_arm = mpt
+                    )
+                  }
+                }
+                
+                # schedule: person-time milestones
+                if ("persontime" %in% schedule_modes) {
+                  for (ml in seq_along(pt_milestones_choices)) {
+                    mlv <- pt_milestones_choices[[ml]]
+                    stopifnot(is.numeric(mlv), all(mlv > 0 & mlv <= 1))
+                    for (lc in latest_calendar_look_grid) {
+                      combos[[length(combos) + 1L]] <- data.table::data.table(
+                        schedule = "persontime",
+                        fut_base = base,
+                        fut_delta = fd,
+                        fut_thr = ft,
+                        min_events = ev,
+                        min_medFU = mu,
+                        beat = NA_real_,
+                        pt_milestones = fmt_frac_vec(mlv),
+                        latest_calendar_look = lc,
+                        min_events_per_arm = me,
+                        min_median_followup_per_arm = mfu,
+                        min_person_time_frac_per_arm = mpt
+                      )
+                    }
+                  }
+                }
+                
+              } # mpt
+            } # mfu
+          } # me
+        } # mu
+      } # ev
+    } # fd
+  } # ft
+  
+  combos_dt <- data.table::rbindlist(combos, use.names = TRUE)
+  out <- vector("list", nrow(combos_dt))
+  
+  # 2) iterate & simulate
+  for (i in seq_len(nrow(combos_dt))) {
+    row <- combos_dt[i]
+    
+    args_i <- args0
+    
+    # set the *interim futility* comparator for experimental arms
+    args_i <- set_futility_medians(
+      args    = args_i,
+      null_med = null_med,
+      alt_med  = alt_med,
+      base     = row$fut_base,
+      delta    = row$fut_delta
+    )
+    args_i$posterior_futility_threshold_hc <- row$fut_thr
+    
+    # global gates
+    args_i$min_events_for_analysis <- row$min_events
+    args_i$min_median_followup     <- row$min_medFU
+    
+    # per-arm gates
+    args_i$min_events_per_arm             <- row$min_events_per_arm
+    args_i$min_median_followup_per_arm    <- row$min_median_followup_per_arm
+    args_i$min_person_time_frac_per_arm   <- row$min_person_time_frac_per_arm
+    
+    # schedule
+    if (row$schedule == "calendar") {
+      args_i$interim_calendar_beat   <- row$beat
+      args_i$person_time_milestones  <- NULL
+      args_i$latest_calendar_look    <- Inf
+    } else {
+      # person-time milestones
+      mlv <- as.numeric(strsplit(row$pt_milestones, ",")[[1]])
+      args_i$person_time_milestones <- mlv
+      args_i$latest_calendar_look   <- row$latest_calendar_look
+      # keep a (small) calendar beat as a guard if you like, but we’ll let the backstop rule dominate
+      args_i$interim_calendar_beat  <- args0$interim_calendar_beat %||% 2
+    }
+    
+    # clean exploration (predictive off)
+    args_i$predictive_fast <- FALSE
+    args_i$num_simulations <- sims
+    
+    # run null vs alt
+    res <- run_scenarios(args_i, adopted$scens2, parallel = parallel, seed = seed)
+    
+    r_null <- res[res$scenario == 1 & res$Arm_Name %in% exp_arms, ]
+    r_alt  <- res[res$scenario == 2 & res$Arm_Name %in% exp_arms, ]
+    
+    out[[i]] <- data.table::data.table(
+      schedule     = row$schedule,
+      fut_base     = row$fut_base,
+      fut_delta    = row$fut_delta,
+      fut_thr      = row$fut_thr,
+      min_events   = row$min_events,
+      min_medFU    = row$min_medFU,
+      beat         = ifelse(row$schedule == "calendar", row$beat, NA_real_),
+      pt_milestones = ifelse(row$schedule == "persontime", row$pt_milestones, NA_character_),
+      latest_calendar_look = ifelse(row$schedule == "persontime", row$latest_calendar_look, NA_real_),
+      
+      min_events_per_arm           = row$min_events_per_arm,
+      min_median_followup_per_arm  = row$min_median_followup_per_arm,
+      min_person_time_frac_per_arm = row$min_person_time_frac_per_arm,
+      
+      alpha        = mean(r_null$Type_I_Error_or_Power),
+      power        = mean(r_alt$Type_I_Error_or_Power),
+      ExpN_null    = mean(r_null$Exp_N),
+      ExpN_alt     = mean(r_alt$Exp_N),
+      PET_Eff_null = mean(r_null$PET_Efficacy),
+      PET_Eff_alt  = mean(r_alt$PET_Efficacy),
+      PET_Fut_null = mean(r_null$PET_Futility),
+      PET_Fut_alt  = mean(r_alt$PET_Futility)
+    )
+  }
+  
+  early <- data.table::rbindlist(out, use.names = TRUE, fill = TRUE)
+  data.table::setorder(
+    early,
+    schedule, fut_base, fut_delta, fut_thr,
+    min_events, min_medFU,
+    min_events_per_arm, min_median_followup_per_arm, min_person_time_frac_per_arm,
+    beat, pt_milestones, latest_calendar_look
+  )
+  early[]
+}
+
+
+# --- Quick plot (optional) ---
+plot_early_tradeoff <- function(early_df,
+                                target_alpha = 0.10,
+                                fix_min_ev = NULL,
+                                fix_mfu    = NULL,
+                                fix_beat   = NULL) {
+  df <- data.table::as.data.table(early_df)
+  if (!is.null(fix_min_ev)) df <- df[min_events == fix_min_ev]
+  if (!is.null(fix_mfu))    df <- df[min_medFU  == fix_mfu]
+  if (!is.null(fix_beat))   df <- df[beat       == fix_beat]
+  if (nrow(df) == 0L) stop("No rows after filtering—relax the fixed settings.")
+  
+  if (requireNamespace("ggplot2", quietly = TRUE)) {
+    ggplot2::ggplot(df, ggplot2::aes(alpha, power, color = factor(fut_thr))) +
+      ggplot2::geom_vline(xintercept = target_alpha, linetype = 2, linewidth = 0.4) +
+      ggplot2::geom_point(size = 2) +
+      ggplot2::geom_path(ggplot2::aes(group = fut_thr), linewidth = 0.6, alpha = 0.7) +
+      ggplot2::facet_grid(min_events ~ min_medFU, labeller = "label_both") +
+      ggplot2::theme_minimal(base_size = 12) +
+      ggplot2::labs(x = "Type I error", y = "Power", color = "Futility thr")
+  } else {
+    message("Install ggplot2 to plot. Returning data.")
+    df
+  }
+}
+
+
+# --- Filter + rank early-stopping designs by constraints ---
+filter_early_grid <- function(early_df,
+                              alpha_cap   = 0.10,
+                              power_floor = 0.70) {
+  df <- data.table::as.data.table(early_df)
+  ok <- df[alpha <= alpha_cap & power >= power_floor]
+  if (nrow(ok) == 0L) return(ok)
+  
+  # Rank: smallest N under alt, then more futility under null, then less efficacy under null
+  data.table::setorder(ok, ExpN_alt, -PET_Fut_null, PET_Eff_null, fut_thr, min_events, min_medFU, beat)
+  ok[]
+}
+
+
+# --- Pick the single recommended design under constraints ---
+recommend_design_from_early <- function(df,
+                                        alpha_cap = 0.10,
+                                        power_floor = 0.80,
+                                        pet_fut_cap = NULL) {
+  df_filt <- df[alpha <= alpha_cap & power >= power_floor]
+  if (!is.null(pet_fut_cap)) {
+    df_filt <- df_filt[PET_Fut_alt <= pet_fut_cap]
+  }
+  if (nrow(df_filt) == 0)
+    stop("No designs meet specified criteria.")
+  
+  df_filt[order(-power, PET_Fut_alt, ExpN_alt)][1]
+}
+
+
+# --- Bake the recommended early-stopping knobs back into args ---
+apply_recommended_to_args <- function(args_star, rec_row) {
+  stopifnot(nrow(rec_row) == 1L)
+  a <- args_star
+  a$posterior_futility_threshold_hc <- rec_row$fut_thr
+  a$min_events_for_analysis         <- rec_row$min_events
+  a$min_median_followup             <- rec_row$min_medFU
+  a$interim_calendar_beat           <- rec_row$beat
+  
+  # NEW: carry per-arm gates if present
+  if ("min_events_per_arm" %in% names(rec_row)) {
+    a$min_events_per_arm <- rec_row$min_events_per_arm
+  }
+  if ("min_median_followup_per_arm" %in% names(rec_row)) {
+    a$min_median_followup_per_arm <- rec_row$min_median_followup_per_arm
+  }
+  if ("min_person_time_frac_per_arm" %in% names(rec_row)) {
+    a$min_person_time_frac_per_arm <- rec_row$min_person_time_frac_per_arm
+  }
+  a
+}
+
+
+# All non-reference arms are considered "experimental"
+exp_arms_from_args <- function(args) {
+  setdiff(args$arm_names, args$reference_arm_name)
+}
+
+
+# Modify args so interim *futility* compares to either:
+#   - null + delta  (base = "null+delta"; delta is a single number for all exp arms)
+#   - alt           (base = "alt")
+# The HC/reference arm keeps its "null" futility threshold.
+set_futility_medians <- function(args, null_med, alt_med, base = c("null+delta","alt"), delta = 0) {
+  base <- match.arg(base)
+  arms_exp <- exp_arms_from_args(args)
+  fut <- args$futility_median_arms
+  if (base == "null+delta") {
+    fut[arms_exp] <- null_med + delta
+  } else if (base == "alt") {
+    fut[arms_exp] <- alt_med
+  }
+  args$futility_median_arms <- fut
+  args
+}
+
