@@ -1,8 +1,3 @@
-library(survminer)
-library(survival)
-library(data.table)
-library(progress)
-
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 
 cum_person_time_arm <- function(state, arm, current_time, max_follow_up, interval_cutpoints) {
@@ -50,36 +45,36 @@ simulate_piecewise_exponential_data <- function(
 ) {
   # Simulates PFS times from a piecewise exponential distribution and applies censoring.
   # The LAST interval is treated as open-ended (extends to infinity).
-  
+
   num_intervals <- length(interval_cutpoints) - 1
   interval_lengths <- diff(interval_cutpoints)
-  
+
   if (length(hazard_rates) != num_intervals) {
     stop("hazard_rates must have length num_intervals (length(interval_cutpoints) - 1).")
   }
-  
+
   if (is.null(censor_max_time)) censor_max_time <- max_follow_up
   if (censor_min_time < 0 || censor_max_time < 0 || censor_min_time > censor_max_time) {
     stop("Require 0 <= censor_min_time <= censor_max_time.")
   }
-  
+
   true_pfs_times <- numeric(num_patients)
   cumulative_hazards_at_cutpoints <- c(0, cumsum(hazard_rates * interval_lengths))
-  
+
   for (p in 1:num_patients) {
     U <- runif(1)
     target_H <- -log(U)
-    
+
     # Find first interval where cumulative hazard exceeds target
     event_interval_idx <- which(target_H <= cumulative_hazards_at_cutpoints[-1])[1]
-    
+
     if (is.na(event_interval_idx)) {
       # Spill into an open-ended last interval
       event_interval_idx <- num_intervals
       lambda_j <- hazard_rates[event_interval_idx]
       interval_start_time <- interval_cutpoints[event_interval_idx]
       H_start <- cumulative_hazards_at_cutpoints[event_interval_idx]
-      
+
       if (lambda_j == 0) {
         true_pfs_times[p] <- Inf
       } else {
@@ -91,7 +86,7 @@ simulate_piecewise_exponential_data <- function(
       lambda_j <- hazard_rates[event_interval_idx]
       interval_start_time <- interval_cutpoints[event_interval_idx]
       H_start <- cumulative_hazards_at_cutpoints[event_interval_idx]
-      
+
       if (lambda_j == 0) {
         if (H_start >= target_H) {
           true_pfs_times[p] <- interval_start_time
@@ -104,15 +99,15 @@ simulate_piecewise_exponential_data <- function(
       }
     }
   }
-  
+
   # Apply censoring
   random_censor_times <- runif(num_patients, min = censor_min_time, max = censor_max_time)
   admin_censor_times  <- rep(max_follow_up, num_patients)
   effective_censor_times <- pmin(random_censor_times, admin_censor_times)
-  
+
   observed_time <- pmin(true_pfs_times, effective_censor_times)
   event_status  <- as.numeric(true_pfs_times <= effective_censor_times)
-  
+
   data.frame(
     id = start_id:(start_id + num_patients - 1),
     true_pfs_time = true_pfs_times,
