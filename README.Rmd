@@ -54,3 +54,37 @@ plot(pressure)
 ```
 
 In that case, don't forget to commit and push the resulting figure files, so they display on GitHub and CRAN.
+
+## Diagnosing interim gating choices
+
+When early stopping does not seem to occur during simulations, it is
+often because the information gates (minimum events, median follow-up,
+or required person-time) postpone the first informative interim look
+until late in the trial.  The helper `estimate_vsref_gate_timing()` gives
+quick lower-bound heuristics for when those gates can all be satisfied
+under deterministic accrual.
+
+``` r
+library(evolveTrial)
+
+args <- list(
+  arm_names = c("Doublet", "Triplet"),
+  reference_arm_name = "Doublet",
+  overall_accrual_rate = 3,
+  randomization_probs = c(Doublet = 0.5, Triplet = 0.5),
+  max_total_patients_per_arm = c(Doublet = 70, Triplet = 70),
+  max_follow_up_sim = 24,
+  min_events_per_arm = 8,
+  min_median_followup_per_arm = 3,
+  min_person_time_frac_per_arm = 0.15
+)
+
+estimate_vsref_gate_timing(args)
+```
+
+For the configuration above the joint lower bound is roughly
+18 months, meaning that with 3-month calendar beats the first eligible
+interim look will occur near the sixth look.  Adjusting the information
+gates (for example by lowering the person-time fraction or the minimum
+median follow-up) yields earlier opportunities for efficacy/futility
+stopping.
