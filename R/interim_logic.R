@@ -56,15 +56,46 @@ calculate_current_prob_vs_ref <- function(slCtrl, slTrt, args) {
 
 interim_check <- function(state, current_time, args, diagnostics = FALSE) {
   if (isTRUE(args$compare_arms_option)) {
-    slC <- slice_arm_data_at_time(state$registries[[args$reference_arm_name]], current_time,
-                                  args$max_follow_up_sim, args$interval_cutpoints_sim)
+    reference_arm <- args$reference_arm_name
+    if (is.null(reference_arm) || !reference_arm %in% names(state$registries)) {
+      stop("interim_check(): args$reference_arm_name must reference an existing arm.")
+    }
 
-    trt_name <- setdiff(args$arm_names, args$reference_arm_name)[1]
+    experimental_arms <- args$arm_names[args$arm_names != reference_arm]
+    if (length(experimental_arms) == 0) {
+      if (diagnostics) message(sprintf("[t=%.2f] vsREF skipped: no experimental arms provided", current_time))
+      return(state)
+    }
+
+    active_experimental <- experimental_arms[
+      experimental_arms %in% names(state$arm_status) &
+        state$arm_status[experimental_arms] == "recruiting"
+    ]
+    if (length(active_experimental) == 0) {
+      if (diagnostics) message(sprintf("[t=%.2f] vsREF skipped: no recruiting experimental arms", current_time))
+      return(state)
+    }
+
+    target_override <- args$compare_arms_target_arm
+    if (!is.null(target_override)) {
+      target_override <- target_override[target_override %in% active_experimental]
+    }
+    trt_name <- if (length(target_override) > 0) {
+      target_override[1]
+    } else {
+      active_experimental[1]
+    }
+
+    slC <- slice_arm_data_at_time(state$registries[[reference_arm]], current_time,
+                                  args$max_follow_up_sim, args$interval_cutpoints_sim)
     slT <- slice_arm_data_at_time(state$registries[[trt_name]], current_time,
                                   args$max_follow_up_sim, args$interval_cutpoints_sim)
 
-    if (!gates_pass_for_both_arms(slC, slT, args, diagnostics = diagnostics)) {
-      if (diagnostics) message(sprintf("[t=%.2f] vsREF gated out", current_time))
+    args_gate <- args
+    args_gate$arm_names <- c(reference_arm, trt_name)
+
+    if (!gates_pass_for_both_arms(slC, slT, args_gate, diagnostics = diagnostics)) {
+      if (diagnostics) message(sprintf("[t=%.2f] vsREF gated out for %s vs %s", current_time, trt_name, reference_arm))
       return(state)
     }
 
@@ -72,8 +103,8 @@ interim_check <- function(state, current_time, args, diagnostics = FALSE) {
     pr_fut <- calculate_current_prob_vs_ref_futility(slC, slT, args)
 
     if (diagnostics) {
-      message(sprintf("[t=%.2f] vsREF PrEff>=%.2f: %.3f | PrFut>=%.2f (m=%.2f): %.3f",
-                      current_time,
+      message(sprintf("[t=%.2f] vsREF %s>%s PrEff>=%.2f: %.3f | PrFut>=%.2f (m=%.2f): %.3f",
+                      current_time, trt_name, reference_arm,
                       coalesce_num(args$efficacy_threshold_vs_ref_prob, NA_real_), pr_eff,
                       coalesce_num(args$futility_threshold_vs_ref_prob, NA_real_), coalesce_num(args$compare_arms_futility_margin, 0), pr_fut))
     }

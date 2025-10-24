@@ -123,8 +123,12 @@ slice_arm_data_at_time <- function(registry_df, calendar_time, max_follow_up, in
 gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
   # Arm names: take control from args$reference_arm_name; treatment is "the other one"
   ctrl_name <- args$reference_arm_name %||% "Doublet"
-  arm_names <- args$arm_names %||% c("Doublet","Triplet")
-  trt_name  <- setdiff(arm_names, ctrl_name)[1] %||% "Triplet"
+  arm_names <- args$arm_names
+  if (is.null(arm_names) || length(arm_names) == 0) {
+    arm_names <- c("Doublet", "Triplet")
+  }
+  trt_candidates <- arm_names[arm_names != ctrl_name]
+  trt_name <- if (length(trt_candidates) > 0) trt_candidates[1] else "Triplet"
 
   # thresholds (per-arm gates)
   min_ev   <- coalesce_num(args$min_events_per_arm, 0)

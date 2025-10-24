@@ -50,7 +50,6 @@ run_simulation_pure <- function(
     min_events_per_arm = NULL,
     min_median_followup_per_arm = NULL,
     min_person_time_frac_per_arm = 0,
-    min_events_ratio_arm_vs_ref = 0.0,
     # NEW: person-time milestones
     person_time_milestones = NULL,
     latest_calendar_look = Inf
@@ -139,7 +138,6 @@ run_simulation_pure <- function(
     min_events_per_arm = min_events_per_arm,
     min_median_followup_per_arm = min_median_followup_per_arm,
     min_person_time_frac_per_arm = min_person_time_frac_per_arm,
-    min_events_ratio_arm_vs_ref = min_events_ratio_arm_vs_ref,
     max_PT_per_arm = max_PT_per_arm
   )
   
@@ -386,4 +384,3 @@ run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL) {
   
   data.table::rbindlist(out, use.names = TRUE, fill = TRUE)
 }
-
