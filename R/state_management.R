@@ -9,10 +9,10 @@ calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
       person_time_per_interval = rep(0, num_intervals)
     ))
   }
-  
+
   dt <- as.data.table(patient_data)
   results_template <- data.table(interval_num = 1:num_intervals)
-  
+
   # 1) Events per interval with bullet-proof indexing
   if (nrow(dt[event_status == 1]) > 0) {
     ev_times <- dt[event_status == 1, observed_time]
@@ -35,7 +35,7 @@ calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
   } else {
     event_counts <- data.table(interval_num = 1:num_intervals, events = 0L)
   }
-  
+
   # 2) Person-time per interval (left-closed, right-open)
   pt_list <- lapply(1:num_intervals, function(i) {
     lower_bound <- interval_cutpoints[i]
@@ -49,13 +49,13 @@ calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
     data.table(interval_num = i, person_time = sum(time_spent))
   })
   pt_summary <- rbindlist(pt_list)
-  
+
   # 3) Merge to full vectors
   merged <- merge(results_template, event_counts, by = "interval_num", all.x = TRUE)
   merged <- merge(merged, pt_summary,   by = "interval_num", all.x = TRUE)
   merged[is.na(events), events := 0L]
   merged[is.na(person_time), person_time := 0]
-  
+
   list(
     events_per_interval = merged$events,
     person_time_per_interval = merged$person_time
@@ -104,8 +104,7 @@ slice_arm_data_at_time <- function(registry_df, calendar_time, max_follow_up, in
   observed_time <- pmin(registry_df$true_event_time,
                         registry_df$random_censor_time,
                         time_available)
-  event_status  <- as.integer(registry_df$true_event_time <= pmin(registry_df$random_censor_time,
-                                                                  time_available))
+  event_status  <- as.integer(registry_df$true_event_time <= pmin(registry_df$random_censor_time, time_available))
   keep <- time_available > 0
   pd <- data.frame(
     observed_time = observed_time[keep],
@@ -121,42 +120,57 @@ slice_arm_data_at_time <- function(registry_df, calendar_time, max_follow_up, in
 
 # --- PER-ARM GATES FOR vs-ref (UPDATED) --------------------------------------
 
-gates_pass_for_both_arms <- function(slA, slB, args, armA_name, armB_name) {
-  stopifnot(!missing(armA_name), !missing(armB_name))
+gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
+  # Arm names: take control from args$reference_arm_name; treatment is "the other one"
+  ctrl_name <- args$reference_arm_name %||% "Doublet"
+  arm_names <- args$arm_names %||% c("Doublet","Triplet")
+  trt_name  <- setdiff(arm_names, ctrl_name)[1] %||% "Triplet"
+
+  # thresholds (per-arm gates)
   min_ev   <- coalesce_num(args$min_events_per_arm, 0)
   min_mfu  <- coalesce_num(args$min_median_followup_per_arm, 0)
   min_pt_f <- coalesce_num(args$min_person_time_frac_per_arm, 0)
-  
-  evA  <- coalesce_num(slA$metrics$events_total, 0)
-  evB  <- coalesce_num(slB$metrics$events_total, 0)
-  mfuA <- coalesce_num(slA$metrics$median_followup, 0)
-  mfuB <- coalesce_num(slB$metrics$median_followup, 0)
-  
-  ptA  <- coalesce_num(slA$metrics$person_time_total, 0)
-  ptB  <- coalesce_num(slB$metrics$person_time_total, 0)
-  
-  lookup_max_pt <- function(arm_name) {
-    max_pt <- NULL
-    if (!is.null(args$max_PT_per_arm)) {
-      max_pt <- args$max_PT_per_arm[[arm_name]]
+
+  # extract metrics
+  evC  <- coalesce_num(slCtrl$metrics$events_total, 0)
+  evT  <- coalesce_num(slTrt$metrics$events_total, 0)
+  mfuC <- coalesce_num(slCtrl$metrics$median_followup, 0)
+  mfuT <- coalesce_num(slTrt$metrics$median_followup, 0)
+  ptC  <- coalesce_num(slCtrl$metrics$person_time_total, 0)
+  ptT  <- coalesce_num(slTrt$metrics$person_time_total, 0)
+
+  # denominators (person-time caps) — handle unnamed vectors safely
+  mtn <- args$max_total_patients_per_arm
+  if (is.null(names(mtn)) || any(names(mtn) == "")) {
+    # fall back to position if unnamed
+    if (length(mtn) >= 2L) {
+      maxPT_C <- as.numeric(mtn[1]) * coalesce_num(args$max_follow_up_sim, 0)
+      maxPT_T <- as.numeric(mtn[2]) * coalesce_num(args$max_follow_up_sim, 0)
+    } else {
+      maxPT_C <- 0; maxPT_T <- 0
     }
-    if (is.null(max_pt)) {
-      max_total <- args$max_total_patients_per_arm[[arm_name]]
-      if (is.null(max_total)) return(0)
-      max_pt <- max_total * coalesce_num(args$max_follow_up_sim, 0)
-    }
-    coalesce_num(max_pt, 0)
+  } else {
+    maxPT_C <- coalesce_num(mtn[[ctrl_name]], 0) * coalesce_num(args$max_follow_up_sim, 0)
+    maxPT_T <- coalesce_num(mtn[[trt_name]],  0) * coalesce_num(args$max_follow_up_sim, 0)
   }
 
-  maxPT_A <- lookup_max_pt(armA_name)
-  maxPT_B <- lookup_max_pt(armB_name)
-  
-  fracA <- if (maxPT_A > 0) ptA / maxPT_A else 0
-  fracB <- if (maxPT_B > 0) ptB / maxPT_B else 0
-  
-  (evA >= min_ev  && evB >= min_ev) &&
-    (mfuA >= min_mfu && mfuB >= min_mfu) &&
-    (fracA >= min_pt_f && fracB >= min_pt_f)
+  fracC <- if (maxPT_C > 0) ptC / maxPT_C else 0
+  fracT <- if (maxPT_T > 0) ptT / maxPT_T else 0
+
+  passC <- (evC >= min_ev) && (mfuC >= min_mfu) && (fracC >= min_pt_f)
+  passT <- (evT >= min_ev) && (mfuT >= min_mfu) && (fracT >= min_pt_f)
+
+  pass <- passC && passT
+
+  if (isTRUE(diagnostics)) {
+    message(sprintf(
+      "[vsREF gate] %s: ev=%d mFU=%.2f PT=%.1f frac=%.3f  |  %s: ev=%d mFU=%.2f PT=%.1f frac=%.3f  -> pass=%s",
+      ctrl_name, evC, mfuC, ptC, fracC,
+      trt_name,  evT, mfuT, ptT, fracT,
+      as.character(pass)
+    ))
+  }
+  pass
 }
 
 
@@ -215,4 +229,3 @@ run_single_arm_interim <- function(current_time, data_by_arm, args) {
 # on the same scale between arms (e.g., median PFS, or -log(hazard), etc.)
 # If your code stores piecewise rates, call your existing aggregator that maps
 # draws -> scalar estimand per arm before comparing.
-

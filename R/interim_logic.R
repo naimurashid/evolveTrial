@@ -56,59 +56,49 @@ calculate_current_prob_vs_ref <- function(slCtrl, slTrt, args) {
 
 interim_check <- function(state, current_time, args, diagnostics = FALSE) {
   if (isTRUE(args$compare_arms_option)) {
-    reference_arm <- args$reference_arm_name
-    experimental_arms <- setdiff(args$arm_names, reference_arm)
-    target_arm <- args$compare_arms_target_arm %||% experimental_arms[1]
-    if (length(experimental_arms) == 0 || is.null(target_arm) || is.na(target_arm)) {
-      stop("compare_arms_option requires at least one non-reference arm to evaluate.")
-    }
-    if (!target_arm %in% args$arm_names) {
-      stop(sprintf("Arm '%s' is not present in args$arm_names.", target_arm))
-    }
+    slC <- slice_arm_data_at_time(state$registries[[args$reference_arm_name]], current_time,
+                                  args$max_follow_up_sim, args$interval_cutpoints_sim)
 
-    slC <- slice_arm_data_at_time(state$registries[[reference_arm]], current_time,
+    trt_name <- setdiff(args$arm_names, args$reference_arm_name)[1]
+    slT <- slice_arm_data_at_time(state$registries[[trt_name]], current_time,
                                   args$max_follow_up_sim, args$interval_cutpoints_sim)
-    slT <- slice_arm_data_at_time(state$registries[[target_arm]],  current_time,
-                                  args$max_follow_up_sim, args$interval_cutpoints_sim)
-    
-    if (!gates_pass_for_both_arms(slC, slT, args, reference_arm, target_arm)) {
-      if (diagnostics) message(sprintf("[t=%.2f] vsREF gated out for %s vs %s", current_time, target_arm, reference_arm))
+
+    if (!gates_pass_for_both_arms(slC, slT, args, diagnostics = diagnostics)) {
+      if (diagnostics) message(sprintf("[t=%.2f] vsREF gated out", current_time))
       return(state)
     }
-    
+
     pr_eff <- calculate_current_prob_vs_ref(slC, slT, args)
     pr_fut <- calculate_current_prob_vs_ref_futility(slC, slT, args)
-    
+
     if (diagnostics) {
-      message(sprintf("[t=%.2f] vsREF %s>%s PrEff>=%.2f: %.3f | PrFut>=%.2f (m=%.2f): %.3f",
-                      current_time, target_arm, reference_arm,
+      message(sprintf("[t=%.2f] vsREF PrEff>=%.2f: %.3f | PrFut>=%.2f (m=%.2f): %.3f",
+                      current_time,
                       coalesce_num(args$efficacy_threshold_vs_ref_prob, NA_real_), pr_eff,
-                      coalesce_num(args$futility_threshold_vs_ref_prob,  NA_real_), coalesce_num(args$compare_arms_futility_margin, 0), pr_fut))
+                      coalesce_num(args$futility_threshold_vs_ref_prob, NA_real_), coalesce_num(args$compare_arms_futility_margin, 0), pr_fut))
     }
-    
+
     # Success?
     if (!is.null(args$efficacy_threshold_vs_ref_prob) && is.finite(args$efficacy_threshold_vs_ref_prob) &&
         pr_eff >= args$efficacy_threshold_vs_ref_prob) {
-      state$arm_status[target_arm] <- "stopped_efficacy"
-      state$stop_efficacy_per_sim_row[target_arm] <- 1L
-      state$sim_final_n_current_run[target_arm]   <- state$enrolled_counts[target_arm]
+      state$arm_status[trt_name] <- "stopped_efficacy"
+      state$stop_efficacy_per_sim_row[trt_name] <- 1L
+      state$sim_final_n_current_run[trt_name]   <- state$enrolled_counts[trt_name]
       return(state)
     }
-    
+
     # Futility?
     if (!is.null(args$futility_threshold_vs_ref_prob) && is.finite(args$futility_threshold_vs_ref_prob) &&
         pr_fut >= args$futility_threshold_vs_ref_prob) {
-      state$arm_status[target_arm] <- "stopped_futility"
-      state$stop_futility_per_sim_row[target_arm] <- 1L
-      state$sim_final_n_current_run[target_arm]   <- state$enrolled_counts[target_arm]
+      state$arm_status[trt_name] <- "stopped_futility"
+      state$stop_futility_per_sim_row[trt_name] <- 1L
+      state$sim_final_n_current_run[trt_name]   <- state$enrolled_counts[trt_name]
       return(state)
     }
-    
+
     return(state)
   }
-  
-  # HC path (not compare_arms)
-  # ... your existing single-arm logic that mutates state ...
+
+  # HC path (single-arm) — leave as is / your existing logic
   state
 }
-
