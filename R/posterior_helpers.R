@@ -89,3 +89,97 @@ final_vsref_probs_abs <- function(med_arm, med_ref, margin_abs) {
   )
 }
 
+# --- VS-REF MEDIAN SAMPLERS ---------------------------------------------------
+
+sample_vs_ref_medians <- function(slCtrl, slTrt, args, num_samples) {
+  num_samples <- num_samples %||% args$num_posterior_draws
+  if (isTRUE(args$use_ph_model_vs_ref)) {
+    sample_vs_ref_medians_ph(slCtrl, slTrt, args, num_samples)
+  } else {
+    sample_vs_ref_medians_independent(slCtrl, slTrt, args, num_samples)
+  }
+}
+
+sample_vs_ref_medians_independent <- function(slCtrl, slTrt, args, num_samples) {
+  interval_lengths <- diff(args$interval_cutpoints_sim)
+  lamC <- draw_posterior_hazard_samples(
+    num_intervals = length(interval_lengths),
+    events_per_interval = slCtrl$metrics$events_per_interval,
+    person_time_per_interval = slCtrl$metrics$person_time_per_interval,
+    prior_alpha_params = args$prior_alpha_params_model,
+    prior_beta_params  = args$prior_beta_params_model,
+    num_samples = num_samples
+  )
+  lamT <- draw_posterior_hazard_samples(
+    num_intervals = length(interval_lengths),
+    events_per_interval = slTrt$metrics$events_per_interval,
+    person_time_per_interval = slTrt$metrics$person_time_per_interval,
+    prior_alpha_params = args$prior_alpha_params_model,
+    prior_beta_params  = args$prior_beta_params_model,
+    num_samples = num_samples
+  )
+  med_ctrl <- apply(lamC, 1, calculate_median_survival_piecewise, interval_lengths = interval_lengths)
+  med_trt  <- apply(lamT,  1, calculate_median_survival_piecewise, interval_lengths = interval_lengths)
+  list(medCtrl = med_ctrl, medTrt = med_trt)
+}
+
+sample_vs_ref_medians_ph <- function(slCtrl, slTrt, args, num_samples) {
+  interval_lengths <- diff(args$interval_cutpoints_sim)
+  E_C <- slCtrl$metrics$events_per_interval
+  PT_C <- slCtrl$metrics$person_time_per_interval
+  E_T <- slTrt$metrics$events_per_interval
+  PT_T <- slTrt$metrics$person_time_per_interval
+  alpha_prior <- args$prior_alpha_params_model
+  beta_prior  <- args$prior_beta_params_model
+  beta_prior_mean <- coalesce_num(args$ph_loghr_prior_mean, 0)
+  beta_prior_sd   <- max(1e-6, coalesce_num(args$ph_loghr_prior_sd, 1))
+  
+  beta_params <- ph_beta_mode_var(
+    E_C = E_C, PT_C = PT_C,
+    E_T = E_T, PT_T = PT_T,
+    alpha_prior = alpha_prior,
+    beta_prior  = beta_prior,
+    mu = beta_prior_mean,
+    sigma = beta_prior_sd
+  )
+  beta_draws <- rnorm(num_samples, mean = beta_params$mean, sd = beta_params$sd)
+  shapes <- alpha_prior + E_C + E_T
+  med_ctrl <- med_trt <- numeric(num_samples)
+  for (i in seq_len(num_samples)) {
+    exp_beta <- exp(beta_draws[i])
+    rates <- beta_prior + PT_C + exp_beta * PT_T
+    lambda <- rgamma(length(shapes), shape = shapes, rate = rates)
+    med_ctrl[i] <- calculate_median_survival_piecewise(lambda, interval_lengths)
+    med_trt[i]  <- calculate_median_survival_piecewise(lambda * exp_beta, interval_lengths)
+  }
+  list(medCtrl = med_ctrl, medTrt = med_trt, logHR = beta_draws)
+}
+
+ph_beta_mode_var <- function(E_C, PT_C, E_T, PT_T, alpha_prior, beta_prior, mu, sigma,
+                             tol = 1e-6, max_iter = 50) {
+  total_events_ctrl <- sum(E_C)
+  total_events_trt  <- sum(E_T)
+  total_pt_ctrl <- sum(PT_C)
+  total_pt_trt  <- sum(PT_T)
+  beta <- log((total_events_trt + 0.5) / (total_pt_trt + 0.5)) -
+    log((total_events_ctrl + 0.5) / (total_pt_ctrl + 0.5))
+  sigma2 <- sigma^2
+  for (iter in seq_len(max_iter)) {
+    exp_beta <- exp(beta)
+    denom <- beta_prior + PT_C + exp_beta * PT_T
+    g <- exp_beta * PT_T / denom
+    grad <- sum(E_T) - sum((alpha_prior + E_C + E_T) * g) - (beta - mu) / sigma2
+    hess <- -sum((alpha_prior + E_C + E_T) * (g - g^2)) - 1 / sigma2
+    step <- grad / hess
+    beta_new <- beta - step
+    if (is.nan(beta_new) || is.infinite(beta_new)) break
+    beta <- beta_new
+    if (abs(step) < tol) break
+  }
+  exp_beta <- exp(beta)
+  denom <- beta_prior + PT_C + exp_beta * PT_T
+  g <- exp_beta * PT_T / denom
+  hess <- -sum((alpha_prior + E_C + E_T) * (g - g^2)) - 1 / sigma2
+  var_beta <- if (hess < 0) min(1e6, max(1e-6, -1 / hess)) else 1
+  list(mean = beta, sd = sqrt(var_beta))
+}

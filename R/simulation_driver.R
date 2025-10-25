@@ -28,6 +28,9 @@ run_simulation_pure <- function(
     efficacy_threshold_vs_ref_prob,
     futility_threshold_vs_ref_prob,
     compare_arms_futility_margin,
+    use_ph_model_vs_ref = FALSE,
+    ph_loghr_prior_mean = 0,
+    ph_loghr_prior_sd = 1,
     # final analysis params
     median_pfs_success_threshold_arms,
     final_success_posterior_prob_threshold,
@@ -123,6 +126,9 @@ run_simulation_pure <- function(
     efficacy_threshold_vs_ref_prob = efficacy_threshold_vs_ref_prob,
     futility_threshold_vs_ref_prob = futility_threshold_vs_ref_prob,
     compare_arms_futility_margin = compare_arms_futility_margin,
+    use_ph_model_vs_ref = use_ph_model_vs_ref,
+    ph_loghr_prior_mean = ph_loghr_prior_mean,
+    ph_loghr_prior_sd = ph_loghr_prior_sd,
     max_total_patients_per_arm = max_total_patients_per_arm,
     median_pfs_success_threshold_arms = median_pfs_success_threshold_arms,
     final_success_posterior_prob_threshold = final_success_posterior_prob_threshold,
@@ -227,24 +233,32 @@ run_simulation_pure <- function(
     interval_lengths <- diff(interval_cutpoints_sim)
     num_intervals <- length(interval_lengths)
     
+    ref_slice_final <- NULL
+    if (compare_arms_option) {
+      ref_slice_final <- slice_arm_data_at_time(
+        state$registries[[reference_arm_name]], final_time,
+        max_follow_up_sim, interval_cutpoints_sim
+      )
+    }
+    
     for (arm in arm_names) {
       if (state$arm_status[arm] != "recruiting") next
       
       arm_slice <- slice_arm_data_at_time(state$registries[[arm]], final_time,
                                           max_follow_up_sim, interval_cutpoints_sim)
-      post_arm <- draw_posterior_hazard_samples(
-        num_intervals = num_intervals,
-        events_per_interval = arm_slice$metrics$events_per_interval,
-        person_time_per_interval = arm_slice$metrics$person_time_per_interval,
-        prior_alpha_params = prior_alpha_params_model,
-        prior_beta_params  = prior_beta_params_model,
-        num_samples = num_posterior_draws
-      )
-      med_arm <- apply(post_arm, 1, function(h) {
-        calculate_median_survival_piecewise(h, interval_lengths)
-      })
       
       if (!compare_arms_option) {
+        post_arm <- draw_posterior_hazard_samples(
+          num_intervals = num_intervals,
+          events_per_interval = arm_slice$metrics$events_per_interval,
+          person_time_per_interval = arm_slice$metrics$person_time_per_interval,
+          prior_alpha_params = prior_alpha_params_model,
+          prior_beta_params  = prior_beta_params_model,
+          num_samples = num_posterior_draws
+        )
+        med_arm <- apply(post_arm, 1, function(h) {
+          calculate_median_survival_piecewise(h, interval_lengths)
+        })
         # Single-arm final vs absolute thresholds
         p_eff <- mean(med_arm > median_pfs_success_threshold_arms[arm])
         if (p_eff >= final_success_posterior_prob_threshold) {
@@ -262,22 +276,14 @@ run_simulation_pure <- function(
         if (arm == reference_arm_name) {
           final_inconclusive_per_sim[s, arm] <- 1L
         } else {
-          ref_slice <- slice_arm_data_at_time(state$registries[[reference_arm_name]], final_time,
-                                              max_follow_up_sim, interval_cutpoints_sim)
-          post_ref <- draw_posterior_hazard_samples(
-            num_intervals = num_intervals,
-            events_per_interval = ref_slice$metrics$events_per_interval,
-            person_time_per_interval = ref_slice$metrics$person_time_per_interval,
-            prior_alpha_params = prior_alpha_params_model,
-            prior_beta_params  = prior_beta_params_model,
+          med_samples <- sample_vs_ref_medians(
+            slCtrl = ref_slice_final,
+            slTrt = arm_slice,
+            args = args,
             num_samples = num_posterior_draws
           )
-          med_ref <- apply(post_ref, 1, function(h) {
-            calculate_median_survival_piecewise(h, interval_lengths)
-          })
-          
           margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
-          pr <- final_vsref_probs_abs(med_arm, med_ref, margin_abs)
+          pr <- final_vsref_probs_abs(med_samples$medTrt, med_samples$medCtrl, margin_abs)
           p_eff_ref <- pr$p_eff_ref
           p_fut_ref <- pr$p_fut_ref
           

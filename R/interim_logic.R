@@ -1,48 +1,17 @@
-calculate_current_prob_vs_ref_futility <- function(slCtrl, slTrt, args) {
-  K <- length(args$interval_cutpoints_sim) - 1
-  L  <- diff(args$interval_cutpoints_sim)
-  lamC <- draw_posterior_hazard_samples(K,
-                                        slCtrl$metrics$events_per_interval,
-                                        slCtrl$metrics$person_time_per_interval,
-                                        args$prior_alpha_params_model,
-                                        args$prior_beta_params_model,
-                                        num_samples = args$num_posterior_draws)
-  lamT <- draw_posterior_hazard_samples(K,
-                                        slTrt$metrics$events_per_interval,
-                                        slTrt$metrics$person_time_per_interval,
-                                        args$prior_alpha_params_model,
-                                        args$prior_beta_params_model,
-                                        num_samples = args$num_posterior_draws)
-  medC <- apply(lamC, 1, calculate_median_survival_piecewise, interval_lengths = L)
-  medT <- apply(lamT, 1, calculate_median_survival_piecewise, interval_lengths = L)
-
+calculate_current_probs_vs_ref <- function(slCtrl, slTrt, args) {
+  medians <- sample_vs_ref_medians(
+    slCtrl = slCtrl,
+    slTrt = slTrt,
+    args = args,
+    num_samples = args$num_posterior_draws
+  )
+  diff_med <- medians$medTrt - medians$medCtrl
   margin <- coalesce_num(args$compare_arms_futility_margin, 0)
-  mean((medT - medC) <= -margin)
+  list(
+    pr_eff = mean(diff_med > 0),
+    pr_fut = mean(diff_med <= -margin)
+  )
 }
-
-calculate_current_prob_vs_ref <- function(slCtrl, slTrt, args) {
-  K <- length(args$interval_cutpoints_sim) - 1
-  L  <- diff(args$interval_cutpoints_sim)
-  # posterior hazards
-  lamC <- draw_posterior_hazard_samples(K,
-                                        slCtrl$metrics$events_per_interval,
-                                        slCtrl$metrics$person_time_per_interval,
-                                        args$prior_alpha_params_model,
-                                        args$prior_beta_params_model,
-                                        num_samples = args$num_posterior_draws)
-  lamT <- draw_posterior_hazard_samples(K,
-                                        slTrt$metrics$events_per_interval,
-                                        slTrt$metrics$person_time_per_interval,
-                                        args$prior_alpha_params_model,
-                                        args$prior_beta_params_model,
-                                        num_samples = args$num_posterior_draws)
-  medC <- apply(lamC, 1, calculate_median_survival_piecewise, interval_lengths = L)
-  medT <- apply(lamT, 1, calculate_median_survival_piecewise, interval_lengths = L)
-
-  mean((medT - medC) > 0)
-}
-
-
 
 # 3) ---------- Interim checker: pure function (reads state, returns updated state)
 # --- INTERIM DECISION ENGINE (UPDATED) ----------------------------------------
@@ -98,8 +67,9 @@ interim_check <- function(state, current_time, args, diagnostics = FALSE) {
       return(state)
     }
 
-    pr_eff <- calculate_current_prob_vs_ref(slC, slT, args)
-    pr_fut <- calculate_current_prob_vs_ref_futility(slC, slT, args)
+    probs_vs_ref <- calculate_current_probs_vs_ref(slC, slT, args)
+    pr_eff <- probs_vs_ref$pr_eff
+    pr_fut <- probs_vs_ref$pr_fut
 
     if (diagnostics) {
       message(sprintf("[t=%.2f] vsREF %s>%s PrEff>=%.2f: %.3f | PrFut>=%.2f (m=%.2f): %.3f",
