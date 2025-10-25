@@ -120,7 +120,7 @@ sample_vs_ref_medians_independent <- function(slCtrl, slTrt, args, num_samples) 
   )
   med_ctrl <- apply(lamC, 1, calculate_median_survival_piecewise, interval_lengths = interval_lengths)
   med_trt  <- apply(lamT,  1, calculate_median_survival_piecewise, interval_lengths = interval_lengths)
-  list(medCtrl = med_ctrl, medTrt = med_trt)
+  list(medCtrl = med_ctrl, medTrt = med_trt, logHR = NULL)
 }
 
 sample_vs_ref_medians_ph <- function(slCtrl, slTrt, args, num_samples) {

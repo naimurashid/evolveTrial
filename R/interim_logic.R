@@ -1,16 +1,23 @@
 calculate_current_probs_vs_ref <- function(slCtrl, slTrt, args) {
-  medians <- sample_vs_ref_medians(
+  draws <- sample_vs_ref_medians(
     slCtrl = slCtrl,
     slTrt = slTrt,
     args = args,
     num_samples = args$num_posterior_draws
   )
-  diff_med <- medians$medTrt - medians$medCtrl
-  margin <- coalesce_num(args$compare_arms_futility_margin, 0)
-  list(
-    pr_eff = mean(diff_med > 0),
-    pr_fut = mean(diff_med <= -margin)
-  )
+  if (isTRUE(args$use_ph_model_vs_ref) && !is.null(draws$logHR)) {
+    list(
+      pr_eff = mean(draws$logHR < 0),
+      pr_fut = mean(draws$logHR >= 0)
+    )
+  } else {
+    diff_med <- draws$medTrt - draws$medCtrl
+    margin <- coalesce_num(args$compare_arms_futility_margin, 0)
+    list(
+      pr_eff = mean(diff_med > 0),
+      pr_fut = mean(diff_med <= -margin)
+    )
+  }
 }
 
 # 3) ---------- Interim checker: pure function (reads state, returns updated state)

@@ -282,10 +282,15 @@ run_simulation_pure <- function(
             args = args,
             num_samples = num_posterior_draws
           )
-          margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
-          pr <- final_vsref_probs_abs(med_samples$medTrt, med_samples$medCtrl, margin_abs)
-          p_eff_ref <- pr$p_eff_ref
-          p_fut_ref <- pr$p_fut_ref
+          if (isTRUE(args$use_ph_model_vs_ref) && !is.null(med_samples$logHR)) {
+            p_eff_ref <- mean(med_samples$logHR < 0)
+            p_fut_ref <- mean(med_samples$logHR >= 0)
+          } else {
+            margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
+            pr <- final_vsref_probs_abs(med_samples$medTrt, med_samples$medCtrl, margin_abs)
+            p_eff_ref <- pr$p_eff_ref
+            p_fut_ref <- pr$p_fut_ref
+          }
           
           if (p_eff_ref >= efficacy_threshold_vs_ref_prob) {
             final_efficacy_per_sim[s, arm] <- 1L
