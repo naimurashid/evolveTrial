@@ -170,7 +170,7 @@ calculate_predicted_prob_vs_ref <- function(
     medA <- apply(finPostA, 1, function(h) calculate_median_survival_piecewise(h, interval_lengths))
     medR <- apply(finPostR, 1, function(h) calculate_median_survival_piecewise(h, interval_lengths))
     
-    p_eff_final <- mean(medA >  medR + margin_abs)
+    p_eff_final <- mean(medA >  medR)
     p_fut_final <- mean(medA <= medR - margin_abs)
     
     s_eff <- s_eff + as.integer(p_eff_final >= final_efficacy_posterior_prob_threshold)
@@ -343,7 +343,7 @@ calculate_predicted_prob_vs_ref_fast <- function(
     med_a <- calculate_median_survival_piecewise(lam_af, L)
     med_r <- calculate_median_survival_piecewise(lam_rf, L)
     
-    p_eff <- as.integer( mean(med_a >  med_r + margin_abs) >= final_efficacy_posterior_prob_threshold )
+    p_eff <- as.integer( mean(med_a >  med_r) >= final_efficacy_posterior_prob_threshold )
     p_fut <- as.integer( mean(med_a <= med_r - margin_abs) >= final_futility_posterior_prob_threshold )
     
     eff_hits <- eff_hits + p_eff
@@ -355,4 +355,3 @@ calculate_predicted_prob_vs_ref_fast <- function(
     predicted_prob_futility = fut_hits / num_posterior_draws
   )
 }
-

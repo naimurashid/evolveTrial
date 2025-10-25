@@ -15,7 +15,7 @@ calculate_current_prob_vs_ref_futility <- function(slCtrl, slTrt, args) {
                                         num_samples = args$num_posterior_draws)
   medC <- apply(lamC, 1, calculate_median_survival_piecewise, interval_lengths = L)
   medT <- apply(lamT, 1, calculate_median_survival_piecewise, interval_lengths = L)
-  
+
   margin <- coalesce_num(args$compare_arms_futility_margin, 0)
   mean((medT - medC) <= -margin)
 }
@@ -38,9 +38,8 @@ calculate_current_prob_vs_ref <- function(slCtrl, slTrt, args) {
                                         num_samples = args$num_posterior_draws)
   medC <- apply(lamC, 1, calculate_median_survival_piecewise, interval_lengths = L)
   medT <- apply(lamT, 1, calculate_median_survival_piecewise, interval_lengths = L)
-  
-  margin <- coalesce_num(args$compare_arms_futility_margin, 0) # see item 4 below
-  mean((medT - medC) > margin)
+
+  mean((medT - medC) > 0)
 }
 
 
