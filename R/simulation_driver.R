@@ -56,7 +56,9 @@ run_simulation_pure <- function(
     min_person_time_frac_per_arm = 0,
     # NEW: person-time milestones
     person_time_milestones = NULL,
-    latest_calendar_look = Inf
+    latest_calendar_look = Inf,
+    # optional interval rebalancing
+    rebalance_after_events = NULL
 ) {
   weibull_scale_true_arms <- sapply(arm_names, function(arm) {
     calculate_weibull_scale(weibull_median_true_arms[arm], weibull_shape_true_arms[arm])
@@ -147,8 +149,15 @@ run_simulation_pure <- function(
     min_events_per_arm = min_events_per_arm,
     min_median_followup_per_arm = min_median_followup_per_arm,
     min_person_time_frac_per_arm = min_person_time_frac_per_arm,
-    max_PT_per_arm = max_PT_per_arm
+    max_PT_per_arm = max_PT_per_arm,
+    rebalance_after_events = rebalance_after_events
   )
+  
+  interval_cutpoints_current <- interval_cutpoints_sim
+  args$interval_cutpoints_sim <- interval_cutpoints_current
+  num_intervals <- length(interval_cutpoints_current) - 1
+  rebalance_threshold <- rebalance_after_events
+  rebalance_done <- is.null(rebalance_threshold)
   
   for (s in 1:num_simulations) {
     state <- make_state(arm_names, max_total_patients_per_arm)
@@ -233,8 +242,7 @@ run_simulation_pure <- function(
     # final analysis
     last_enroll_time <- max(c(0, unlist(lapply(state$registries, function(df) df$enroll_time))), na.rm = TRUE)
     final_time <- last_enroll_time + min_follow_up_at_final
-    interval_lengths <- diff(interval_cutpoints_sim)
-    num_intervals <- length(interval_lengths)
+      interval_lengths <- diff(interval_cutpoints_current)
     
     ref_slice_final <- NULL
     if (compare_arms_option) {
@@ -248,7 +256,7 @@ run_simulation_pure <- function(
       if (state$arm_status[arm] != "recruiting") next
       
       arm_slice <- slice_arm_data_at_time(state$registries[[arm]], final_time,
-                                          max_follow_up_sim, interval_cutpoints_sim)
+                                          max_follow_up_sim, interval_cutpoints_current)
       
       if (!compare_arms_option) {
         post_arm <- draw_posterior_hazard_samples(
@@ -401,4 +409,60 @@ run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL) {
   if (!all(ok_types)) stop("run_scenarios: one or more scenarios did not return a tabular result.")
   
   data.table::rbindlist(out, use.names = TRUE, fill = TRUE)
+}
+    # optional interval rebalancing once sufficient events observed
+    if (!rebalance_done && !is.null(rebalance_threshold)) {
+      total_events <- 0
+      event_times_all <- numeric(0)
+      for (arm in arm_names) {
+        slice_tmp <- slice_arm_data_at_time(
+          state$registries[[arm]], current_time,
+          max_follow_up_sim, interval_cutpoints_current
+        )
+        total_events <- total_events + slice_tmp$metrics$events_total
+        if (nrow(slice_tmp$patient_data) > 0) {
+          ev_idx <- which(slice_tmp$patient_data$event_status == 1)
+          if (length(ev_idx) > 0) {
+            event_times_all <- c(event_times_all, slice_tmp$patient_data$observed_time[ev_idx])
+          }
+        }
+      }
+      if (total_events >= rebalance_threshold) {
+        new_cuts <- rebalance_cutpoints_from_events(
+          event_times_all, max_follow_up_sim, num_intervals
+        )
+        if (!is.null(new_cuts)) {
+          interval_cutpoints_current <- new_cuts
+          args$interval_cutpoints_sim <- new_cuts
+          rebalance_done <- TRUE
+          if (diagnostics) {
+            message(sprintf(
+              "Rebalanced interval cutpoints at t=%.2f using %d observed events",
+              current_time, total_events
+            ))
+          }
+        } else {
+          rebalance_done <- TRUE
+        }
+      }
+    }
+# helper to build new interval cutpoints once enough events accrued
+rebalance_cutpoints_from_events <- function(event_times, max_follow_up, num_intervals) {
+  if (length(event_times) < max(2, num_intervals)) {
+    return(NULL)
+  }
+  event_times <- pmin(pmax(event_times, 0), max_follow_up)
+  probs <- seq(0, 1, length.out = num_intervals + 1)
+  q_vals <- as.numeric(stats::quantile(event_times, probs = probs, na.rm = TRUE, type = 7))
+  q_vals[1] <- 0
+  q_vals[length(q_vals)] <- max_follow_up
+  for (i in 2:length(q_vals)) {
+    if (!is.finite(q_vals[i]) || q_vals[i] <= q_vals[i - 1]) {
+      q_vals[i] <- min(max_follow_up, q_vals[i - 1] + 1e-6)
+    }
+  }
+  if (any(diff(q_vals) <= 0)) {
+    return(NULL)
+  }
+  q_vals
 }
