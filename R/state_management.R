@@ -133,6 +133,7 @@ gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
   # thresholds (per-arm gates)
   resolve_gate_vec <- function(raw, default = 0, scale = FALSE) {
     arms <- c(ctrl_name, trt_name)
+    raw_len <- if (is.null(raw)) 0 else length(raw)
     if (is.null(raw)) {
       out <- rep(default, length(arms))
     } else if (!is.null(names(raw))) {
@@ -148,7 +149,8 @@ gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
       out <- rep(raw[1], length(arms))
     }
     names(out) <- arms
-    if (scale) {
+    should_scale <- scale && (raw_len <= 1 || is.null(raw))
+    if (should_scale) {
       probs <- args$randomization_probs
       if (is.null(probs)) {
         probs <- rep(1 / length(arm_names), length(arm_names))

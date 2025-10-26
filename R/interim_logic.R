@@ -6,9 +6,13 @@ calculate_current_probs_vs_ref <- function(slCtrl, slTrt, args) {
     num_samples = args$num_posterior_draws
   )
   if (isTRUE(args$use_ph_model_vs_ref) && !is.null(draws$logHR)) {
+    log_margin <- 0
+    if (!is.null(args$compare_arms_hr_margin)) {
+      log_margin <- log1p(max(0, args$compare_arms_hr_margin))
+    }
     list(
       pr_eff = mean(draws$logHR < 0),
-      pr_fut = mean(draws$logHR >= 0)
+      pr_fut = mean(draws$logHR >= log_margin)
     )
   } else {
     diff_med <- draws$medTrt - draws$medCtrl

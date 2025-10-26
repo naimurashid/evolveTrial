@@ -28,6 +28,7 @@ run_simulation_pure <- function(
     efficacy_threshold_vs_ref_prob,
     futility_threshold_vs_ref_prob,
     compare_arms_futility_margin,
+    compare_arms_hr_margin = NULL,
     use_ph_model_vs_ref = FALSE,
     ph_loghr_prior_mean = 0,
     ph_loghr_prior_sd = 1,
@@ -127,6 +128,7 @@ run_simulation_pure <- function(
     efficacy_threshold_vs_ref_prob = efficacy_threshold_vs_ref_prob,
     futility_threshold_vs_ref_prob = futility_threshold_vs_ref_prob,
     compare_arms_futility_margin = compare_arms_futility_margin,
+    compare_arms_hr_margin = compare_arms_hr_margin,
     use_ph_model_vs_ref = use_ph_model_vs_ref,
     ph_loghr_prior_mean = ph_loghr_prior_mean,
     ph_loghr_prior_sd = ph_loghr_prior_sd,
@@ -284,8 +286,12 @@ run_simulation_pure <- function(
             num_samples = num_posterior_draws
           )
           if (isTRUE(args$use_ph_model_vs_ref) && !is.null(med_samples$logHR)) {
+            log_margin <- 0
+            if (!is.null(args$compare_arms_hr_margin)) {
+              log_margin <- log1p(max(0, args$compare_arms_hr_margin))
+            }
             p_eff_ref <- mean(med_samples$logHR < 0)
-            p_fut_ref <- mean(med_samples$logHR >= 0)
+            p_fut_ref <- mean(med_samples$logHR >= log_margin)
           } else {
             margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
             pr <- final_vsref_probs_abs(med_samples$medTrt, med_samples$medCtrl, margin_abs)
