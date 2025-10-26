@@ -206,15 +206,44 @@ calculate_predicted_prob_vs_ref <- function(
 
 
 # Approximate future person-time per interval (no patient sim)
+approx_future_exposure <- function(current_time,
+                                   enroll_times,
+                                   max_total_patients,
+                                   overall_accrual_rate,
+                                   interval_cutpoints,
+                                   max_follow_up) {
+  cuts <- interval_cutpoints
+  K <- length(cuts) - 1
+  n_enrolled <- length(enroll_times)
+  remaining_expected <- max(0, max_total_patients - n_enrolled)
+  if (remaining_expected == 0) return(numeric(K))
+  interval_follow_up <- numeric(K)
+  for (j in 1:K) {
+    lo <- cuts[j]; hi <- cuts[j + 1]
+    interval_follow_up[j] <- max(0, min(hi, max_follow_up) - lo)
+  }
+  remaining_expected * interval_follow_up
+}
+
+calculate_predicted_success_prob_vs_hc_fast <- function(
+    current_patient_data,
+    current_enroll_times,
+    max_total_patients,
+    interval_cutpoints,
+    prior_alpha_params,
+    prior_beta_params,
+    num_posterior_draws = 400,
+    median_pfs_success_threshold,
+    final_success_posterior_prob_threshold,
+    max_follow_up_sim,
+    overall_accrual_rate,
     current_time
 ) {
   K <- length(interval_cutpoints) - 1
   stopifnot(length(prior_alpha_params) == K, length(prior_beta_params) == K)
-  
   m <- calculate_interval_metrics_fast(current_patient_data, interval_cutpoints)
   alpha0 <- prior_alpha_params + m$events_per_interval
   beta0  <- prior_beta_params  + m$person_time_per_interval
-  
   T_future <- approx_future_exposure(
     current_time,
     enroll_times = current_enroll_times,
@@ -223,31 +252,20 @@ calculate_predicted_prob_vs_ref <- function(
     interval_cutpoints = interval_cutpoints,
     max_follow_up = max_follow_up_sim
   )
-  
   interval_lengths <- diff(interval_cutpoints)
   hit <- 0L
-  
   for (k in seq_len(num_posterior_draws)) {
     lambda <- rgamma(K, shape = alpha0, rate = beta0)
     ev_future <- ifelse(T_future > 0, rpois(K, lambda * T_future), 0L)
-    
     alpha_fin <- alpha0 + ev_future
     beta_fin  <- beta0  + T_future
-    
     lambda_fin <- rgamma(K, shape = alpha_fin, rate = beta_fin)
     med_fin <- calculate_median_survival_piecewise(lambda_fin, interval_lengths)
-    
     hit <- hit + as.integer(med_fin > median_pfs_success_threshold)
   }
-  
   hit / num_posterior_draws
 }
 
-near_boundary <- function(prob_now, target, band = 0.10) {
-  abs(prob_now - target) <= band
-}
-
-# --- Predicted probability vs-ref (FAST) (UPDATED: add argument checks) ---
 calculate_predicted_prob_vs_ref_fast <- function(
     current_patient_data_arm,
     current_patient_data_ref,
