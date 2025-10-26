@@ -175,12 +175,48 @@ run_simulation_pure <- function(
     while (length(is_eligible(state)) > 0) {
       interarrival <- rexp(1, rate = overall_accrual_rate)
       current_time <- current_time + interarrival
+
+      if (!rebalance_done && !is.null(rebalance_threshold)) {
+        total_events <- 0
+        event_times_all <- numeric(0)
+        for (arm in arm_names) {
+          slice_tmp <- slice_arm_data_at_time(
+            state$registries[[arm]], current_time,
+            max_follow_up_sim, interval_cutpoints_current
+          )
+          total_events <- total_events + slice_tmp$metrics$events_total
+          if (nrow(slice_tmp$patient_data) > 0) {
+            ev_idx <- which(slice_tmp$patient_data$event_status == 1)
+            if (length(ev_idx) > 0) {
+              event_times_all <- c(event_times_all, slice_tmp$patient_data$observed_time[ev_idx])
+            }
+          }
+        }
+        if (total_events >= rebalance_threshold) {
+          new_cuts <- rebalance_cutpoints_from_events(
+            event_times_all, max_follow_up_sim, num_intervals
+          )
+          if (!is.null(new_cuts)) {
+            interval_cutpoints_current <- new_cuts
+            args$interval_cutpoints_sim <- new_cuts
+            rebalance_done <- TRUE
+            if (diagnostics) {
+              message(sprintf(
+                "Rebalanced interval cutpoints at t=%.2f using %d observed events",
+                current_time, total_events
+              ))
+            }
+          } else {
+            rebalance_done <- TRUE
+          }
+        }
+      }
       
       # ---- LOOK SCHEDULING ----
       if (!is.null(pt_targets_abs)) {
         # PT-based schedule (with calendar backstop)
         total_PT_now <- cum_person_time_all_arms(state, current_time, max_follow_up_sim,
-                                                 interval_cutpoints_sim, arm_names)
+                                                 interval_cutpoints_current, arm_names)
         if (is.null(state$.__backstop_fired__)) state$.__backstop_fired__ <- FALSE
         
         while (!is.null(pt_targets_abs) &&
@@ -199,7 +235,7 @@ run_simulation_pure <- function(
           
           if (all(state$arm_status != "recruiting")) break
           total_PT_now <- cum_person_time_all_arms(state, current_time, max_follow_up_sim,
-                                                   interval_cutpoints_sim, arm_names)
+                                                   interval_cutpoints_current, arm_names)
         }
       } else {
         # calendar-beat schedule
@@ -248,7 +284,7 @@ run_simulation_pure <- function(
     if (compare_arms_option) {
       ref_slice_final <- slice_arm_data_at_time(
         state$registries[[reference_arm_name]], final_time,
-        max_follow_up_sim, interval_cutpoints_sim
+        max_follow_up_sim, interval_cutpoints_current
       )
     }
     
@@ -410,42 +446,7 @@ run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL) {
   
   data.table::rbindlist(out, use.names = TRUE, fill = TRUE)
 }
-    # optional interval rebalancing once sufficient events observed
-    if (!rebalance_done && !is.null(rebalance_threshold)) {
-      total_events <- 0
-      event_times_all <- numeric(0)
-      for (arm in arm_names) {
-        slice_tmp <- slice_arm_data_at_time(
-          state$registries[[arm]], current_time,
-          max_follow_up_sim, interval_cutpoints_current
-        )
-        total_events <- total_events + slice_tmp$metrics$events_total
-        if (nrow(slice_tmp$patient_data) > 0) {
-          ev_idx <- which(slice_tmp$patient_data$event_status == 1)
-          if (length(ev_idx) > 0) {
-            event_times_all <- c(event_times_all, slice_tmp$patient_data$observed_time[ev_idx])
-          }
-        }
-      }
-      if (total_events >= rebalance_threshold) {
-        new_cuts <- rebalance_cutpoints_from_events(
-          event_times_all, max_follow_up_sim, num_intervals
-        )
-        if (!is.null(new_cuts)) {
-          interval_cutpoints_current <- new_cuts
-          args$interval_cutpoints_sim <- new_cuts
-          rebalance_done <- TRUE
-          if (diagnostics) {
-            message(sprintf(
-              "Rebalanced interval cutpoints at t=%.2f using %d observed events",
-              current_time, total_events
-            ))
-          }
-        } else {
-          rebalance_done <- TRUE
-        }
-      }
-    }
+
 # helper to build new interval cutpoints once enough events accrued
 rebalance_cutpoints_from_events <- function(event_times, max_follow_up, num_intervals) {
   if (length(event_times) < max(2, num_intervals)) {
