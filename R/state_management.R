@@ -131,9 +131,54 @@ gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
   trt_name <- if (length(trt_candidates) > 0) trt_candidates[1] else "Triplet"
 
   # thresholds (per-arm gates)
-  min_ev   <- coalesce_num(args$min_events_per_arm, 0)
-  min_mfu  <- coalesce_num(args$min_median_followup_per_arm, 0)
-  min_pt_f <- coalesce_num(args$min_person_time_frac_per_arm, 0)
+  resolve_gate_vec <- function(raw, default = 0, scale = FALSE) {
+    arms <- c(ctrl_name, trt_name)
+    if (is.null(raw)) {
+      out <- rep(default, length(arms))
+    } else if (!is.null(names(raw))) {
+      out <- raw[arms]
+      out[is.na(out)] <- default
+    } else if (length(raw) == length(arm_names)) {
+      out <- raw
+      names(out) <- arm_names
+      out <- out[arms]
+    } else if (length(raw) == length(arms)) {
+      out <- raw
+    } else {
+      out <- rep(raw[1], length(arms))
+    }
+    names(out) <- arms
+    if (scale) {
+      probs <- args$randomization_probs
+      if (is.null(probs)) {
+        probs <- rep(1 / length(arm_names), length(arm_names))
+        names(probs) <- arm_names
+      } else if (is.null(names(probs)) && length(probs) == length(arm_names)) {
+        names(probs) <- arm_names
+      }
+      scale_vec <- rep(1, length(arms))
+      names(scale_vec) <- arms
+      if (!is.null(names(probs))) {
+        max_prob <- max(probs, na.rm = TRUE)
+        if (is.finite(max_prob) && max_prob > 0) {
+          scale_vec <- probs[arms] / max_prob
+          scale_vec[!is.finite(scale_vec)] <- 1
+        }
+      }
+      out <- out * scale_vec
+    }
+    out
+  }
+
+  min_ev_vec   <- resolve_gate_vec(args$min_events_per_arm, 0, scale = TRUE)
+  min_mfu_vec  <- resolve_gate_vec(args$min_median_followup_per_arm, 0, scale = FALSE)
+  min_pt_vec   <- resolve_gate_vec(args$min_person_time_frac_per_arm, 0, scale = TRUE)
+  min_ev_ctrl <- min_ev_vec[[ctrl_name]] %||% 0
+  min_ev_trt  <- min_ev_vec[[trt_name]] %||% 0
+  min_mfu_ctrl <- min_mfu_vec[[ctrl_name]] %||% 0
+  min_mfu_trt  <- min_mfu_vec[[trt_name]] %||% 0
+  min_pt_ctrl  <- min_pt_vec[[ctrl_name]] %||% 0
+  min_pt_trt   <- min_pt_vec[[trt_name]] %||% 0
 
   # extract metrics
   evC  <- coalesce_num(slCtrl$metrics$events_total, 0)
@@ -161,8 +206,8 @@ gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
   fracC <- if (maxPT_C > 0) ptC / maxPT_C else 0
   fracT <- if (maxPT_T > 0) ptT / maxPT_T else 0
 
-  passC <- (evC >= min_ev) && (mfuC >= min_mfu) && (fracC >= min_pt_f)
-  passT <- (evT >= min_ev) && (mfuT >= min_mfu) && (fracT >= min_pt_f)
+  passC <- (evC >= min_ev_ctrl) && (mfuC >= min_mfu_ctrl) && (fracC >= min_pt_ctrl)
+  passT <- (evT >= min_ev_trt)  && (mfuT >= min_mfu_trt)  && (fracT >= min_pt_trt)
 
   pass <- passC && passT
 

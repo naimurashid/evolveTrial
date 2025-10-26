@@ -113,6 +113,7 @@ run_simulation_pure <- function(
     compare_arms_option = compare_arms_option,
     interval_cutpoints_sim = interval_cutpoints_sim,
     max_follow_up_sim = max_follow_up_sim,
+    randomization_probs = randomization_probs,
     prior_alpha_params_model = prior_alpha_params_model,
     prior_beta_params_model  = prior_beta_params_model,
     num_posterior_draws = num_posterior_draws,
