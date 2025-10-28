@@ -15,6 +15,7 @@ run_simulation_pure <- function(
     prior_alpha_params_model,
     prior_beta_params_model,
     num_posterior_draws,
+    num_posterior_draws_interim = NULL,
     cohort_size_per_arm,
     max_total_patients_per_arm,
     min_patients_for_analysis,
@@ -101,14 +102,20 @@ run_simulation_pure <- function(
   max_PT_per_arm <- setNames(as.numeric(max_total_patients_per_arm) * max_follow_up_sim,
                              names(max_total_patients_per_arm))
   total_max_PT <- sum(max_PT_per_arm)
-  
+
   # Build absolute PT milestones (if any)
   pt_targets_abs <- NULL
   if (!is.null(person_time_milestones)) {
     stopifnot(all(person_time_milestones > 0 & person_time_milestones <= 1))
     pt_targets_abs <- sort(unique(person_time_milestones)) * total_max_PT
   }
-  
+
+  num_draws_interim <- if (is.null(num_posterior_draws_interim)) {
+    num_posterior_draws
+  } else {
+    num_posterior_draws_interim
+  }
+
   # pack args for interim_check
   args <- list(
     arm_names = arm_names,
@@ -120,6 +127,7 @@ run_simulation_pure <- function(
     prior_alpha_params_model = prior_alpha_params_model,
     prior_beta_params_model  = prior_beta_params_model,
     num_posterior_draws = num_posterior_draws,
+    num_posterior_draws_interim = num_draws_interim,
     min_patients_for_analysis = min_patients_for_analysis,
     min_events_for_analysis = min_events_for_analysis,
     min_median_followup = min_median_followup,

@@ -214,15 +214,31 @@ approx_future_exposure <- function(current_time,
                                    max_follow_up) {
   cuts <- interval_cutpoints
   K <- length(cuts) - 1
-  n_enrolled <- length(enroll_times)
-  remaining_expected <- max(0, max_total_patients - n_enrolled)
-  if (remaining_expected == 0) return(numeric(K))
-  interval_follow_up <- numeric(K)
-  for (j in 1:K) {
-    lo <- cuts[j]; hi <- cuts[j + 1]
-    interval_follow_up[j] <- max(0, min(hi, max_follow_up) - lo)
+  remaining <- max(0, max_total_patients - length(enroll_times))
+  if (remaining == 0) {
+    return(numeric(K))
   }
-  remaining_expected * interval_follow_up
+
+  horizon <- max(0, max_follow_up - current_time)
+  if (!is.finite(horizon) || horizon <= 0) {
+    return(rep(0, K))
+  }
+
+  if (!is.finite(overall_accrual_rate) || overall_accrual_rate <= 0) {
+    total_exposure <- remaining * horizon
+  } else {
+    expected_accrual_duration <- remaining / overall_accrual_rate
+    effective_duration <- min(horizon, expected_accrual_duration)
+    avg_follow_up <- pmax(0, horizon - effective_duration / 2)
+    total_exposure <- remaining * avg_follow_up
+  }
+
+  widths <- diff(cuts)
+  width_sum <- sum(widths)
+  if (width_sum <= 0) {
+    return(rep(0, K))
+  }
+  total_exposure * (widths / width_sum)
 }
 
 calculate_predicted_success_prob_vs_hc_fast <- function(
@@ -344,31 +360,4 @@ calculate_predicted_prob_vs_ref_fast <- function(
     predicted_prob_efficacy = eff_hits / num_posterior_draws,
     predicted_prob_futility = fut_hits / num_posterior_draws
   )
-}
-
-approx_future_exposure <- function(current_time,
-                                   enroll_times,
-                                   max_total_patients,
-                                   overall_accrual_rate,
-                                   interval_cutpoints,
-                                   max_follow_up) {
-  cuts <- interval_cutpoints
-  K <- length(cuts) - 1
-  remaining <- pmax(0, max_total_patients - length(enroll_times))
-  if (remaining == 0) {
-    return(rep(0, K))
-  }
-  total_time <- max(max_follow_up - current_time, 0)
-  if (total_time == 0) {
-    return(rep(0, K))
-  }
-  rate <- overall_accrual_rate
-  exposure <- numeric(K)
-  if (rate > 0) {
-    avg_time <- total_time / 2
-    total_exposure <- remaining * avg_time
-    width <- diff(cuts)
-    exposure <- total_exposure * (width / sum(width))
-  }
-  exposure
 }

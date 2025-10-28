@@ -26,13 +26,15 @@ calculate_current_probs_vs_ref <- function(slCtrl, slTrt, args) {
 
 calculate_current_probs_hc <- function(slArm, args, arm_name) {
   interval_lengths <- diff(args$interval_cutpoints_sim)
+  num_draws <- args$num_posterior_draws_interim %||% args$num_posterior_draws
+  num_draws <- max(1L, as.integer(num_draws))
   lam <- draw_posterior_hazard_samples(
     num_intervals = length(interval_lengths),
     events_per_interval = slArm$metrics$events_per_interval,
     person_time_per_interval = slArm$metrics$person_time_per_interval,
     prior_alpha_params = args$prior_alpha_params_model,
     prior_beta_params  = args$prior_beta_params_model,
-    num_samples = args$num_posterior_draws
+    num_samples = num_draws
   )
   med_draws <- apply(lam, 1, calculate_median_survival_piecewise,
                      interval_lengths = interval_lengths)

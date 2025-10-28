@@ -250,12 +250,23 @@ coalesce_num <- function(x, y) {
 # Adapter: slice a single arm at a given calendar time
 # Replace body with your project's existing function if names differ.
 slice_arm_at_time <- function(arm_name, current_time, arm_data, args) {
-  # Your internal slicer likely already exists; keep this as a thin wrapper.
-  # Example placeholder:
-  calculate_arm_slice(arm_name = arm_name,
-                      current_time = current_time,
-                      data = arm_data,
-                      args = args)
+  interval_cutpoints <- args$interval_cutpoints_sim
+  if (is.null(interval_cutpoints)) {
+    stop("slice_arm_at_time(): args$interval_cutpoints_sim must be supplied.")
+  }
+  max_follow <- coalesce_num(args$max_follow_up_sim, 0)
+  if (max_follow <= 0) {
+    stop("slice_arm_at_time(): args$max_follow_up_sim must be positive.")
+  }
+  if (is.null(arm_data)) {
+    stop(sprintf("slice_arm_at_time(): data for arm '%s' is NULL.", arm_name))
+  }
+  slice_arm_data_at_time(
+    registry_df = arm_data,
+    calendar_time = current_time,
+    max_follow_up = max_follow,
+    interval_cutpoints = interval_cutpoints
+  )
 }
 
 
@@ -277,8 +288,86 @@ posterior_scalar_draws <- function(arm_slice, args) {
 
 # Single-arm interim (unchanged). Keep your original implementation.
 run_single_arm_interim <- function(current_time, data_by_arm, args) {
-  # ... your existing HC interim logic ...
-  list(decision = "continue", path = "hc")
+  if (is.null(names(data_by_arm))) {
+    stop("run_single_arm_interim(): data_by_arm must be a named list of registries.")
+  }
+  decisions <- setNames(rep("continue", length(data_by_arm)), names(data_by_arm))
+  pr_eff <- pr_fut <- setNames(rep(NA_real_, length(data_by_arm)), names(data_by_arm))
+
+  for (arm in names(data_by_arm)) {
+    slice <- slice_arm_at_time(
+      arm_name = arm,
+      current_time = current_time,
+      arm_data = data_by_arm[[arm]],
+      args = args
+    )
+
+    n_pat <- nrow(slice$patient_data)
+    events_total <- sum(slice$patient_data$event_status)
+    median_fu <- if (n_pat > 0) stats::median(slice$patient_data$observed_time) else 0
+    pt_total <- sum(slice$metrics$person_time_per_interval)
+
+    min_pat <- coalesce_num(args$min_patients_for_analysis, 0)
+    min_events <- coalesce_num(args$min_events_for_analysis, 0)
+    min_median_fu <- coalesce_num(args$min_median_followup, 0)
+
+    min_pt_frac <- 0
+    if (!is.null(args$min_person_time_frac_per_arm)) {
+      gate_vec <- args$min_person_time_frac_per_arm
+      if (!is.null(names(gate_vec)) && arm %in% names(gate_vec)) {
+        min_pt_frac <- coalesce_num(gate_vec[[arm]], 0)
+      } else if (length(gate_vec) == length(args$arm_names)) {
+        min_pt_frac <- coalesce_num(gate_vec[match(arm, args$arm_names)], 0)
+      } else if (length(gate_vec) >= 1) {
+        min_pt_frac <- coalesce_num(gate_vec[1], 0)
+      }
+    }
+
+    maxPT_arm <- 0
+    mtpa <- args$max_total_patients_per_arm
+    if (!is.null(mtpa)) {
+      if (!is.null(names(mtpa)) && arm %in% names(mtpa)) {
+        maxPT_arm <- coalesce_num(mtpa[[arm]], 0) * coalesce_num(args$max_follow_up_sim, 0)
+      } else if (length(mtpa) == length(args$arm_names)) {
+        maxPT_arm <- coalesce_num(mtpa[match(arm, args$arm_names)], 0) *
+          coalesce_num(args$max_follow_up_sim, 0)
+      } else if (length(mtpa) >= 1) {
+        maxPT_arm <- coalesce_num(mtpa[1], 0) * coalesce_num(args$max_follow_up_sim, 0)
+      }
+    }
+    pt_frac <- if (maxPT_arm > 0) pt_total / maxPT_arm else 0
+
+    if (n_pat < min_pat ||
+        events_total < min_events ||
+        median_fu < min_median_fu ||
+        pt_frac < min_pt_frac) {
+      next
+    }
+
+    probs <- calculate_current_probs_hc(slice, args, arm)
+    pr_eff[arm] <- probs$pr_eff
+    pr_fut[arm] <- probs$pr_fut
+
+    if (!is.null(args$efficacy_threshold_current_prob_hc) &&
+        is.finite(args$efficacy_threshold_current_prob_hc) &&
+        probs$pr_eff >= args$efficacy_threshold_current_prob_hc) {
+      decisions[arm] <- "stop_efficacy"
+      next
+    }
+
+    if (!is.null(args$posterior_futility_threshold_hc) &&
+        is.finite(args$posterior_futility_threshold_hc) &&
+        probs$pr_fut >= args$posterior_futility_threshold_hc) {
+      decisions[arm] <- "stop_futility"
+    }
+  }
+
+  list(
+    decisions = decisions,
+    pr_eff = pr_eff,
+    pr_fut = pr_fut,
+    path = "hc"
+  )
 }
 
 
