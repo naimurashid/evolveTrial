@@ -24,6 +24,29 @@ calculate_current_probs_vs_ref <- function(slCtrl, slTrt, args) {
   }
 }
 
+calculate_current_probs_hc <- function(slArm, args, arm_name) {
+  interval_lengths <- diff(args$interval_cutpoints_sim)
+  lam <- draw_posterior_hazard_samples(
+    num_intervals = length(interval_lengths),
+    events_per_interval = slArm$metrics$events_per_interval,
+    person_time_per_interval = slArm$metrics$person_time_per_interval,
+    prior_alpha_params = args$prior_alpha_params_model,
+    prior_beta_params  = args$prior_beta_params_model,
+    num_samples = args$num_posterior_draws
+  )
+  med_draws <- apply(lam, 1, calculate_median_survival_piecewise,
+                     interval_lengths = interval_lengths)
+  success_thr_vec <- args$median_pfs_success_threshold_arms %||% args$null_median_arms
+  futility_thr_vec <- args$median_pfs_futility_threshold_arms %||%
+    args$futility_median_arms %||% success_thr_vec
+  success_thr <- success_thr_vec[[arm_name]] %||% success_thr_vec[1]
+  futility_thr <- futility_thr_vec[[arm_name]] %||% futility_thr_vec[1]
+  list(
+    pr_eff = mean(med_draws > success_thr),
+    pr_fut = mean(med_draws < futility_thr)
+  )
+}
+
 # 3) ---------- Interim checker: pure function (reads state, returns updated state)
 # --- INTERIM DECISION ENGINE (UPDATED) ----------------------------------------
 # This function assumes you already have utilities that can slice data for a given
@@ -113,6 +136,84 @@ interim_check <- function(state, current_time, args, diagnostics = FALSE) {
     return(state)
   }
 
-  # HC path (single-arm) — leave as is / your existing logic
+  # HC path (single-arm)
+  for (arm in args$arm_names) {
+    if (state$arm_status[arm] != "recruiting") next
+
+    slA <- slice_arm_data_at_time(state$registries[[arm]], current_time,
+                                  args$max_follow_up_sim, args$interval_cutpoints_sim)
+    n_pat <- nrow(slA$patient_data)
+    events_total <- sum(slA$patient_data$event_status)
+    median_fu <- if (n_pat > 0) stats::median(slA$patient_data$observed_time) else 0
+    pt_total <- sum(slA$metrics$person_time_per_interval)
+
+    min_pat <- coalesce_num(args$min_patients_for_analysis, 0)
+    min_events <- coalesce_num(args$min_events_for_analysis, 0)
+    min_median_fu <- coalesce_num(args$min_median_followup, 0)
+
+    min_pt_frac <- 0
+    if (!is.null(args$min_person_time_frac_per_arm)) {
+      gate_vec <- args$min_person_time_frac_per_arm
+      if (!is.null(names(gate_vec))) {
+        min_pt_frac <- coalesce_num(gate_vec[[arm]], 0)
+      } else if (length(gate_vec) == length(args$arm_names)) {
+        min_pt_frac <- coalesce_num(gate_vec[match(arm, args$arm_names)], 0)
+      } else if (length(gate_vec) >= 1) {
+        min_pt_frac <- coalesce_num(gate_vec[1], 0)
+      }
+    }
+    maxPT_arm <- 0
+    mtpa <- args$max_total_patients_per_arm
+    if (!is.null(mtpa)) {
+      if (!is.null(names(mtpa)) && arm %in% names(mtpa)) {
+        maxPT_arm <- coalesce_num(mtpa[[arm]], 0) * coalesce_num(args$max_follow_up_sim, 0)
+      } else if (length(mtpa) == length(args$arm_names)) {
+        maxPT_arm <- coalesce_num(mtpa[match(arm, args$arm_names)], 0) *
+          coalesce_num(args$max_follow_up_sim, 0)
+      } else if (length(mtpa) >= 1) {
+        maxPT_arm <- coalesce_num(mtpa[1], 0) * coalesce_num(args$max_follow_up_sim, 0)
+      }
+    }
+    pt_frac <- if (maxPT_arm > 0) pt_total / maxPT_arm else 0
+
+    if (n_pat < min_pat ||
+        events_total < min_events ||
+        median_fu < min_median_fu ||
+        pt_frac < min_pt_frac) {
+      next
+    }
+
+    probs_hc <- calculate_current_probs_hc(slA, args, arm)
+    pr_eff <- probs_hc$pr_eff
+    pr_fut <- probs_hc$pr_fut
+
+    if (diagnostics) {
+      message(sprintf("[t=%.2f] HC %s PrEff>=%.3f: %.3f | PrFut>=%.3f: %.3f",
+                      current_time, arm,
+                      coalesce_num(args$efficacy_threshold_current_prob_hc, NA_real_),
+                      pr_eff,
+                      coalesce_num(args$posterior_futility_threshold_hc, NA_real_),
+                      pr_fut))
+    }
+
+    if (!is.null(args$efficacy_threshold_current_prob_hc) &&
+        is.finite(args$efficacy_threshold_current_prob_hc) &&
+        pr_eff >= args$efficacy_threshold_current_prob_hc) {
+      state$arm_status[arm] <- "stopped_efficacy"
+      state$stop_efficacy_per_sim_row[arm] <- 1L
+      state$sim_final_n_current_run[arm] <- state$enrolled_counts[arm]
+      next
+    }
+
+    if (!is.null(args$posterior_futility_threshold_hc) &&
+        is.finite(args$posterior_futility_threshold_hc) &&
+        pr_fut >= args$posterior_futility_threshold_hc) {
+      state$arm_status[arm] <- "stopped_futility"
+      state$stop_futility_per_sim_row[arm] <- 1L
+      state$sim_final_n_current_run[arm] <- state$enrolled_counts[arm]
+      next
+    }
+  }
+
   state
 }
