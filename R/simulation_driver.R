@@ -1,5 +1,109 @@
 
-# 4) ---------- Main simulation using pure-state threading ----------
+#' Run a full set of evolveTrial simulations for a design specification
+#'
+#' `run_simulation_pure()` is the workhorse simulator for evolveTrial.  It
+#' enrols patients according to the supplied accrual plan, applies interim
+#' gating/decision rules, optionally rebalances interval cut points, and
+#' carries each replicate forward to the final analysis.  Operating
+#' characteristics are returned summarised per arm.
+#'
+#' @param num_simulations Number of Monte Carlo replicates to run.
+#' @param arm_names Character vector naming the trial arms.
+#' @param reference_arm_name Character scalar naming the control/reference arm.
+#' @param compare_arms_option Logical; `TRUE` evaluates vs-reference logic,
+#'   `FALSE` evaluates arms independently against historical control targets.
+#' @param weibull_shape_true_arms Named numeric vector of Weibull shape
+#'   parameters under the truth.
+#' @param weibull_median_true_arms Named numeric vector of true median PFS
+#'   (months) for each arm.
+#' @param null_median_arms Named numeric vector of null (historical control)
+#'   medians used for single-arm evaluations.
+#' @param futility_median_arms Named numeric vector of futility medians for
+#'   single-arm logic.
+#' @param interval_cutpoints_sim Numeric vector of interval boundaries (months)
+#'   for piecewise exponential modelling.
+#' @param max_follow_up_sim Maximum administrative follow-up time (months).
+#' @param censor_max_time_sim Upper bound for random censoring draws (months).
+#' @param prior_alpha_params_model Numeric vector of Gamma prior shape
+#'   parameters for the piecewise exponential hazards.
+#' @param prior_beta_params_model Numeric vector of Gamma prior rate parameters
+#'   for the piecewise exponential hazards.
+#' @param num_posterior_draws Number of posterior draws used for final analyses.
+#' @param num_posterior_draws_interim Optional integer overriding the number of
+#'   posterior draws used at interim looks.
+#' @param cohort_size_per_arm Size of each enrolment batch per arm (typically 1).
+#' @param max_total_patients_per_arm Named integer vector of per-arm sample size
+#'   caps.
+#' @param min_patients_for_analysis Minimum number of patients required to
+#'   evaluate an arm in the single-arm path.
+#' @param efficacy_stopping_rule_hc Logical; enable interim efficacy checks for
+#'   the historical-control path.
+#' @param efficacy_threshold_current_prob_hc Interim success probability
+#'   threshold for single-arm logic.
+#' @param posterior_futility_threshold_hc Interim futility probability threshold
+#'   for single-arm logic.
+#' @param futility_stopping_rule_hc Logical; enable interim futility checks for
+#'   the single-arm path.
+#' @param efficacy_stopping_rule_vs_ref Logical; enable interim efficacy checks
+#'   for the vs-reference path.
+#' @param futility_stopping_rule_vs_ref Logical; enable interim futility checks
+#'   for the vs-reference path.
+#' @param efficacy_threshold_vs_ref_prob Posterior superiority threshold for
+#'   vs-reference decisions.
+#' @param futility_threshold_vs_ref_prob Posterior inferiority threshold for
+#'   vs-reference decisions.
+#' @param compare_arms_futility_margin Absolute median difference used when
+#'   defining vs-reference futility.
+#' @param compare_arms_hr_margin Optional hazard-ratio margin used when
+#'   `use_ph_model_vs_ref = TRUE`.
+#' @param use_ph_model_vs_ref Logical; use the proportional-hazards joint model
+#'   for vs-reference comparisons.
+#' @param ph_loghr_prior_mean Mean of the normal prior on the log hazard ratio
+#'   (PH model).
+#' @param ph_loghr_prior_sd Standard deviation of the normal prior on the log
+#'   hazard ratio.
+#' @param median_pfs_success_threshold_arms Named numeric vector of median PFS
+#'   thresholds for declaring final success per arm.
+#' @param final_success_posterior_prob_threshold Posterior probability threshold
+#'   for final success declarations.
+#' @param median_pfs_futility_threshold_arms Named numeric vector of median PFS
+#'   futility thresholds for final analyses.
+#' @param final_futility_posterior_prob_threshold Posterior probability
+#'   threshold for final futility declarations.
+#' @param overall_accrual_rate Expected accrual rate (patients per month).
+#' @param randomization_probs Named numeric vector of randomisation probabilities.
+#' @param min_follow_up_at_final Additional follow-up (months) required after
+#'   last enrolment before the final analysis.
+#' @param min_events_for_analysis Minimum events required for interim review
+#'   (global gate).
+#' @param min_median_followup Minimum median follow-up required for interim
+#'   review (global gate).
+#' @param interim_calendar_beat Calendar spacing (months) between scheduled
+#'   interim looks when person-time milestones are not used.
+#' @param diagnostics Logical; if `TRUE` prints interim diagnostic messages.
+#' @param pred_success_pp_threshold_hc Predictive probability threshold for
+#'   interim success in the single-arm predictive look (if enabled).
+#' @param pred_futility_pp_threshold_hc Predictive probability threshold for
+#'   interim futility in the single-arm predictive look (if enabled).
+#' @param num_posterior_draws_pred Number of posterior draws used inside
+#'   predictive probability calculations.
+#' @param predictive_fast Logical; switch to the analytic predictive
+#'   approximations.
+#' @param min_events_per_arm Optional per-arm minimum event gate for vs-reference.
+#' @param min_median_followup_per_arm Optional per-arm minimum median follow-up
+#'   gate for vs-reference.
+#' @param min_person_time_frac_per_arm Optional per-arm proportion of planned
+#'   person-time required before evaluating vs-reference decisions.
+#' @param person_time_milestones Optional numeric vector (fractions of total
+#'   planned person-time) triggering interim looks.
+#' @param latest_calendar_look Backstop calendar time for person-time schedules.
+#' @param rebalance_after_events Optional integer; when non-`NULL` the piecewise
+#'   cut points are re-estimated once that number of events has accrued.
+#'
+#' @return A data frame with one row per arm and columns summarising operating
+#'   characteristics such as type I error / power, PETs, final decision
+#'   probabilities, and expected sample size.
+#' @export
 run_simulation_pure <- function(
     num_simulations,
     arm_names,
@@ -404,6 +508,27 @@ run_simulation_pure <- function(
 }
 
 
+#' Build scenario overrides from a grid of design choices
+#'
+#' Expands a named list of options into a list of scenario override lists that
+#' can be merged with `base_args` prior to simulation.
+#'
+#' @param choices Named list where each element is either a vector of scalar
+#'   values or a list whose elements are per-arm vectors.
+#'
+#' @return A list of scenario override lists.  The underlying Cartesian grid is
+#'   attached as an attribute named `"grid"`.
+#'
+#' @examples
+#' scenarios_from_grid(list(
+#'   max_total_patients_per_arm = list(
+#'     c(Doublet = 60, Triplet = 60),
+#'     c(Doublet = 60, Triplet = 70)
+#'   ),
+#'   compare_arms_futility_margin = c(0.3, 0.4)
+#' ))
+#'
+#' @export
 # ---------- 1) Build scenarios from a grid of options ----------
 # Pass a named list where each element is either:
 #   - a vector of scalar options (e.g., c(60, 70)), OR
@@ -434,6 +559,72 @@ scenarios_from_grid <- function(choices) {
   scen_list
 }
 
+#' Evaluate a design across multiple scenarios
+#'
+#' Merges each scenario override list with `base_args`, runs
+#' `run_simulation_pure()` for every scenario, and binds the results into a
+#' single table.
+#'
+#' @param base_args Named list of arguments accepted by `run_simulation_pure()`.
+#' @param scens List of scenario override lists, typically from
+#'   `scenarios_from_grid()`.
+#' @param parallel Logical; if `TRUE` uses `parallel::mclapply()` to distribute
+#'   scenarios across cores.
+#' @param seed Optional integer seed passed to `set.seed()` before simulations.
+#'
+#' @return A data.table/data.frame containing the combined operating
+#'   characteristic summaries.  A `scenario` column identifies the originating
+#'   scenario index.
+#'
+#' @examples
+#' \dontrun{
+#' base_args <- list(
+#'   num_simulations = 200,
+#'   arm_names = c("Doublet", "Triplet"),
+#'   reference_arm_name = "Doublet",
+#'   compare_arms_option = TRUE,
+#'   weibull_shape_true_arms = c(Doublet = 1.2, Triplet = 1.2),
+#'   weibull_median_true_arms = c(Doublet = 6, Triplet = 6),
+#'   null_median_arms = c(Doublet = 6, Triplet = 6),
+#'   futility_median_arms = c(Doublet = 6, Triplet = 6),
+#'   interval_cutpoints_sim = seq(0, 24, by = 3),
+#'   max_follow_up_sim = 24,
+#'   censor_max_time_sim = 24,
+#'   prior_alpha_params_model = rep(0.5, 8),
+#'   prior_beta_params_model = rep(0.5, 8),
+#'   num_posterior_draws = 400,
+#'   cohort_size_per_arm = 1,
+#'   max_total_patients_per_arm = c(Doublet = 60, Triplet = 60),
+#'   min_patients_for_analysis = 10,
+#'   efficacy_stopping_rule_hc = TRUE,
+#'   efficacy_threshold_current_prob_hc = 0.95,
+#'   posterior_futility_threshold_hc = 0.8,
+#'   futility_stopping_rule_hc = TRUE,
+#'   efficacy_threshold_vs_ref_prob = 0.98,
+#'   futility_threshold_vs_ref_prob = 0.6,
+#'   compare_arms_futility_margin = 0.4,
+#'   overall_accrual_rate = 3,
+#'   randomization_probs = c(Doublet = 1/3, Triplet = 2/3),
+#'   min_follow_up_at_final = 0,
+#'   min_events_for_analysis = 0,
+#'   min_median_followup = 0,
+#'   interim_calendar_beat = 3,
+#'   pred_success_pp_threshold_hc = 1,
+#'   pred_futility_pp_threshold_hc = 0,
+#'   num_posterior_draws_pred = 200
+#' )
+#'
+#' scens <- scenarios_from_grid(list(
+#'   weibull_median_true_arms = list(
+#'     c(Doublet = 6, Triplet = 6),
+#'     c(Doublet = 6, Triplet = 9)
+#'   )
+#' ))
+#'
+#' run_scenarios(base_args, scens, parallel = FALSE, seed = 123)
+#' }
+#'
+#' @export
 run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   

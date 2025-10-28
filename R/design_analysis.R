@@ -1,3 +1,14 @@
+#' Summarise simulation output by scenario and arm
+#'
+#' Aggregates the per-arm results returned by `run_scenarios()` and pivots them
+#' into a wide table (one row per scenario) for downstream reporting.
+#'
+#' @param results_df Data frame/data.table produced by `run_scenarios()`
+#'   containing at least `scenario` and `Arm_Name`.
+#'
+#' @return A data.frame with one row per scenario and columns for each arm's key
+#'   operating characteristics.
+#' @export
 pretty_scenario_matrix <- function(results_df) {
   # Validate
   if (!"scenario" %in% names(results_df)) stop("results_df must include 'scenario'")
@@ -34,6 +45,13 @@ pretty_scenario_matrix <- function(results_df) {
   as.data.frame(wide)
 }
 
+#' Export a scenario summary table to Excel
+#'
+#' @param pretty_tbl Data frame produced by `pretty_scenario_matrix()`.
+#' @param file_path Output path for the Excel workbook.
+#'
+#' @return Invisibly returns `file_path`.  Writes an `.xlsx` file to disk.
+#' @export
 export_scenario_table_to_excel <- function(pretty_tbl, file_path = "scenario_summary.xlsx") {
   library(openxlsx)
   wb <- createWorkbook()
@@ -44,6 +62,22 @@ export_scenario_table_to_excel <- function(pretty_tbl, file_path = "scenario_sum
   message("✅ Exported formatted table to: ", normalizePath(file_path))
 }
 
+#' Render the scenario summary table to a PNG image
+#'
+#' @param results_df Data frame returned by `run_scenarios()`.
+#' @param file_path Output path for the PNG image.
+#' @param title Main title for the table.
+#' @param subtitle Optional subtitle.
+#' @param highlight_arm Arm name whose columns should be highlighted.
+#' @param snapshot_engine Rendering backend; one of `"auto"`, `"webshot2"`,
+#'   or `"webshot"`.
+#' @param vwidth Viewport width passed to the renderer.
+#' @param vheight Viewport height passed to the renderer.
+#' @param zoom Zoom factor passed to the renderer.
+#'
+#' @return Invisibly returns `file_path`.  Writes a PNG (and temporary HTML if
+#'   `snapshot_engine = "webshot"`).
+#' @export
 export_scenario_table_to_png <- function(results_df,
                                          file_path = "scenario_summary.png",
                                          title = "Bayesian Adaptive Design Summary",
@@ -141,6 +175,21 @@ export_scenario_table_to_png <- function(results_df,
   message("✅ Image saved: ", normalizePath(file_path))
 }
 
+#' Calibrate interim and final thresholds for single-arm designs
+#'
+#' Sweeps candidate interim and final posterior probability thresholds and
+#' returns the best combination achieving the desired type I error under the
+#' null scenario(s).
+#'
+#' @param base_args Baseline argument list passed to `run_scenarios()`.
+#' @param scens_null Scenario list representing null hypotheses.
+#' @param thr_grid_interim Numeric vector of interim success thresholds to try.
+#' @param thr_grid_final Numeric vector of final success thresholds to try.
+#' @param sims Number of simulations per candidate setting.
+#'
+#' @return A list containing the chosen thresholds and corresponding estimated
+#'   type I error.
+#' @export
 calibrate_alpha <- function(base_args, scens_null, thr_grid_interim = c(0.9, 0.95, 0.975),
                             thr_grid_final = c(0.95, 0.975, 0.99), sims = 300) {
   best <- NULL
@@ -167,6 +216,26 @@ calibrate_alpha <- function(base_args, scens_null, thr_grid_interim = c(0.9, 0.9
 
 library(data.table)
 
+#' Calibrate historical-control thresholds over a grid
+#'
+#' Evaluates a grid of interim/final thresholds and superiority margins under
+#' null and alternative scenarios, returning full operating characteristics for
+#' each combination.
+#'
+#' @param base_args Baseline argument list passed to `run_scenarios()`.
+#' @param null_med Control-arm median under the null hypothesis.
+#' @param alt_med Experimental median under the alternative.
+#' @param margins_abs Numeric vector of absolute superiority margins (months).
+#' @param interim_thr_grid Interim success probabilities to evaluate.
+#' @param final_thr_grid Final posterior success probabilities to evaluate.
+#' @param sims Number of simulations per grid point.
+#' @param target_alpha Target type I error used when ranking feasible designs.
+#' @param seed RNG seed.
+#' @param parallel Logical; run scenarios in parallel.
+#'
+#' @return A list with components `all`, `feasible`, and `top` summarising the
+#'   grid results.
+#' @export
 grid_calibrate <- function(base_args,
                            null_med = 6,
                            alt_med  = 9,
@@ -265,6 +334,23 @@ grid_calibrate <- function(base_args,
 #' @param parallel Whether to use `parallel::mclapply`.
 #' @return data.table summarising Type I error, power, PETs, expected N per arm,
 #'   control-arm expectations, and total expected N under null/alt.
+#' Evaluate proportional-hazards vs-reference designs over a grid
+#'
+#' Runs the supplied grid of thresholds/margins against a scenario list,
+#' collecting operating characteristics for each design.
+#'
+#' @param base_args Baseline argument list passed to `run_scenarios()`.
+#' @param grid data.table/data.frame describing the design grid.  Must include
+#'   columns `label`, `thr_eff`, `thr_fut`, `margin`, `min_ev`, `min_pt`, and
+#'   optionally `hr_margin`.
+#' @param scens Scenario list (e.g., from `scenarios_from_grid()`).
+#' @param sims Number of simulations per grid row.
+#' @param seed RNG seed.
+#' @param parallel Logical; use parallel execution.
+#'
+#' @return data.table summarising alpha, power, PETs, and expected sample sizes
+#'   for each labelled design.
+#' @export
 evaluate_ph_grid <- function(base_args, grid, scens, sims = 2000,
                              seed = 4242, parallel = TRUE) {
   run_one <- function(i) {
@@ -330,6 +416,17 @@ evaluate_ph_grid <- function(base_args, grid, scens, sims = 2000,
 library(data.table)
 library(ggplot2)
 
+#' Plot power versus type I error for calibration grids
+#'
+#' Visualises the output of `grid_calibrate()` by plotting power against type I
+#' error, optionally highlighting Pareto frontiers and feasible designs.
+#'
+#' @param cal List returned by `grid_calibrate()`.
+#' @param target_alpha Type I error threshold to display.
+#' @param label_top_n Number of feasible designs to annotate.
+#'
+#' @return A ggplot object.
+#' @export
 plot_calibration <- function(cal,
                              target_alpha = 0.10,
                              label_top_n = 3) {
@@ -417,6 +514,20 @@ plot_calibration <- function(cal,
 }
 
 # --- Pick best calibration row and bake into args ---
+#' Adopt a calibrated design configuration
+#'
+#' Picks a selected row from `grid_calibrate()` and returns updated arguments
+#' plus a two-scenario list (null vs alternative) for subsequent exploration.
+#'
+#' @param cal Output from `grid_calibrate()`.
+#' @param base_args Baseline argument list.
+#' @param null_med Control-arm median under the null.
+#' @param alt_med Experimental median under the alternative.
+#' @param which Integer index specifying which row of `cal$top` to adopt.
+#'
+#' @return A list containing the updated arguments (`args_star`), the selected
+#'   row (`pick`), and a two-scenario list (`scens2`).
+#' @export
 adopt_calibration <- function(cal, base_args, null_med, alt_med, which = 1L) {
   stopifnot(is.list(cal), !is.null(cal$top), nrow(cal$top) >= which)
   best <- data.table::as.data.table(cal$top)[which]
@@ -463,6 +574,36 @@ adopt_calibration <- function(cal, base_args, null_med, alt_med, which = 1L) {
 # For person-time schedules, pass a LIST of milestone vectors via `pt_milestones_choices`,
 # e.g. list(c(0.30,0.45,0.60,0.80,1.00), c(0.30,0.60,0.90)).
 #
+#' Explore early stopping knobs around a calibrated design
+#'
+#' Sweeps futility thresholds, information gates, and interim schedules around a
+#' calibrated design to characterise trade-offs between alpha, power, and PETs.
+#'
+#' @param adopted Output from `adopt_calibration()`.
+#' @param base_args Baseline argument list.
+#' @param exp_arms Character vector naming experimental arms.
+#' @param futility_thresholds Set of final posterior futility thresholds to try.
+#' @param futility_bases Character vector controlling how futility medians are
+#'   derived (`"null+delta"` or `"alt"`).
+#' @param futility_deltas Numeric vector of deltas added to null medians when
+#'   `futility_bases` includes `"null+delta"`.
+#' @param futility_threshold_grid Numeric vector of interim futility thresholds.
+#' @param min_events_grid Global minimum event counts to consider.
+#' @param min_median_followup_grid Global minimum median follow-up values.
+#' @param min_events_per_arm_grid Per-arm minimum events for gating.
+#' @param min_median_followup_per_arm_grid Per-arm minimum median follow-up.
+#' @param min_person_time_frac_per_arm_grid Per-arm minimum person-time
+#'   fractions.
+#' @param beat_grid Calendar beat schedules to evaluate.
+#' @param pt_milestones_choices List of person-time milestone vectors.
+#' @param latest_calendar_look_grid Backstop calendar times for person-time
+#'   schedules.
+#' @param sims Number of simulations per configuration.
+#' @param seed RNG seed.
+#' @param parallel Logical; use parallel processing.
+#'
+#' @return data.table of operating characteristics for each configuration.
+#' @export
 explore_early_stopping_from_cal <- function(
     cal,
     base_args,
@@ -660,6 +801,19 @@ explore_early_stopping_from_cal <- function(
 
 
 # --- Quick plot (optional) ---
+#' Plot early-stopping trade-offs
+#'
+#' Visualises power versus type I error for the early-stopping exploration grid.
+#'
+#' @param early_df data.table/data.frame returned by
+#'   `explore_early_stopping_from_cal()`.
+#' @param target_alpha Type I error target to show as a reference line.
+#' @param fix_min_ev Optional scalar to filter `min_events`.
+#' @param fix_mfu Optional scalar to filter `min_medFU`.
+#' @param fix_beat Optional scalar to filter calendar beats.
+#'
+#' @return A ggplot object (or the filtered data when `ggplot2` is unavailable).
+#' @export
 plot_early_tradeoff <- function(early_df,
                                 target_alpha = 0.10,
                                 fix_min_ev = NULL,
@@ -687,6 +841,15 @@ plot_early_tradeoff <- function(early_df,
 
 
 # --- Filter + rank early-stopping designs by constraints ---
+#' Filter early-stopping designs by operating targets
+#'
+#' @param early_df data.table/data.frame produced by
+#'   `explore_early_stopping_from_cal()`.
+#' @param alpha_cap Maximum acceptable type I error.
+#' @param power_floor Minimum acceptable power.
+#'
+#' @return data.table containing the subset that meets the supplied criteria.
+#' @export
 filter_early_grid <- function(early_df,
                               alpha_cap   = 0.10,
                               power_floor = 0.70) {
@@ -701,6 +864,18 @@ filter_early_grid <- function(early_df,
 
 
 # --- Pick the single recommended design under constraints ---
+#' Recommend a single early-stopping design
+#'
+#' Selects the top-performing row from an early-stopping grid subject to
+#' alpha/power (and optionally PET) constraints.
+#'
+#' @param df data.table/data.frame from `explore_early_stopping_from_cal()`.
+#' @param alpha_cap Maximum acceptable type I error.
+#' @param power_floor Minimum acceptable power.
+#' @param pet_fut_cap Optional cap on alternative PET for futility.
+#'
+#' @return data.table row describing the recommended design.
+#' @export
 recommend_design_from_early <- function(df,
                                         alpha_cap = 0.10,
                                         power_floor = 0.80,
@@ -717,6 +892,14 @@ recommend_design_from_early <- function(df,
 
 
 # --- Bake the recommended early-stopping knobs back into args ---
+#' Apply a recommended early-stopping configuration to the argument list
+#'
+#' @param args_star Baseline argument list (typically from `adopt_calibration()`).
+#' @param rec_row Single-row data.table produced by
+#'   `recommend_design_from_early()`.
+#'
+#' @return Modified argument list with the recommended early-stopping settings.
+#' @export
 apply_recommended_to_args <- function(args_star, rec_row) {
   stopifnot(nrow(rec_row) == 1L)
   a <- args_star
@@ -740,6 +923,12 @@ apply_recommended_to_args <- function(args_star, rec_row) {
 
 
 # All non-reference arms are considered "experimental"
+#' Extract experimental arm names from an argument list
+#'
+#' @param args Argument list containing `arm_names` and `reference_arm_name`.
+#'
+#' @return Character vector of experimental arm names.
+#' @export
 exp_arms_from_args <- function(args) {
   setdiff(args$arm_names, args$reference_arm_name)
 }
@@ -749,6 +938,16 @@ exp_arms_from_args <- function(args) {
 #   - null + delta  (base = "null+delta"; delta is a single number for all exp arms)
 #   - alt           (base = "alt")
 # The HC/reference arm keeps its "null" futility threshold.
+#' Adjust futility medians for experimental arms
+#'
+#' @param args Argument list whose `futility_median_arms` entry will be updated.
+#' @param null_med Numeric scalar representing the null median.
+#' @param alt_med Numeric scalar representing the alternative median.
+#' @param base Character scalar selecting `"null+delta"` or `"alt"`.
+#' @param delta Numeric offset added when `base = "null+delta"`.
+#'
+#' @return Modified argument list with updated `futility_median_arms`.
+#' @export
 set_futility_medians <- function(args, null_med, alt_med, base = c("null+delta","alt"), delta = 0) {
   base <- match.arg(base)
   arms_exp <- exp_arms_from_args(args)
