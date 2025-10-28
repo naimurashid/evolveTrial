@@ -192,17 +192,27 @@ gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
 
   # denominators (person-time caps) — handle unnamed vectors safely
   mtn <- args$max_total_patients_per_arm
-  if (is.null(names(mtn)) || any(names(mtn) == "")) {
-    # fall back to position if unnamed
-    if (length(mtn) >= 2L) {
-      maxPT_C <- as.numeric(mtn[1]) * coalesce_num(args$max_follow_up_sim, 0)
-      maxPT_T <- as.numeric(mtn[2]) * coalesce_num(args$max_follow_up_sim, 0)
-    } else {
-      maxPT_C <- 0; maxPT_T <- 0
+  max_follow <- coalesce_num(args$max_follow_up_sim, 0)
+  if (!is.null(mtn) && (is.null(names(mtn)) || any(!nzchar(names(mtn))))) {
+    if (!is.null(arm_names) && length(mtn) == length(arm_names)) {
+      names(mtn) <- arm_names
     }
+  }
+  if (is.null(mtn)) {
+    maxPT_C <- 0; maxPT_T <- 0
+  } else if (!is.null(names(mtn)) &&
+             all(c(ctrl_name, trt_name) %in% names(mtn))) {
+    maxPT_C <- coalesce_num(mtn[[ctrl_name]], 0) * max_follow
+    maxPT_T <- coalesce_num(mtn[[trt_name]],  0) * max_follow
   } else {
-    maxPT_C <- coalesce_num(mtn[[ctrl_name]], 0) * coalesce_num(args$max_follow_up_sim, 0)
-    maxPT_T <- coalesce_num(mtn[[trt_name]],  0) * coalesce_num(args$max_follow_up_sim, 0)
+    idx_ctrl <- match(ctrl_name, arm_names)
+    idx_trt  <- match(trt_name,  arm_names)
+    if (is.na(idx_ctrl) || idx_ctrl > length(mtn)) idx_ctrl <- 1L
+    if (is.na(idx_trt)  || idx_trt  > length(mtn)) {
+      idx_trt <- if (length(mtn) >= 2L) 2L else idx_ctrl
+    }
+    maxPT_C <- coalesce_num(as.numeric(mtn[idx_ctrl]), 0) * max_follow
+    maxPT_T <- coalesce_num(as.numeric(mtn[idx_trt]),  0) * max_follow
   }
 
   fracC <- if (maxPT_C > 0) ptC / maxPT_C else 0

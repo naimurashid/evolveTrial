@@ -251,6 +251,14 @@ run_simulation_pure <- function(
       # randomize next patient
       elig_idx <- is_eligible(state)
       if (length(elig_idx) == 0) break
+
+      # If all experimental arms are closed or at cap, stop enrolling control only
+      exp_idx <- which(arm_names != reference_arm_name)
+      exp_active <- exp_idx[state$arm_status[arm_names[exp_idx]] == "recruiting"]
+      exp_active <- exp_active[state$enrolled_counts[arm_names[exp_active]] <
+                                 max_total_patients_per_arm[arm_names[exp_active]]]
+      if (length(exp_active) == 0) break
+
       elig_arms <- arm_names[elig_idx]
       
       probs <- randomization_probs[elig_arms]

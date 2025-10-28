@@ -250,6 +250,77 @@ grid_calibrate <- function(base_args,
        top = head(ok, 10))
 }
 
+
+#' Evaluate PH-based grid of designs
+#'
+#' Helper that sweeps probability thresholds, gate settings, and HR margins,
+#' returning operating characteristics plus expected sample sizes per arm.
+#' @param base_args List of defaults passed to `run_scenarios()`.
+#' @param grid data.table/data.frame with at least the columns
+#'   `label`, `thr_eff`, `thr_fut`, `margin`, `min_ev`, `min_pt`,
+#'   and `hr_margin`.
+#' @param scens Scenario list (from `scenarios_from_grid()`).
+#' @param sims Simulations per grid row.
+#' @param seed RNG seed.
+#' @param parallel Whether to use `parallel::mclapply`.
+#' @return data.table summarising Type I error, power, PETs, expected N per arm,
+#'   control-arm expectations, and total expected N under null/alt.
+evaluate_ph_grid <- function(base_args, grid, scens, sims = 2000,
+                             seed = 4242, parallel = TRUE) {
+  run_one <- function(i) {
+    row <- grid[i]
+    args_i <- base_args
+    args_i$num_simulations                <- sims
+    args_i$efficacy_threshold_vs_ref_prob <- row$thr_eff
+    args_i$futility_threshold_vs_ref_prob <- row$thr_fut
+    args_i$compare_arms_futility_margin   <- row$margin
+    args_i$compare_arms_hr_margin         <- row$hr_margin
+    args_i$min_events_per_arm             <- row$min_ev
+    args_i$min_person_time_frac_per_arm   <- row$min_pt
+    args_i$diagnostics                    <- FALSE
+
+    res <- run_scenarios(args_i, scens, parallel = FALSE, seed = seed)
+    res_dt <- data.table::as.data.table(res)
+
+    ref_arm <- args_i$reference_arm_name
+    if (is.null(ref_arm) || !ref_arm %in% args_i$arm_names) {
+      ref_arm <- args_i$arm_names[1]
+    }
+
+    summary <- res_dt[Arm_Name == "Triplet",
+                      .(alpha = mean(Type_I_Error_or_Power[scenario == 1]),
+                        power = mean(Type_I_Error_or_Power[scenario == 2]),
+                        PET_Eff_null = mean(PET_Efficacy[scenario == 1]),
+                        PET_Eff_alt  = mean(PET_Efficacy[scenario == 2]),
+                        PET_Fut_null = mean(PET_Futility[scenario == 1]),
+                        PET_Fut_alt  = mean(PET_Futility[scenario == 2]),
+                        ExpN_null    = mean(Exp_N[scenario == 1]),
+                        ExpN_alt     = mean(Exp_N[scenario == 2]))]
+
+    ctrl_null <- res_dt[scenario == 1 & Arm_Name == ref_arm, mean(Exp_N)]
+    ctrl_alt  <- res_dt[scenario == 2 & Arm_Name == ref_arm, mean(Exp_N)]
+    total_null <- res_dt[scenario == 1, sum(Exp_N)]
+    total_alt  <- res_dt[scenario == 2, sum(Exp_N)]
+
+    summary[, `:=`(
+      ExpN_ctrl_null = ctrl_null %||% NA_real_,
+      ExpN_ctrl_alt  = ctrl_alt %||% NA_real_,
+      ExpN_total_null = total_null %||% NA_real_,
+      ExpN_total_alt  = total_alt %||% NA_real_
+    )]
+
+    cbind(row, summary)
+  }
+
+  idx <- seq_len(nrow(grid))
+  out <- if (parallel) {
+    parallel::mclapply(idx, run_one, mc.cores = max(1L, parallel::detectCores() - 1L))
+  } else {
+    lapply(idx, run_one)
+  }
+  data.table::rbindlist(out, use.names = TRUE)
+}
+
 # =========================
 # Power vs Type I plots
 # =========================
@@ -690,4 +761,3 @@ set_futility_medians <- function(args, null_med, alt_med, base = c("null+delta",
   args$futility_median_arms <- fut
   args
 }
-
