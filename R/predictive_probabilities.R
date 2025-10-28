@@ -233,7 +233,9 @@ approx_future_exposure <- function(current_time,
     total_exposure <- remaining * avg_follow_up
   }
 
-  widths <- diff(cuts)
+  effective_upper <- pmin(cuts[-1], max_follow_up)
+  effective_lower <- pmax(cuts[-length(cuts)], current_time)
+  widths <- pmax(0, effective_upper - effective_lower)
   width_sum <- sum(widths)
   if (width_sum <= 0) {
     return(rep(0, K))
