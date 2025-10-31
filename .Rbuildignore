@@ -9,3 +9,7 @@
 ^docs$
 ^pkgdown$
 ^\.github$
+^\.claude$
+^CLAUDE\.md$
+^AGENTS\.md$
+^gitapply\.patch$

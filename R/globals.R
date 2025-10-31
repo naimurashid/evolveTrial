@@ -6,7 +6,7 @@ utils::globalVariables(c(
 
   # columns you create via := or use in i/j
   "event_status", "observed_time", "interval_num", "events", "person_time",
-  "alpha", "power", "ExpN_alt", "PET_Fut_null", "PET_Eff_null", "fut_thr",
+  "alpha", "power", "ExpN_alt", "PET_Fut_null", "PET_Fut_alt", "PET_Eff_null", "fut_thr",
   "min_events", "min_medFU", "beat", "pt_milestones", "latest_calendar_look",
   "margin_abs", "interim_thr", "final_thr", "interim_lab", "final_lab",
   "frontier", "True_Median", "Exp_N", "Pr_Reach_Max_N", "Type_I_Error_or_Power",

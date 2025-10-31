@@ -9,21 +9,25 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Suggests: 
-    testthat (>= 3.0.0)
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    dplyr,
+    gt,
+    openxlsx,
+    ggrepel,
+    scales,
+    webshot,
+    webshot2
 Config/testthat/edition: 3
+VignetteBuilder: knitr
 Imports:
     data.table,
     ggplot2,
-    ggpubr,
     grid,
-    dplyr,
-    gt,
     magrittr,
-    openxlsx,
     progress,
     stats,
-    survival,
-    survminer,
     tidyselect,
     utils

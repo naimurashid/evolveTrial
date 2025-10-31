@@ -1,6 +1,18 @@
 
 # --- HELPER FUNCTION: Calculate Median Survival for a Piecewise Exponential Model ---
 # --- UPDATED: Calculate Median Survival for a Piecewise Exponential Model ---
+#' Calculate median survival for piecewise exponential model
+#'
+#' Computes the median survival time for a piecewise exponential model.
+#' If the 0.5 survival is not reached by the end of the last interval,
+#' we continue past the last cutpoint with the last interval's hazard (open-ended tail).
+#' Only return Inf if the last hazard is exactly zero.
+#'
+#' @param hazard_rates Numeric vector of hazard rates for each interval.
+#' @param interval_lengths Numeric vector of interval lengths (durations).
+#'
+#' @return Median survival time (numeric scalar, possibly Inf).
+#' @keywords internal
 calculate_median_survival_piecewise <- function(hazard_rates, interval_lengths) {
   #' Computes the median survival time for a piecewise exponential model.
   #' If the 0.5 survival is not reached by the end of the last interval,
@@ -49,6 +61,20 @@ calculate_median_survival_piecewise <- function(hazard_rates, interval_lengths) 
 
 
 # --- HELPER FUNCTION: Draw Posterior Hazard Samples ---
+#' Draw posterior hazard samples for piecewise exponential model
+#'
+#' Draws samples from the posterior distribution of hazard rates for each interval
+#' in a Bayesian piecewise exponential model with Gamma priors.
+#'
+#' @param num_intervals Number of intervals in the piecewise model.
+#' @param events_per_interval Integer vector of observed events per interval.
+#' @param person_time_per_interval Numeric vector of person-time at risk per interval.
+#' @param prior_alpha_params Numeric vector of Gamma prior shape parameters.
+#' @param prior_beta_params Numeric vector of Gamma prior rate parameters.
+#' @param num_samples Number of posterior samples to draw (default 1000).
+#'
+#' @return Matrix with `num_samples` rows and `num_intervals` columns of hazard samples.
+#' @keywords internal
 draw_posterior_hazard_samples <- function(
     num_intervals,
     events_per_interval,

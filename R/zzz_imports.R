@@ -5,7 +5,6 @@
 #' @importFrom grid unit
 #' @importFrom magrittr "%>%"
 #' @importFrom tidyselect where
-#' @importFrom openxlsx createWorkbook addWorksheet writeDataTable setColWidths saveWorkbook
 #' @importFrom utils head tail
-#' @importFrom stats median setNames rexp rgamma rpois runif rweibull
+#' @importFrom stats median setNames rexp rgamma rnorm rpois runif rweibull
 NULL

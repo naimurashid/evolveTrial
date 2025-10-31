@@ -1,5 +1,14 @@
 
 # --- UPDATED: Fast interval metrics with robust event indexing ---
+#' Calculate interval-specific metrics from patient data
+#'
+#' Recalculates events and person-time using a more efficient data.table approach.
+#'
+#' @param patient_data Data frame with columns `observed_time` and `event_status`.
+#' @param interval_cutpoints Numeric vector of interval boundaries.
+#'
+#' @return A list with `events_per_interval` and `person_time_per_interval` vectors.
+#' @keywords internal
 calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
   #' Recalculates events and person-time using a more efficient data.table approach.
   num_intervals <- length(interval_cutpoints) - 1

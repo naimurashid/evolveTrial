@@ -53,13 +53,15 @@ pretty_scenario_matrix <- function(results_df) {
 #' @return Invisibly returns `file_path`.  Writes an `.xlsx` file to disk.
 #' @export
 export_scenario_table_to_excel <- function(pretty_tbl, file_path = "scenario_summary.xlsx") {
-  library(openxlsx)
-  wb <- createWorkbook()
-  addWorksheet(wb, "Scenario Summary")
-  writeDataTable(wb, sheet = 1, x = pretty_tbl, tableStyle = "TableStyleMedium9")
-  setColWidths(wb, sheet = 1, cols = 1:ncol(pretty_tbl), widths = "auto")
-  saveWorkbook(wb, file_path, overwrite = TRUE)
-  message("✅ Exported formatted table to: ", normalizePath(file_path))
+  if (!requireNamespace("openxlsx", quietly = TRUE)) {
+    stop("Package 'openxlsx' is required. Install with install.packages('openxlsx')")
+  }
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "Scenario Summary")
+  openxlsx::writeDataTable(wb, sheet = 1, x = pretty_tbl, tableStyle = "TableStyleMedium9")
+  openxlsx::setColWidths(wb, sheet = 1, cols = 1:ncol(pretty_tbl), widths = "auto")
+  openxlsx::saveWorkbook(wb, file_path, overwrite = TRUE)
+  message("[OK] Exported formatted table to: ", normalizePath(file_path))
 }
 
 #' Render the scenario summary table to a PNG image
@@ -105,12 +107,16 @@ export_scenario_table_to_png <- function(results_df,
   
   # build table data (expects you already defined pretty_scenario_matrix)
   tbl <- pretty_scenario_matrix(results_df)
-  
+
   # minimal formatting
-  library(gt)
-  library(dplyr)
-  
-  tbl <- tbl %>% dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 2)))
+  if (!requireNamespace("gt", quietly = TRUE)) {
+    stop("Package 'gt' is required. Install with install.packages('gt')")
+  }
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    stop("Package 'dplyr' is required. Install with install.packages('dplyr')")
+  }
+
+  tbl <- tbl %>% dplyr::mutate(dplyr::across(tidyselect::where(is.numeric), ~ round(.x, 2)))
   
   gt_tbl <- gt::gt(tbl) %>%
     gt::tab_header(
@@ -172,7 +178,7 @@ export_scenario_table_to_png <- function(results_df,
     )
   }
   
-  message("✅ Image saved: ", normalizePath(file_path))
+  message("[OK] Image saved: ", normalizePath(file_path))
 }
 
 #' Calibrate interim and final thresholds for single-arm designs
@@ -213,8 +219,6 @@ calibrate_alpha <- function(base_args, scens_null, thr_grid_interim = c(0.9, 0.9
 # - Sweeps interim success threshold (vs HC), final success threshold, and Triplet success margin
 # - Evaluates Type I under all-null (Doublet=6, Triplet=6) and Power under alt (Doublet=6, Triplet=9)
 # - Ranks designs that satisfy alpha <= target_alpha by highest power, then lowest Exp_N under alt
-
-library(data.table)
 
 #' Calibrate historical-control thresholds over a grid
 #'
@@ -413,8 +417,6 @@ evaluate_ph_grid <- function(base_args, grid, scens, sims = 2000,
 # Requires: data.table, ggplot2
 # Optional: ggrepel (for nicer labels), scales (percent axes)
 
-library(data.table)
-library(ggplot2)
 
 #' Plot power versus type I error for calibration grids
 #'
@@ -435,7 +437,7 @@ plot_calibration <- function(cal,
   if (nrow(df) == 0L) stop("cal$all is empty")
   
   # Facet label helpers
-  df[, margin_lab := sprintf("Δ = %s", format(margin_abs, trim = TRUE))]
+  df[, margin_lab := sprintf("Delta = %s", format(margin_abs, trim = TRUE))]
   df[, final_lab  := paste0("Final thr = ", final_thr)]
   df[, interim_lab := paste0("Interim thr=", interim_thr)]
   
@@ -447,7 +449,7 @@ plot_calibration <- function(cal,
   best_tbl <- if (!is.null(cal$feasible) && nrow(cal$feasible) > 0L) {
     bt <- as.data.table(cal$feasible)
     setorder(bt, -power, ExpN_alt)
-    bt[, margin_lab := sprintf("Δ = %s", format(margin_abs, trim = TRUE))]
+    bt[, margin_lab := sprintf("Delta = %s", format(margin_abs, trim = TRUE))]
     bt[, final_lab  := paste0("Final thr = ", final_thr)]
     bt[1:min(label_top_n, .N)]
   } else data.table()
@@ -480,7 +482,7 @@ plot_calibration <- function(cal,
       p <- p + ggrepel::geom_label_repel(
         data = best_tbl,
         aes(x = alpha, y = power,
-            label = paste0("Δ=", margin_abs,
+            label = paste0("Delta=", margin_abs,
                            "; Int=", interim_thr,
                            "; Fin=", final_thr,
                            "; N~", round(ExpN_alt, 1))),
@@ -492,7 +494,7 @@ plot_calibration <- function(cal,
       p <- p + geom_text(
         data = best_tbl,
         aes(x = alpha, y = power,
-            label = paste0("Δ=", margin_abs,
+            label = paste0("Delta=", margin_abs,
                            ", Int=", interim_thr,
                            ", Fin=", final_thr)),
         size = 3, vjust = -0.8
@@ -579,25 +581,22 @@ adopt_calibration <- function(cal, base_args, null_med, alt_med, which = 1L) {
 #' Sweeps futility thresholds, information gates, and interim schedules around a
 #' calibrated design to characterise trade-offs between alpha, power, and PETs.
 #'
-#' @param adopted Output from `adopt_calibration()`.
+#' @param cal Calibration output from `grid_calibrate()` or similar.
 #' @param base_args Baseline argument list.
-#' @param exp_arms Character vector naming experimental arms.
-#' @param futility_thresholds Set of final posterior futility thresholds to try.
-#' @param futility_bases Character vector controlling how futility medians are
-#'   derived (`"null+delta"` or `"alt"`).
-#' @param futility_deltas Numeric vector of deltas added to null medians when
-#'   `futility_bases` includes `"null+delta"`.
-#' @param futility_threshold_grid Numeric vector of interim futility thresholds.
+#' @param null_med Control-arm median under null.
+#' @param alt_med Experimental median under alternative.
+#' @param base Futility baseline mode: "null+delta" or "alt".
+#' @param futility_delta_grid Numeric vector of deltas added to null medians.
+#' @param fut_thr_grid Numeric vector of futility probability thresholds.
 #' @param min_events_grid Global minimum event counts to consider.
-#' @param min_median_followup_grid Global minimum median follow-up values.
+#' @param min_medFU_grid Global minimum median follow-up values.
+#' @param schedule_modes Character vector: "calendar", "persontime", or both.
+#' @param beat_grid Calendar beat schedules to evaluate (months).
+#' @param pt_milestones_choices List of person-time milestone vectors.
+#' @param latest_calendar_look_grid Backstop calendar times for person-time schedules.
 #' @param min_events_per_arm_grid Per-arm minimum events for gating.
 #' @param min_median_followup_per_arm_grid Per-arm minimum median follow-up.
-#' @param min_person_time_frac_per_arm_grid Per-arm minimum person-time
-#'   fractions.
-#' @param beat_grid Calendar beat schedules to evaluate.
-#' @param pt_milestones_choices List of person-time milestone vectors.
-#' @param latest_calendar_look_grid Backstop calendar times for person-time
-#'   schedules.
+#' @param min_person_time_frac_per_arm_grid Per-arm minimum person-time fractions.
 #' @param sims Number of simulations per configuration.
 #' @param seed RNG seed.
 #' @param parallel Logical; use parallel processing.
@@ -748,7 +747,7 @@ explore_early_stopping_from_cal <- function(
       mlv <- as.numeric(strsplit(row$pt_milestones, ",")[[1]])
       args_i$person_time_milestones <- mlv
       args_i$latest_calendar_look   <- row$latest_calendar_look
-      # keep a (small) calendar beat as a guard if you like, but we’ll let the backstop rule dominate
+      # keep a (small) calendar beat as a guard if you like, but we'll let the backstop rule dominate
       args_i$interim_calendar_beat  <- args0$interim_calendar_beat %||% 2
     }
     
@@ -823,7 +822,7 @@ plot_early_tradeoff <- function(early_df,
   if (!is.null(fix_min_ev)) df <- df[min_events == fix_min_ev]
   if (!is.null(fix_mfu))    df <- df[min_medFU  == fix_mfu]
   if (!is.null(fix_beat))   df <- df[beat       == fix_beat]
-  if (nrow(df) == 0L) stop("No rows after filtering—relax the fixed settings.")
+  if (nrow(df) == 0L) stop("No rows after filtering--relax the fixed settings.")
   
   if (requireNamespace("ggplot2", quietly = TRUE)) {
     ggplot2::ggplot(df, ggplot2::aes(alpha, power, color = factor(fut_thr))) +
