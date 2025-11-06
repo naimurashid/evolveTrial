@@ -56,7 +56,11 @@ run_simulation_pure(
   min_person_time_frac_per_arm = 0,
   person_time_milestones = NULL,
   latest_calendar_look = Inf,
-  rebalance_after_events = NULL
+  rebalance_after_events = NULL,
+  parallel_replicates = FALSE,
+  num_workers = NULL,
+  cluster_type = c("PSOCK", "FORK"),
+  progress = interactive()
 )
 }
 \arguments{
@@ -203,6 +207,18 @@ planned person-time) triggering interim looks.}
 
 \item{rebalance_after_events}{Optional integer; when non-\code{NULL} the piecewise
 cut points are re-estimated once that number of events has accrued.}
+
+\item{parallel_replicates}{Logical; if \code{TRUE}, distribute Monte Carlo
+replicates across a parallel cluster (PSOCK by default).}
+
+\item{num_workers}{Optional integer specifying the number of workers when
+\code{parallel_replicates = TRUE}. Defaults to \code{parallel::detectCores() - 1}.}
+
+\item{cluster_type}{Type of parallel cluster to spawn when distributing
+replicates. One of \code{"PSOCK"} (default) or \code{"FORK"}.}
+
+\item{progress}{Logical; show the simulation progress bar when running
+sequentially. Automatically disabled for parallel replicate execution.}
 }
 \value{
 A data frame with one row per arm and columns summarising operating
@@ -215,4 +231,14 @@ enrols patients according to the supplied accrual plan, applies interim
 gating/decision rules, optionally rebalances interval cut points, and
 carries each replicate forward to the final analysis.  Operating
 characteristics are returned summarised per arm.
+}
+\details{
+When \code{parallel_replicates = TRUE}, results will vary based on
+\code{num_workers} due to different random number stream partitioning.
+For exact reproducibility across runs, use \code{parallel_replicates = FALSE}.
+
+During package development with \code{devtools::load_all()}, parallel workers
+will load the installed package version, not the development code. For
+testing development changes, either use \code{parallel_replicates = FALSE} or
+reinstall the package with \code{devtools::install()}.
 }

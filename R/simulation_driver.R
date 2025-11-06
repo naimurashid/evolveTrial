@@ -99,10 +99,27 @@
 #' @param latest_calendar_look Backstop calendar time for person-time schedules.
 #' @param rebalance_after_events Optional integer; when non-`NULL` the piecewise
 #'   cut points are re-estimated once that number of events has accrued.
+#' @param parallel_replicates Logical; if `TRUE`, distribute Monte Carlo
+#'   replicates across a parallel cluster (PSOCK by default).
+#' @param num_workers Optional integer specifying the number of workers when
+#'   `parallel_replicates = TRUE`. Defaults to `parallel::detectCores() - 1`.
+#' @param cluster_type Type of parallel cluster to spawn when distributing
+#'   replicates. One of `"PSOCK"` (default) or `"FORK"`.
+#' @param progress Logical; show the simulation progress bar when running
+#'   sequentially. Automatically disabled for parallel replicate execution.
 #'
 #' @return A data frame with one row per arm and columns summarising operating
 #'   characteristics such as type I error / power, PETs, final decision
 #'   probabilities, and expected sample size.
+#'
+#' @details When \code{parallel_replicates = TRUE}, results will vary based on
+#'   \code{num_workers} due to different random number stream partitioning.
+#'   For exact reproducibility across runs, use \code{parallel_replicates = FALSE}.
+#'
+#'   During package development with \code{devtools::load_all()}, parallel workers
+#'   will load the installed package version, not the development code. For
+#'   testing development changes, either use \code{parallel_replicates = FALSE} or
+#'   reinstall the package with \code{devtools::install()}.
 #' @export
 run_simulation_pure <- function(
     num_simulations,
@@ -163,8 +180,14 @@ run_simulation_pure <- function(
     person_time_milestones = NULL,
     latest_calendar_look = Inf,
     # optional interval rebalancing
-    rebalance_after_events = NULL
+    rebalance_after_events = NULL,
+    # replicate-level parallelisation
+    parallel_replicates = FALSE,
+    num_workers = NULL,
+    cluster_type = c("PSOCK", "FORK"),
+    progress = interactive()
 ) {
+  cluster_type <- match.arg(cluster_type)
   weibull_scale_true_arms <- sapply(arm_names, function(arm) {
     calculate_weibull_scale(weibull_median_true_arms[arm], weibull_shape_true_arms[arm])
   })
@@ -184,23 +207,13 @@ run_simulation_pure <- function(
     stringsAsFactors = FALSE
   )
   
-  final_n_per_sim <- matrix(0, nrow = num_simulations, ncol = length(arm_names),
-                            dimnames = list(NULL, arm_names))
-  stop_efficacy_per_sim <- matrix(0, nrow = num_simulations, ncol = length(arm_names),
-                                  dimnames = list(NULL, arm_names))
-  stop_futility_per_sim <- matrix(0, nrow = num_simulations, ncol = length(arm_names),
-                                  dimnames = list(NULL, arm_names))
-  final_efficacy_per_sim <- matrix(0, nrow = num_simulations, ncol = length(arm_names),
-                                   dimnames = list(NULL, arm_names))
-  final_futility_per_sim <- matrix(0, nrow = num_simulations, ncol = length(arm_names),
-                                   dimnames = list(NULL, arm_names))
-  final_inconclusive_per_sim <- matrix(0, nrow = num_simulations, ncol = length(arm_names),
-                                       dimnames = list(NULL, arm_names))
-  
-  pb <- progress::progress_bar$new(
-    format = "  Sims [:bar] :percent in :elapsed",
-    total = num_simulations, clear = FALSE, width = 60
-  )
+  show_progress <- isTRUE(progress) && !isTRUE(parallel_replicates)
+  if (show_progress) {
+    pb <- progress::progress_bar$new(
+      format = "  Sims [:bar] :percent in :elapsed",
+      total = num_simulations, clear = FALSE, width = 60
+    )
+  }
   
   # total max person-time across arms (for milestone schedule)
   max_PT_per_arm <- setNames(as.numeric(max_total_patients_per_arm) * max_follow_up_sim,
@@ -265,235 +278,357 @@ run_simulation_pure <- function(
     rebalance_after_events = rebalance_after_events
   )
   
-  interval_cutpoints_current <- interval_cutpoints_sim
-  args$interval_cutpoints_sim <- interval_cutpoints_current
-  num_intervals <- length(interval_cutpoints_current) - 1
-  rebalance_threshold <- rebalance_after_events
-  rebalance_done <- is.null(rebalance_threshold)
-  
-  for (s in 1:num_simulations) {
-    state <- make_state(arm_names, max_total_patients_per_arm)
-    
-    current_time <- 0.0
-    next_calendar_look <- interim_calendar_beat
-    next_pt_idx <- 1L
-    patient_id <- 0L
-    
-    is_eligible <- function(st) {
-      which((st$arm_status == "recruiting") & (st$enrolled_counts < max_total_patients_per_arm))
-    }
-    
-    # accrual loop
-    while (length(is_eligible(state)) > 0) {
-      interarrival <- rexp(1, rate = overall_accrual_rate)
-      current_time <- current_time + interarrival
+  num_intervals <- length(interval_cutpoints_sim) - 1
+  interval_lengths_base <- diff(interval_cutpoints_sim)
 
-      if (!rebalance_done && !is.null(rebalance_threshold)) {
-        total_events <- 0
-        event_times_all <- numeric(0)
-        for (arm in arm_names) {
-          slice_tmp <- slice_arm_data_at_time(
-            state$registries[[arm]], current_time,
-            max_follow_up_sim, interval_cutpoints_current
-          )
-          total_events <- total_events + slice_tmp$metrics$events_total
-          if (nrow(slice_tmp$patient_data) > 0) {
-            ev_idx <- which(slice_tmp$patient_data$event_status == 1)
-            if (length(ev_idx) > 0) {
-              event_times_all <- c(event_times_all, slice_tmp$patient_data$observed_time[ev_idx])
-            }
-          }
-        }
-        if (total_events >= rebalance_threshold) {
-          new_cuts <- rebalance_cutpoints_from_events(
-            event_times_all, max_follow_up_sim, num_intervals
-          )
-          if (!is.null(new_cuts)) {
-            interval_cutpoints_current <- new_cuts
-            args$interval_cutpoints_sim <- new_cuts
-            rebalance_done <- TRUE
-            if (diagnostics) {
-              message(sprintf(
-                "Rebalanced interval cutpoints at t=%.2f using %d observed events",
-                current_time, total_events
-              ))
-            }
-          } else {
-            rebalance_done <- TRUE
-          }
-        }
+  sum_final_n       <- setNames(numeric(length(arm_names)), arm_names)
+  sum_stop_efficacy <- setNames(numeric(length(arm_names)), arm_names)
+  sum_stop_futility <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_efficacy <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_futility <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_inconclusive <- setNames(numeric(length(arm_names)), arm_names)
+
+  tick_fun <- if (show_progress) function() pb$tick() else function() invisible(NULL)
+
+  base_args_for_interim <- args
+
+  simulate_chunk <- function(sim_indices, seed = NULL, tick = function() {}) {
+    if (!is.null(seed)) {
+      set.seed(seed)
+    }
+    chunk_sum_final_n <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_stop_eff <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_stop_fut <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_eff <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_fut <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_inc <- setNames(numeric(length(arm_names)), arm_names)
+
+    for (sim_idx in sim_indices) {
+      args_local <- base_args_for_interim
+      # Reset cutpoints to baseline for each simulation (handles rebalancing correctly)
+      interval_cutpoints_current <- interval_cutpoints_sim
+      args_local$interval_cutpoints_sim <- interval_cutpoints_current
+      interval_lengths <- interval_lengths_base
+      rebalance_threshold <- rebalance_after_events
+      rebalance_done <- is.null(rebalance_threshold)
+
+      state <- make_state(arm_names, max_total_patients_per_arm)
+      current_time <- 0.0
+      next_calendar_look <- interim_calendar_beat
+      next_pt_idx <- 1L
+      patient_id <- 0L
+
+      is_eligible <- function(st) {
+        which((st$arm_status == "recruiting") & (st$enrolled_counts < max_total_patients_per_arm))
       }
-      
-      # ---- LOOK SCHEDULING ----
-      if (!is.null(pt_targets_abs)) {
-        # PT-based schedule (with calendar backstop)
-        total_PT_now <- cum_person_time_all_arms(state, current_time, max_follow_up_sim,
-                                                 interval_cutpoints_current, arm_names)
-        if (is.null(state$.__backstop_fired__)) state$.__backstop_fired__ <- FALSE
-        
-        while (!is.null(pt_targets_abs) &&
-               next_pt_idx <= length(pt_targets_abs) &&
-               (total_PT_now >= pt_targets_abs[next_pt_idx] ||
-                (!state$.__backstop_fired__ && is.finite(latest_calendar_look) && current_time >= latest_calendar_look))) {
-          
-          state <- interim_check(state, current_time, args, diagnostics = diagnostics)
-          
-          if (total_PT_now >= pt_targets_abs[next_pt_idx]) {
-            next_pt_idx <- next_pt_idx + 1L
+
+      while (length(is_eligible(state)) > 0) {
+        interarrival <- rexp(1, rate = overall_accrual_rate)
+        current_time <- current_time + interarrival
+
+        if (!rebalance_done && !is.null(rebalance_threshold)) {
+          total_events <- 0
+          event_times_all <- numeric(0)
+          for (arm in arm_names) {
+            slice_tmp <- slice_arm_data_at_time(
+              state$registries[[arm]], current_time,
+              max_follow_up_sim, interval_cutpoints_current
+            )
+            total_events <- total_events + slice_tmp$metrics$events_total
+            if (nrow(slice_tmp$patient_data) > 0) {
+              ev_idx <- which(slice_tmp$patient_data$event_status == 1)
+              if (length(ev_idx) > 0) {
+                event_times_all <- c(event_times_all, slice_tmp$patient_data$observed_time[ev_idx])
+              }
+            }
           }
-          if (!state$.__backstop_fired__ && is.finite(latest_calendar_look) && current_time >= latest_calendar_look) {
-            state$.__backstop_fired__ <- TRUE
+          if (total_events >= rebalance_threshold) {
+            new_cuts <- rebalance_cutpoints_from_events(
+              event_times_all, max_follow_up_sim, num_intervals
+            )
+            if (!is.null(new_cuts)) {
+              interval_cutpoints_current <- new_cuts
+              args_local$interval_cutpoints_sim <- new_cuts
+              interval_lengths <- diff(new_cuts)
+              rebalance_done <- TRUE
+              if (diagnostics) {
+                message(sprintf(
+                  "Rebalanced interval cutpoints at t=%.2f using %d observed events",
+                  current_time, total_events
+                ))
+              }
+            } else {
+              rebalance_done <- TRUE
+            }
           }
-          
-          if (all(state$arm_status != "recruiting")) break
+        }
+
+        if (!is.null(pt_targets_abs)) {
           total_PT_now <- cum_person_time_all_arms(state, current_time, max_follow_up_sim,
                                                    interval_cutpoints_current, arm_names)
-        }
-      } else {
-        # calendar-beat schedule
-        if (current_time >= next_calendar_look) {
-          state <- interim_check(state, current_time, args, diagnostics = diagnostics)
-          next_calendar_look <- next_calendar_look + interim_calendar_beat
-        }
-      }
-      
-      # if all arms stopped at a look, quit
-      if (all(state$arm_status != "recruiting")) break
-      
-      # randomize next patient
-      elig_idx <- is_eligible(state)
-      if (length(elig_idx) == 0) break
+          if (is.null(state$.__backstop_fired__)) state$.__backstop_fired__ <- FALSE
 
-      # If all experimental arms are closed or at cap, stop enrolling control only
-      exp_idx <- which(arm_names != reference_arm_name)
-      exp_active <- exp_idx[state$arm_status[arm_names[exp_idx]] == "recruiting"]
-      exp_active <- exp_active[state$enrolled_counts[arm_names[exp_active]] <
-                                 max_total_patients_per_arm[arm_names[exp_active]]]
-      if (length(exp_active) == 0) break
+          while (!is.null(pt_targets_abs) &&
+                 next_pt_idx <= length(pt_targets_abs) &&
+                 (total_PT_now >= pt_targets_abs[next_pt_idx] ||
+                  (!state$.__backstop_fired__ && is.finite(latest_calendar_look) && current_time >= latest_calendar_look))) {
 
-      elig_arms <- arm_names[elig_idx]
-      
-      probs <- randomization_probs[elig_arms]
-      probs <- probs / sum(probs)
-      chosen_arm <- sample(elig_arms, size = 1, prob = probs)
-      
-      patient_id <- patient_id + 1L
-      t_event_true <- rweibull(1, shape = weibull_shape_true_arms[chosen_arm],
-                               scale = weibull_scale_true_arms[chosen_arm])
-      t_random_censor <- runif(1, min = 0, max = censor_max_time_sim)
-      
-      state$registries[[chosen_arm]] <- rbind(state$registries[[chosen_arm]],
-                                              data.frame(
-                                                id = patient_id,
-                                                enroll_time = current_time,
-                                                true_event_time = t_event_true,
-                                                random_censor_time = t_random_censor
-                                              ))
-      state$enrolled_counts[chosen_arm] <- state$enrolled_counts[chosen_arm] + 1L
-    }
-    
-    # last interim if we ended between looks
-    state <- interim_check(state, current_time, args, diagnostics = diagnostics)
-    
-    # final analysis
-    last_enroll_time <- max(c(0, unlist(lapply(state$registries, function(df) df$enroll_time))), na.rm = TRUE)
-    final_time <- last_enroll_time + min_follow_up_at_final
-      interval_lengths <- diff(interval_cutpoints_current)
-    
-    ref_slice_final <- NULL
-    if (compare_arms_option) {
-      ref_slice_final <- slice_arm_data_at_time(
-        state$registries[[reference_arm_name]], final_time,
-        max_follow_up_sim, interval_cutpoints_current
-      )
-    }
-    
-    for (arm in arm_names) {
-      if (state$arm_status[arm] != "recruiting") next
-      
-      arm_slice <- slice_arm_data_at_time(state$registries[[arm]], final_time,
-                                          max_follow_up_sim, interval_cutpoints_current)
-      
-      if (!compare_arms_option) {
-        post_arm <- draw_posterior_hazard_samples(
-          num_intervals = num_intervals,
-          events_per_interval = arm_slice$metrics$events_per_interval,
-          person_time_per_interval = arm_slice$metrics$person_time_per_interval,
-          prior_alpha_params = prior_alpha_params_model,
-          prior_beta_params  = prior_beta_params_model,
-          num_samples = num_posterior_draws
-        )
-        med_arm <- apply(post_arm, 1, function(h) {
-          calculate_median_survival_piecewise(h, interval_lengths)
-        })
-        # Single-arm final vs absolute thresholds
-        p_eff <- mean(med_arm > median_pfs_success_threshold_arms[arm])
-        if (p_eff >= final_success_posterior_prob_threshold) {
-          final_efficacy_per_sim[s, arm] <- 1L
+            state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
+
+            if (total_PT_now >= pt_targets_abs[next_pt_idx]) {
+              next_pt_idx <- next_pt_idx + 1L
+            }
+            if (!state$.__backstop_fired__ && is.finite(latest_calendar_look) && current_time >= latest_calendar_look) {
+              state$.__backstop_fired__ <- TRUE
+            }
+
+            if (all(state$arm_status != "recruiting")) break
+            total_PT_now <- cum_person_time_all_arms(state, current_time, max_follow_up_sim,
+                                                     interval_cutpoints_current, arm_names)
+          }
         } else {
-          p_fut <- mean(med_arm < median_pfs_futility_threshold_arms[arm])
-          if (p_fut >= final_futility_posterior_prob_threshold) {
-            final_futility_per_sim[s, arm] <- 1L
-          } else {
-            final_inconclusive_per_sim[s, arm] <- 1L
+          if (current_time >= next_calendar_look) {
+            state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
+            next_calendar_look <- next_calendar_look + interim_calendar_beat
           }
         }
-      } else {
-        # Between-arm final (Triplet vs Doublet) with ABSOLUTE margin
-        if (arm == reference_arm_name) {
-          final_inconclusive_per_sim[s, arm] <- 1L
-        } else {
-          med_samples <- sample_vs_ref_medians(
-            slCtrl = ref_slice_final,
-            slTrt = arm_slice,
-            args = args,
+
+        if (all(state$arm_status != "recruiting")) break
+
+        elig_idx <- is_eligible(state)
+        if (length(elig_idx) == 0) break
+
+        exp_idx <- which(arm_names != reference_arm_name)
+        exp_active <- exp_idx[state$arm_status[arm_names[exp_idx]] == "recruiting"]
+        exp_active <- exp_active[state$enrolled_counts[arm_names[exp_active]] <
+                                   max_total_patients_per_arm[arm_names[exp_active]]]
+        if (length(exp_active) == 0) break
+
+        elig_arms <- arm_names[elig_idx]
+
+        probs <- randomization_probs[elig_arms]
+        probs <- probs / sum(probs)
+        chosen_arm <- sample(elig_arms, size = 1, prob = probs)
+
+        patient_id <- patient_id + 1L
+        t_event_true <- rweibull(1, shape = weibull_shape_true_arms[chosen_arm],
+                                 scale = weibull_scale_true_arms[chosen_arm])
+        t_random_censor <- runif(1, min = 0, max = censor_max_time_sim)
+
+        state$registries[[chosen_arm]] <- rbind(state$registries[[chosen_arm]],
+                                                data.frame(
+                                                  id = patient_id,
+                                                  enroll_time = current_time,
+                                                  true_event_time = t_event_true,
+                                                  random_censor_time = t_random_censor
+                                                ))
+        state$enrolled_counts[chosen_arm] <- state$enrolled_counts[chosen_arm] + 1L
+      }
+
+      state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
+
+      last_enroll_time <- max(c(0, unlist(lapply(state$registries, function(df) df$enroll_time))), na.rm = TRUE)
+      final_time <- last_enroll_time + min_follow_up_at_final
+
+      if (!identical(interval_cutpoints_current, interval_cutpoints_sim)) {
+        interval_lengths <- diff(interval_cutpoints_current)
+      }
+
+      ref_slice_final <- NULL
+      if (compare_arms_option) {
+        ref_slice_final <- slice_arm_data_at_time(
+          state$registries[[reference_arm_name]], final_time,
+          max_follow_up_sim, interval_cutpoints_current
+        )
+      }
+
+      final_eff_vec <- setNames(integer(length(arm_names)), arm_names)
+      final_fut_vec <- setNames(integer(length(arm_names)), arm_names)
+      final_inc_vec <- setNames(integer(length(arm_names)), arm_names)
+
+      for (arm in arm_names) {
+        if (state$arm_status[arm] != "recruiting") next
+
+        arm_slice <- slice_arm_data_at_time(state$registries[[arm]], final_time,
+                                            max_follow_up_sim, interval_cutpoints_current)
+
+        if (!compare_arms_option) {
+          post_arm <- draw_posterior_hazard_samples(
+            num_intervals = num_intervals,
+            events_per_interval = arm_slice$metrics$events_per_interval,
+            person_time_per_interval = arm_slice$metrics$person_time_per_interval,
+            prior_alpha_params = prior_alpha_params_model,
+            prior_beta_params  = prior_beta_params_model,
             num_samples = num_posterior_draws
           )
-          if (isTRUE(args$use_ph_model_vs_ref) && !is.null(med_samples$logHR)) {
-            log_margin <- 0
-            if (!is.null(args$compare_arms_hr_margin)) {
-              log_margin <- log1p(max(0, args$compare_arms_hr_margin))
+          med_arm <- apply(post_arm, 1, function(h) {
+            calculate_median_survival_piecewise(h, interval_lengths)
+          })
+          p_eff <- mean(med_arm > median_pfs_success_threshold_arms[arm])
+          if (p_eff >= final_success_posterior_prob_threshold) {
+            final_eff_vec[arm] <- 1L
+          } else {
+            p_fut <- mean(med_arm < median_pfs_futility_threshold_arms[arm])
+            if (p_fut >= final_futility_posterior_prob_threshold) {
+              final_fut_vec[arm] <- 1L
+            } else {
+              final_inc_vec[arm] <- 1L
             }
-            p_eff_ref <- mean(med_samples$logHR < 0)
-            p_fut_ref <- mean(med_samples$logHR >= log_margin)
-          } else {
-            margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
-            pr <- final_vsref_probs_abs(med_samples$medTrt, med_samples$medCtrl, margin_abs)
-            p_eff_ref <- pr$p_eff_ref
-            p_fut_ref <- pr$p_fut_ref
           }
-          
-          if (p_eff_ref >= efficacy_threshold_vs_ref_prob) {
-            final_efficacy_per_sim[s, arm] <- 1L
-          } else if (p_fut_ref >= futility_threshold_vs_ref_prob) {
-            final_futility_per_sim[s, arm] <- 1L
+        } else {
+          if (arm == reference_arm_name) {
+            final_inc_vec[arm] <- 1L
           } else {
-            final_inconclusive_per_sim[s, arm] <- 1L
+            med_samples <- sample_vs_ref_medians(
+              slCtrl = ref_slice_final,
+              slTrt = arm_slice,
+              args = args_local,
+              num_samples = num_posterior_draws
+            )
+            if (isTRUE(args_local$use_ph_model_vs_ref) && !is.null(med_samples$logHR)) {
+              log_margin <- 0
+              if (!is.null(args_local$compare_arms_hr_margin)) {
+                log_margin <- log1p(max(0, args_local$compare_arms_hr_margin))
+              }
+              p_eff_ref <- mean(med_samples$logHR < 0)
+              p_fut_ref <- mean(med_samples$logHR >= log_margin)
+            } else {
+              margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
+              pr <- final_vsref_probs_abs(med_samples$medTrt, med_samples$medCtrl, margin_abs)
+              p_eff_ref <- pr$p_eff_ref
+              p_fut_ref <- pr$p_fut_ref
+            }
+
+            if (p_eff_ref >= efficacy_threshold_vs_ref_prob) {
+              final_eff_vec[arm] <- 1L
+            } else if (p_fut_ref >= futility_threshold_vs_ref_prob) {
+              final_fut_vec[arm] <- 1L
+            } else {
+              final_inc_vec[arm] <- 1L
+            }
           }
         }
       }
-    }
-    
-    for (arm in arm_names) {
-      final_n_per_sim[s, arm] <- if (is.na(state$sim_final_n_current_run[arm])) {
-        state$enrolled_counts[arm]
-      } else {
-        state$sim_final_n_current_run[arm]
+
+      final_n_vec <- setNames(numeric(length(arm_names)), arm_names)
+      for (arm in arm_names) {
+        final_n_vec[arm] <- if (is.na(state$sim_final_n_current_run[arm])) {
+          state$enrolled_counts[arm]
+        } else {
+          state$sim_final_n_current_run[arm]
+        }
       }
-      stop_efficacy_per_sim[s, arm] <- state$stop_efficacy_per_sim_row[arm]
-      stop_futility_per_sim[s, arm] <- state$stop_futility_per_sim_row[arm]
+
+      chunk_sum_final_n <- chunk_sum_final_n + final_n_vec
+      chunk_sum_stop_eff <- chunk_sum_stop_eff + state$stop_efficacy_per_sim_row
+      chunk_sum_stop_fut <- chunk_sum_stop_fut + state$stop_futility_per_sim_row
+      chunk_sum_final_eff <- chunk_sum_final_eff + final_eff_vec
+      chunk_sum_final_fut <- chunk_sum_final_fut + final_fut_vec
+      chunk_sum_final_inc <- chunk_sum_final_inc + final_inc_vec
+
+      tick()
     }
-    
-    pb$tick()
-  } # sims
+
+    list(
+      sum_final_n = chunk_sum_final_n,
+      sum_stop_eff = chunk_sum_stop_eff,
+      sum_stop_fut = chunk_sum_stop_fut,
+      sum_final_eff = chunk_sum_final_eff,
+      sum_final_fut = chunk_sum_final_fut,
+      sum_final_inc = chunk_sum_final_inc,
+      n_sims = length(sim_indices)
+    )
+  }
+
+  aggregate_results <- function(partials) {
+    for (res in partials) {
+      sum_final_n       <<- sum_final_n + res$sum_final_n
+      sum_stop_efficacy <<- sum_stop_efficacy + res$sum_stop_eff
+      sum_stop_futility <<- sum_stop_futility + res$sum_stop_fut
+      sum_final_efficacy <<- sum_final_efficacy + res$sum_final_eff
+      sum_final_futility <<- sum_final_futility + res$sum_final_fut
+      sum_final_inconclusive <<- sum_final_inconclusive + res$sum_final_inc
+    }
+  }
+
+  chunk_results <- list()
+
+  if (isTRUE(parallel_replicates) && num_simulations > 1) {
+    workers <- if (is.null(num_workers)) {
+      max(1L, parallel::detectCores() - 1L)
+    } else {
+      as.integer(num_workers)
+    }
+    workers <- max(1L, min(workers, num_simulations))
+
+    # Check if parallelization is worthwhile
+    if (num_simulations < workers * 2) {
+      if (interactive()) {
+        message("Few simulations (", num_simulations,
+                ") relative to workers (", workers,
+                "); running sequentially for efficiency")
+      }
+      chunk_results <- list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
+    } else {
+      chunks <- parallel::splitIndices(num_simulations, workers)
+      chunks <- chunks[lengths(chunks) > 0]
+
+      pkg_name <- utils::packageName()
+      if (is.null(pkg_name) || identical(pkg_name, "")) {
+        pkg_name <- "evolveTrial"
+      }
+
+      # Diagnostic for development workflow
+      if (interactive()) {
+        pkg_version <- tryCatch(
+          as.character(utils::packageVersion(pkg_name)),
+          error = function(e) "not installed"
+        )
+        message("Parallel execution: ", workers, " workers will load ",
+                pkg_name, " version ", pkg_version)
+      }
+
+      cl <- parallel::makeCluster(workers, type = cluster_type)
+      on.exit(parallel::stopCluster(cl), add = TRUE)
+
+      parallel::clusterCall(cl, function(pkg) {
+        suppressPackageStartupMessages(require(pkg, character.only = TRUE))
+        NULL
+      }, pkg_name)
+
+      seed_list <- replicate(length(chunks), sample.int(.Machine$integer.max, 1L), simplify = TRUE)
+
+      chunk_results <- tryCatch(
+        parallel::parLapply(
+          cl,
+          seq_along(chunks),
+          function(idx, chunk_indices, seed_vals) {
+            simulate_chunk(chunk_indices[[idx]], seed = seed_vals[[idx]], tick = function() {})
+          },
+          chunk_indices = chunks,
+          seed_vals = as.list(seed_list)
+        ),
+        error = function(e) {
+          stop("Parallel simulation failed: ", e$message, call. = FALSE)
+        }
+      )
+    }
+  } else {
+    chunk_results <- list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
+  }
+
+  aggregate_results(chunk_results)
+
+  stopifnot(num_simulations > 0)
+  inv_num_sims <- 1 / num_simulations
   
   for (j in seq_along(arm_names)) {
     arm <- arm_names[j]
-    early_eff <- mean(stop_efficacy_per_sim[, arm])
-    early_fut <- mean(stop_futility_per_sim[, arm])
-    final_eff <- mean(final_efficacy_per_sim[, arm])
-    final_fut <- mean(final_futility_per_sim[, arm])
-    final_inc <- mean(final_inconclusive_per_sim[, arm])
+    early_eff <- sum_stop_efficacy[arm] * inv_num_sims
+    early_fut <- sum_stop_futility[arm] * inv_num_sims
+    final_eff <- sum_final_efficacy[arm] * inv_num_sims
+    final_fut <- sum_final_futility[arm] * inv_num_sims
+    final_inc <- sum_final_inconclusive[arm] * inv_num_sims
     results_data$Type_I_Error_or_Power[j]   <- early_eff + final_eff
     results_data$PET_Efficacy[j]            <- early_eff
     results_data$PET_Futility[j]            <- early_fut
@@ -501,7 +636,7 @@ run_simulation_pure <- function(
     results_data$Pr_Final_Efficacy[j]       <- final_eff
     results_data$Pr_Final_Futility[j]       <- final_fut
     results_data$Pr_Final_Inconclusive[j]   <- final_inc
-    results_data$Exp_N[j]                   <- mean(final_n_per_sim[, arm])
+    results_data$Exp_N[j]                   <- sum_final_n[arm] * inv_num_sims
   }
   
   results_data
