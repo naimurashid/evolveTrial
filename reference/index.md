@@ -1,0 +1,23 @@
+# Package index
+
+## All functions
+
+- [`calculate_interval_metrics_fast()`](calculate_interval_metrics_fast.md)
+  : Recalculates events and person-time using a more efficient
+  data.table approach.
+
+- [`calculate_median_survival_piecewise()`](calculate_median_survival_piecewise.md)
+  :
+
+  Computes the median survival time for a piecewise exponential model.
+  If the 0.5 survival is not reached by the end of the last interval, we
+  *continue past the last cutpoint* with the last interval's hazard
+  (open-ended tail). Only return Inf if the last hazard is exactly zero.
+
+- [`draw_posterior_hazard_samples()`](draw_posterior_hazard_samples.md)
+  : Draws samples from the posterior distribution of hazard rates for
+  each interval in a Bayesian piecewise exponential model with Gamma
+  priors.
+
+- [`estimate_vsref_gate_timing()`](estimate_vsref_gate_timing.md) :
+  Estimate when the vs-reference interim gates can be satisfied
