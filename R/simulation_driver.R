@@ -331,6 +331,16 @@ run_simulation_pure <- function(
 #   - a vector of scalar options (e.g., c(60, 70)), OR
 #   - a list of per-arm options (e.g., list(c(Arm1=6,Arm2=6,Arm3=9), c(...)))
 # Returns: a list of "override" lists, one per scenario.
+#' Construct scenarios from a grid of design options
+#'
+#' Expands a named list of design options into a list of per-scenario override
+#' lists that can be supplied to `run_scenarios()`.
+#'
+#' @param choices Named list where each element is either a vector of scalar
+#'   options or a list of per-arm options.
+#' @return List of override lists for each scenario (attribute `grid` retains
+#'   the raw grid for reference).
+#' @export
 scenarios_from_grid <- function(choices) {
   stopifnot(is.list(choices), length(choices) > 0)
   keys <- names(choices)
@@ -356,6 +366,18 @@ scenarios_from_grid <- function(choices) {
   scen_list
 }
 
+#' Run a list of scenarios with base design arguments
+#'
+#' Applies scenario-specific overrides to `base_args` and simulates each
+#' scenario, optionally parallelizing across scenarios.
+#'
+#' @param base_args Named list of design arguments passed to `run_simulation_pure()`.
+#' @param scens List of per-scenario override lists (e.g., from `scenarios_from_grid()`).
+#' @param parallel Logical; if `TRUE`, parallelize across scenarios with `mclapply()`.
+#' @param seed Optional RNG seed.
+#'
+#' @return `data.table` with results combined across scenarios.
+#' @export
 run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   
