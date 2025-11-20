@@ -22,10 +22,12 @@ run_simulation_pure(
   num_posterior_draws_interim = NULL,
   cohort_size_per_arm,
   max_total_patients_per_arm,
-  min_patients_for_analysis,
+  min_patients_for_analysis = NULL,
   efficacy_stopping_rule_hc,
-  efficacy_threshold_current_prob_hc,
-  posterior_futility_threshold_hc,
+  efficacy_threshold_current_prob_hc = NULL,
+  posterior_futility_threshold_hc = NULL,
+  efficacy_threshold_hc_prob = NULL,
+  futility_threshold_hc_prob = NULL,
   futility_stopping_rule_hc,
   efficacy_stopping_rule_vs_ref,
   futility_stopping_rule_vs_ref,
@@ -43,8 +45,10 @@ run_simulation_pure(
   overall_accrual_rate,
   randomization_probs,
   min_follow_up_at_final = 0,
-  min_events_for_analysis = 0,
-  min_median_followup = 0,
+  min_events_for_analysis = NULL,
+  min_median_followup = NULL,
+  min_events_hc = NULL,
+  min_median_followup_hc = NULL,
   interim_calendar_beat = 2,
   diagnostics = FALSE,
   pred_success_pp_threshold_hc,
@@ -114,11 +118,19 @@ evaluate an arm in the single-arm path.}
 \item{efficacy_stopping_rule_hc}{Logical; enable interim efficacy checks for
 the historical-control path.}
 
-\item{efficacy_threshold_current_prob_hc}{Interim success probability
+\item{efficacy_threshold_current_prob_hc}{\strong{DEPRECATED}. Use
+\code{efficacy_threshold_hc_prob} instead. Interim success probability
 threshold for single-arm logic.}
 
-\item{posterior_futility_threshold_hc}{Interim futility probability threshold
-for single-arm logic.}
+\item{posterior_futility_threshold_hc}{\strong{DEPRECATED}. Use
+\code{futility_threshold_hc_prob} instead. Interim futility probability
+threshold for single-arm logic.}
+
+\item{efficacy_threshold_hc_prob}{Interim success probability threshold for
+single-arm logic (preferred harmonized name).}
+
+\item{futility_threshold_hc_prob}{Interim futility probability threshold for
+single-arm logic (preferred harmonized name).}
 
 \item{futility_stopping_rule_hc}{Logical; enable interim futility checks for
 the single-arm path.}
@@ -169,11 +181,17 @@ threshold for final futility declarations.}
 \item{min_follow_up_at_final}{Additional follow-up (months) required after
 last enrolment before the final analysis.}
 
-\item{min_events_for_analysis}{Minimum events required for interim review
-(global gate).}
+\item{min_events_for_analysis}{\strong{DEPRECATED}. Use \code{min_events_hc}
+instead. Minimum events required for interim review (global gate).}
 
-\item{min_median_followup}{Minimum median follow-up required for interim
-review (global gate).}
+\item{min_median_followup}{\strong{DEPRECATED}. Use \code{min_median_followup_hc}
+instead. Minimum median follow-up required for interim review (global gate).}
+
+\item{min_events_hc}{Minimum events required for single-arm interim review
+(preferred harmonized name).}
+
+\item{min_median_followup_hc}{Minimum median follow-up required for single-arm
+interim review (preferred harmonized name).}
 
 \item{interim_calendar_beat}{Calendar spacing (months) between scheduled
 interim looks when person-time milestones are not used.}

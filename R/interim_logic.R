@@ -153,28 +153,32 @@ interim_check <- function(state, current_time, args, diagnostics = FALSE) {
     min_events <- coalesce_num(args$min_events_for_analysis, 0)
     min_median_fu <- coalesce_num(args$min_median_followup, 0)
 
-    min_pt_frac <- 0
-    if (!is.null(args$min_person_time_frac_per_arm)) {
-      gate_vec <- args$min_person_time_frac_per_arm
-      if (!is.null(names(gate_vec))) {
-        min_pt_frac <- coalesce_num(gate_vec[[arm]], 0)
-      } else if (length(gate_vec) == length(args$arm_names)) {
-        min_pt_frac <- coalesce_num(gate_vec[match(arm, args$arm_names)], 0)
-      } else if (length(gate_vec) >= 1) {
-        min_pt_frac <- coalesce_num(gate_vec[1], 0)
-      }
-    }
-    maxPT_arm <- 0
+    # Use shared gate resolution helper with proportional scaling
+    min_pt_frac_vec <- resolve_gate_vec(
+      args$min_person_time_frac_per_arm,
+      target_arms = arm,
+      all_arm_names = args$arm_names,
+      randomization_probs = args$randomization_probs,
+      default = 0,
+      scale = TRUE
+    )
+    min_pt_frac <- min_pt_frac_vec[[arm]] %||% 0
+
+    # Calculate max person-time denominator for this arm
     mtpa <- args$max_total_patients_per_arm
+    max_follow <- coalesce_num(args$max_follow_up_sim, 0)
     if (!is.null(mtpa)) {
       if (!is.null(names(mtpa)) && arm %in% names(mtpa)) {
-        maxPT_arm <- coalesce_num(mtpa[[arm]], 0) * coalesce_num(args$max_follow_up_sim, 0)
+        maxPT_arm <- coalesce_num(mtpa[[arm]], 0) * max_follow
       } else if (length(mtpa) == length(args$arm_names)) {
-        maxPT_arm <- coalesce_num(mtpa[match(arm, args$arm_names)], 0) *
-          coalesce_num(args$max_follow_up_sim, 0)
+        maxPT_arm <- coalesce_num(mtpa[match(arm, args$arm_names)], 0) * max_follow
       } else if (length(mtpa) >= 1) {
-        maxPT_arm <- coalesce_num(mtpa[1], 0) * coalesce_num(args$max_follow_up_sim, 0)
+        maxPT_arm <- coalesce_num(mtpa[1], 0) * max_follow
+      } else {
+        maxPT_arm <- 0
       }
+    } else {
+      maxPT_arm <- 0
     }
     pt_frac <- if (maxPT_arm > 0) pt_total / maxPT_arm else 0
 

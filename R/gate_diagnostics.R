@@ -1,3 +1,74 @@
+# --- INTERNAL HELPER: Resolve gate vectors with optional proportional scaling ---
+
+#' Resolve gate parameter vector for specified arms with optional scaling
+#'
+#' Internal helper that converts gate parameters (which may be scalar, named vector,
+#' or positional vector) into a named numeric vector for the specified arms.
+#' Optionally applies proportional scaling based on randomization probabilities.
+#'
+#' @param raw Raw gate parameter value (scalar, named vector, or positional vector).
+#' @param target_arms Character vector of arm names to resolve gates for.
+#' @param all_arm_names Character vector of all arm names in the trial (for positional matching).
+#' @param randomization_probs Optional named numeric vector of randomization probabilities.
+#' @param default Default value if `raw` is NULL (default 0).
+#' @param scale Logical; if TRUE and `raw` is scalar/NULL, apply proportional scaling
+#'   by dividing each arm's randomization probability by the maximum probability (default FALSE).
+#'
+#' @return Named numeric vector with one element per arm in `target_arms`.
+#' @keywords internal
+resolve_gate_vec <- function(raw, target_arms, all_arm_names,
+                              randomization_probs = NULL,
+                              default = 0, scale = FALSE) {
+  raw_len <- if (is.null(raw)) 0 else length(raw)
+
+  # Step 1: Convert raw input to named vector for target arms
+  if (is.null(raw)) {
+    out <- rep(default, length(target_arms))
+  } else if (!is.null(names(raw))) {
+    # Named vector: extract by name
+    out <- raw[target_arms]
+    out[is.na(out)] <- default
+  } else if (length(raw) == length(all_arm_names)) {
+    # Positional vector matching all arms: name it then extract
+    out <- raw
+    names(out) <- all_arm_names
+    out <- out[target_arms]
+  } else if (length(raw) == length(target_arms)) {
+    # Vector already matches target length
+    out <- raw
+  } else {
+    # Scalar or mismatched length: recycle first element
+    out <- rep(raw[1], length(target_arms))
+  }
+  names(out) <- target_arms
+
+  # Step 2: Apply proportional scaling if requested
+  should_scale <- scale && (raw_len <= 1 || is.null(raw))
+  if (should_scale) {
+    probs <- randomization_probs
+    if (is.null(probs)) {
+      probs <- rep(1 / length(all_arm_names), length(all_arm_names))
+      names(probs) <- all_arm_names
+    } else if (is.null(names(probs)) && length(probs) == length(all_arm_names)) {
+      names(probs) <- all_arm_names
+    }
+
+    scale_vec <- rep(1, length(target_arms))
+    names(scale_vec) <- target_arms
+    if (!is.null(names(probs))) {
+      max_prob <- max(probs, na.rm = TRUE)
+      if (is.finite(max_prob) && max_prob > 0) {
+        scale_vec <- probs[target_arms] / max_prob
+        scale_vec[!is.finite(scale_vec)] <- 1
+      }
+    }
+    out <- out * scale_vec
+  }
+
+  out
+}
+
+
 #' Estimate when the vs-reference interim gates can be satisfied
 #'
 #' This helper provides rough lower-bound heuristics for when the

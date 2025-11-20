@@ -79,10 +79,11 @@ testthat::test_local(filter = "utils")
 ## Coding Conventions
 
 - **Style**: Follow tidyverse conventions (two-space indentation, `{` on same line, `snake_case` identifiers like `min_person_time_frac_per_arm`)
-- **Utilities**: Reuse package helpers (`%||%` for fallback, `coalesce_num()` for numeric coalescing) instead of reimplementing
+- **Utilities**: Reuse package helpers (`%||%` for fallback, `coalesce_num()` for numeric coalescing, `resolve_gate_vec()` for gate parameter resolution) instead of reimplementing
 - **Diagnostics**: Keep `message()` calls concise and prefixed (e.g., `[vsREF gate]`)
 - **Argument Threading**: When adding parameters, add them to `run_simulation_pure()` formals so downstream helpers can access them via `modifyList()`
 - **Documentation**: Use roxygen2 markdown format; document all exported functions and user-facing helpers
+- **Parameter Naming**: Use harmonized naming scheme across comparison paths (e.g., `efficacy_threshold_hc_prob`, `futility_threshold_hc_prob`)
 
 ## Simulation Configuration
 
@@ -90,23 +91,38 @@ Key design parameters threaded through `run_simulation_pure()` and `interim_chec
 
 - **Arms & Comparison**: `arm_names`, `reference_arm_name`, `compare_arms_option` (TRUE = vs-reference, FALSE = single-arm)
 - **Truth & Priors**: `weibull_shape_true_arms`, `weibull_median_true_arms`, `prior_alpha_params_model`, `prior_beta_params_model`
-- **Thresholds**:
+- **Thresholds** (harmonized naming):
   - vs-reference: `efficacy_threshold_vs_ref_prob`, `futility_threshold_vs_ref_prob`, `compare_arms_futility_margin`
-  - single-arm: `efficacy_threshold_current_prob_hc`, `posterior_futility_threshold_hc`, `null_median_arms`, `futility_median_arms`
-- **Gates**:
-  - vs-reference per-arm: `min_events_per_arm`, `min_median_followup_per_arm`, `min_person_time_frac_per_arm`
-  - single-arm global: `min_events_for_analysis`, `min_median_followup`, `min_patients_for_analysis`
+  - single-arm: `efficacy_threshold_hc_prob`, `futility_threshold_hc_prob`, `null_median_arms`, `futility_median_arms`
+  - **Deprecated (still supported with warnings)**: `efficacy_threshold_current_prob_hc`, `posterior_futility_threshold_hc`
+- **Gates** (now use proportional scaling for both paths):
+  - Per-arm gates: `min_events_per_arm`, `min_median_followup_per_arm`, `min_person_time_frac_per_arm` (used by both vs-reference and single-arm)
+  - Legacy global gates: `min_events_hc`, `min_median_followup_hc`, `min_patients_for_analysis` (single-arm only)
+  - **Deprecated (still supported with warnings)**: `min_events_for_analysis`, `min_median_followup`
+  - **Proportional Scaling**: When `min_events_per_arm` or `min_person_time_frac_per_arm` are scalar, they are automatically scaled by `randomization_probs` to account for unbalanced randomization
 - **Scheduling**: `interim_calendar_beat` (fixed spacing) or `person_time_milestones` (data-driven)
 - **Sample Size**: `max_total_patients_per_arm`, `cohort_size_per_arm`, `overall_accrual_rate`, `randomization_probs`
+
+## Gate Scaling Behavior
+
+As of recent updates, **both vs-reference and single-arm paths apply proportional gate scaling** when scalar gate values are provided:
+
+- **What gets scaled**: `min_events_per_arm` and `min_person_time_frac_per_arm` (when provided as scalars)
+- **What doesn't get scaled**: `min_median_followup_per_arm` (followup time is independent of randomization ratio)
+- **How scaling works**: If you specify `min_events_per_arm = 10` with `randomization_probs = c(Control = 0.3, Treatment = 0.7)`, the helper `resolve_gate_vec()` (in `R/gate_diagnostics.R`) will scale gates proportionally: arms with lower randomization probabilities get proportionally lower gates
+- **When to use named vectors**: To override proportional scaling, provide a named vector (e.g., `min_events_per_arm = c(Control = 8, Treatment = 12)`)
+
+This ensures fairness when comparing arms with unbalanced randomization, and unifies behavior across comparison paths.
 
 ## Testing Approach
 
 New decision logic or gating features require regression tests in `tests/testthat/`. Prioritize:
 - Multi-arm comparisons with reference arm switches
-- Proportional gate scaling across unbalanced arms
+- Proportional gate scaling across unbalanced arms (see `test-single-arm-gates.R` and `test-path-parity.R`)
 - Predictive probability fallback triggers
 - Use deterministic seeds (`set.seed(4242)`) and low simulation counts (e.g., `num_simulations = 50`) for unit tests
 - Document required outputs (PET, alpha, expected N) in `expect_*()` calls to catch behavior shifts
+- Parity tests ensure single-arm and vs-reference paths maintain consistent behavior
 
 ## Project Management
 

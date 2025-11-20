@@ -38,10 +38,16 @@
 #'   evaluate an arm in the single-arm path.
 #' @param efficacy_stopping_rule_hc Logical; enable interim efficacy checks for
 #'   the historical-control path.
-#' @param efficacy_threshold_current_prob_hc Interim success probability
+#' @param efficacy_threshold_current_prob_hc **DEPRECATED**. Use
+#'   \code{efficacy_threshold_hc_prob} instead. Interim success probability
 #'   threshold for single-arm logic.
-#' @param posterior_futility_threshold_hc Interim futility probability threshold
-#'   for single-arm logic.
+#' @param posterior_futility_threshold_hc **DEPRECATED**. Use
+#'   \code{futility_threshold_hc_prob} instead. Interim futility probability
+#'   threshold for single-arm logic.
+#' @param efficacy_threshold_hc_prob Interim success probability threshold for
+#'   single-arm logic (preferred harmonized name).
+#' @param futility_threshold_hc_prob Interim futility probability threshold for
+#'   single-arm logic (preferred harmonized name).
 #' @param futility_stopping_rule_hc Logical; enable interim futility checks for
 #'   the single-arm path.
 #' @param efficacy_stopping_rule_vs_ref Logical; enable interim efficacy checks
@@ -74,10 +80,14 @@
 #' @param randomization_probs Named numeric vector of randomisation probabilities.
 #' @param min_follow_up_at_final Additional follow-up (months) required after
 #'   last enrolment before the final analysis.
-#' @param min_events_for_analysis Minimum events required for interim review
-#'   (global gate).
-#' @param min_median_followup Minimum median follow-up required for interim
-#'   review (global gate).
+#' @param min_events_for_analysis **DEPRECATED**. Use \code{min_events_hc}
+#'   instead. Minimum events required for interim review (global gate).
+#' @param min_median_followup **DEPRECATED**. Use \code{min_median_followup_hc}
+#'   instead. Minimum median follow-up required for interim review (global gate).
+#' @param min_events_hc Minimum events required for single-arm interim review
+#'   (preferred harmonized name).
+#' @param min_median_followup_hc Minimum median follow-up required for single-arm
+#'   interim review (preferred harmonized name).
 #' @param interim_calendar_beat Calendar spacing (months) between scheduled
 #'   interim looks when person-time milestones are not used.
 #' @param diagnostics Logical; if `TRUE` prints interim diagnostic messages.
@@ -128,8 +138,8 @@ run_simulation_pure <- function(
     compare_arms_option,
     weibull_shape_true_arms,
     weibull_median_true_arms,
-    null_median_arms,
-    futility_median_arms,
+    null_median_arms = NULL,
+    futility_median_arms = NULL,
     interval_cutpoints_sim,
     max_follow_up_sim,
     censor_max_time_sim,
@@ -139,38 +149,44 @@ run_simulation_pure <- function(
     num_posterior_draws_interim = NULL,
     cohort_size_per_arm,
     max_total_patients_per_arm,
-    min_patients_for_analysis,
+    min_patients_for_analysis = NULL,
     # stopping rule params
-    efficacy_stopping_rule_hc,
-    efficacy_threshold_current_prob_hc,
-    posterior_futility_threshold_hc,
-    futility_stopping_rule_hc,
-    efficacy_stopping_rule_vs_ref,
-    futility_stopping_rule_vs_ref,
-    efficacy_threshold_vs_ref_prob,
-    futility_threshold_vs_ref_prob,
-    compare_arms_futility_margin,
+    efficacy_stopping_rule_hc = FALSE,
+    efficacy_threshold_current_prob_hc = NULL,
+    posterior_futility_threshold_hc = NULL,
+    # NEW harmonized parameter names (preferred)
+    efficacy_threshold_hc_prob = NULL,
+    futility_threshold_hc_prob = NULL,
+    futility_stopping_rule_hc = FALSE,
+    efficacy_stopping_rule_vs_ref = FALSE,
+    futility_stopping_rule_vs_ref = FALSE,
+    efficacy_threshold_vs_ref_prob = NULL,
+    futility_threshold_vs_ref_prob = NULL,
+    compare_arms_futility_margin = 0,
     compare_arms_hr_margin = NULL,
     use_ph_model_vs_ref = FALSE,
     ph_loghr_prior_mean = 0,
     ph_loghr_prior_sd = 1,
     # final analysis params
-    median_pfs_success_threshold_arms,
-    final_success_posterior_prob_threshold,
-    median_pfs_futility_threshold_arms,
-    final_futility_posterior_prob_threshold,
+    median_pfs_success_threshold_arms = NULL,
+    final_success_posterior_prob_threshold = 0.85,
+    median_pfs_futility_threshold_arms = NULL,
+    final_futility_posterior_prob_threshold = 0.85,
     # accrual & randomization
     overall_accrual_rate,
     randomization_probs,
     min_follow_up_at_final = 0,
     # legacy info gates + calendar-beat interims
-    min_events_for_analysis = 0,
-    min_median_followup   = 0,
+    min_events_for_analysis = NULL,
+    min_median_followup = NULL,
+    # NEW harmonized parameter names (preferred)
+    min_events_hc = NULL,
+    min_median_followup_hc = NULL,
     interim_calendar_beat = 2,
     diagnostics = FALSE,
-    pred_success_pp_threshold_hc,
-    pred_futility_pp_threshold_hc,
-    num_posterior_draws_pred,
+    pred_success_pp_threshold_hc = 1,
+    pred_futility_pp_threshold_hc = 0,
+    num_posterior_draws_pred = 100,
     predictive_fast = FALSE,
     # NEW: per-arm info gates
     min_events_per_arm = NULL,
@@ -188,6 +204,59 @@ run_simulation_pure <- function(
     progress = interactive()
 ) {
   cluster_type <- match.arg(cluster_type)
+
+  # ---- PARAMETER DEPRECATION HANDLING ----------------------------------------
+  # Map old parameter names to new harmonized names with warnings
+
+  # efficacy_threshold_current_prob_hc → efficacy_threshold_hc_prob
+  if (!is.null(efficacy_threshold_current_prob_hc) && is.null(efficacy_threshold_hc_prob)) {
+    warning("Parameter 'efficacy_threshold_current_prob_hc' is deprecated. ",
+            "Use 'efficacy_threshold_hc_prob' instead.",
+            call. = FALSE)
+    efficacy_threshold_hc_prob <- efficacy_threshold_current_prob_hc
+  } else if (is.null(efficacy_threshold_hc_prob)) {
+    efficacy_threshold_hc_prob <- efficacy_threshold_current_prob_hc
+  }
+
+  # posterior_futility_threshold_hc → futility_threshold_hc_prob
+  if (!is.null(posterior_futility_threshold_hc) && is.null(futility_threshold_hc_prob)) {
+    warning("Parameter 'posterior_futility_threshold_hc' is deprecated. ",
+            "Use 'futility_threshold_hc_prob' instead.",
+            call. = FALSE)
+    futility_threshold_hc_prob <- posterior_futility_threshold_hc
+  } else if (is.null(futility_threshold_hc_prob)) {
+    futility_threshold_hc_prob <- posterior_futility_threshold_hc
+  }
+
+  # min_events_for_analysis → min_events_hc
+  if (!is.null(min_events_for_analysis) && is.null(min_events_hc)) {
+    warning("Parameter 'min_events_for_analysis' is deprecated. ",
+            "Use 'min_events_hc' instead.",
+            call. = FALSE)
+    min_events_hc <- min_events_for_analysis
+  } else if (is.null(min_events_hc)) {
+    min_events_hc <- min_events_for_analysis
+  }
+  # Default to 0 if both NULL
+  if (is.null(min_events_hc)) min_events_hc <- 0
+
+  # min_median_followup → min_median_followup_hc
+  if (!is.null(min_median_followup) && is.null(min_median_followup_hc)) {
+    warning("Parameter 'min_median_followup' is deprecated. ",
+            "Use 'min_median_followup_hc' instead.",
+            call. = FALSE)
+    min_median_followup_hc <- min_median_followup
+  } else if (is.null(min_median_followup_hc)) {
+    min_median_followup_hc <- min_median_followup
+  }
+  # Default to 0 if both NULL
+  if (is.null(min_median_followup_hc)) min_median_followup_hc <- 0
+
+  # min_patients_for_analysis default
+  if (is.null(min_patients_for_analysis)) min_patients_for_analysis <- 0
+
+  # ---------------------------------------------------------------------------
+
   weibull_scale_true_arms <- sapply(arm_names, function(arm) {
     calculate_weibull_scale(weibull_median_true_arms[arm], weibull_shape_true_arms[arm])
   })
@@ -246,12 +315,12 @@ run_simulation_pure <- function(
     num_posterior_draws = num_posterior_draws,
     num_posterior_draws_interim = num_draws_interim,
     min_patients_for_analysis = min_patients_for_analysis,
-    min_events_for_analysis = min_events_for_analysis,
-    min_median_followup = min_median_followup,
+    min_events_for_analysis = min_events_hc,  # Use new harmonized name
+    min_median_followup = min_median_followup_hc,  # Use new harmonized name
     null_median_arms = null_median_arms,
     futility_median_arms = futility_median_arms,
-    efficacy_threshold_current_prob_hc = efficacy_threshold_current_prob_hc,
-    posterior_futility_threshold_hc = posterior_futility_threshold_hc,
+    efficacy_threshold_current_prob_hc = efficacy_threshold_hc_prob,  # Use new harmonized name
+    posterior_futility_threshold_hc = futility_threshold_hc_prob,  # Use new harmonized name
     efficacy_threshold_vs_ref_prob = efficacy_threshold_vs_ref_prob,
     futility_threshold_vs_ref_prob = futility_threshold_vs_ref_prob,
     compare_arms_futility_margin = compare_arms_futility_margin,
@@ -464,12 +533,26 @@ run_simulation_pure <- function(
           med_arm <- apply(post_arm, 1, function(h) {
             calculate_median_survival_piecewise(h, interval_lengths)
           })
-          p_eff <- mean(med_arm > median_pfs_success_threshold_arms[arm])
-          if (p_eff >= final_success_posterior_prob_threshold) {
+          # Final success check
+          success_thr <- if (!is.null(median_pfs_success_threshold_arms) && arm %in% names(median_pfs_success_threshold_arms)) {
+            median_pfs_success_threshold_arms[arm]
+          } else {
+            Inf  # Impossible to cross if not specified
+          }
+          p_eff <- if (is.finite(success_thr)) mean(med_arm > success_thr) else 0
+
+          if (!is.na(p_eff) && p_eff >= final_success_posterior_prob_threshold) {
             final_eff_vec[arm] <- 1L
           } else {
-            p_fut <- mean(med_arm < median_pfs_futility_threshold_arms[arm])
-            if (p_fut >= final_futility_posterior_prob_threshold) {
+            # Final futility check
+            futility_thr <- if (!is.null(median_pfs_futility_threshold_arms) && arm %in% names(median_pfs_futility_threshold_arms)) {
+              median_pfs_futility_threshold_arms[arm]
+            } else {
+              -Inf  # Impossible to cross if not specified
+            }
+            p_fut <- if (is.finite(futility_thr)) mean(med_arm < futility_thr) else 0
+
+            if (!is.na(p_fut) && p_fut >= final_futility_posterior_prob_threshold) {
               final_fut_vec[arm] <- 1L
             } else {
               final_inc_vec[arm] <- 1L
