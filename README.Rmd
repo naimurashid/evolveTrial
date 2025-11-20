@@ -19,41 +19,54 @@ knitr::opts_chunk$set(
 [![R-CMD-check](https://github.com/naimurashid/evolveTrial/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/naimurashid/evolveTrial/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
-The goal of evolveTrial is to ...
+**evolveTrial** provides utilities for designing and simulating Bayesian adaptive platform and umbrella clinical trials. The package includes tools for:
+
+- Simulating multi-arm adaptive trials with time-to-event endpoints
+- Bayesian decision rules for efficacy and futility stopping
+- Piecewise exponential hazard models with proportional hazards
+- Interim analysis timing and information gates
+- Operating characteristic summaries and diagnostics
 
 ## Installation
 
-You can install the development version of evolveTrial from [GitHub](https://github.com/) with:
+### From GitHub (Recommended)
 
-``` r
-# install.packages("pak")
+Install the development version from GitHub using one of these methods:
+
+```r
+# Using pak (fastest)
+install.packages("pak")
 pak::pak("naimurashid/evolveTrial")
+
+# Or using remotes
+install.packages("remotes")
+remotes::install_github("naimurashid/evolveTrial")
+
+# Or using devtools
+install.packages("devtools")
+devtools::install_github("naimurashid/evolveTrial")
 ```
 
-## Example
+### Dependencies
 
-This is a basic example which shows you how to solve a common problem:
+The package requires:
 
-```{r example}
-library(evolveTrial)
-## basic example code
+- **Core**: `data.table`, `ggplot2`, `magrittr`, `progress`, `tidyselect`
+- **Suggested**: `dplyr`, `gt`, `openxlsx`, `ggrepel`, `knitr`, `rmarkdown`
+
+All dependencies will be installed automatically when you install evolveTrial.
+
+### Development Installation
+
+For development work with the latest features:
+
+```r
+# Clone the repository
+git clone https://github.com/naimurashid/evolveTrial.git
+
+# Load in R session
+devtools::load_all("path/to/evolveTrial")
 ```
-
-What is special about using `README.Rmd` instead of just `README.md`? You can include R chunks like so:
-
-```{r cars}
-summary(cars)
-```
-
-You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this.
-
-You can also embed plots, for example:
-
-```{r pressure, echo = FALSE}
-plot(pressure)
-```
-
-In that case, don't forget to commit and push the resulting figure files, so they display on GitHub and CRAN.
 
 ## Diagnosing interim gating choices
 
