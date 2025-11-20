@@ -56,42 +56,64 @@
 </h1></div>
 <!-- badges: start -->
 
-<p>The goal of evolveTrial is to …</p>
+<p><strong>evolveTrial</strong> provides utilities for designing and simulating Bayesian adaptive platform and umbrella clinical trials. The package includes tools for:</p>
+<ul>
+<li>Simulating multi-arm adaptive trials with time-to-event endpoints</li>
+<li>Bayesian decision rules for efficacy and futility stopping</li>
+<li>Piecewise exponential hazard models with proportional hazards</li>
+<li>Interim analysis timing and information gates</li>
+<li>Operating characteristic summaries and diagnostics</li>
+</ul>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>You can install the development version of evolveTrial from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
+<div class="section level3">
+<h3 id="from-github-recommended">From GitHub (Recommended)<a class="anchor" aria-label="anchor" href="#from-github-recommended"></a>
+</h3>
+<p>Install the development version from GitHub using one of these methods:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
-<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"naimurashid/evolveTrial"</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="co"># Using pak (fastest)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"naimurashid/evolveTrial"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Or using remotes</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"naimurashid/evolveTrial"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Or using devtools</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"devtools"</span><span class="op">)</span></span>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"naimurashid/evolveTrial"</span><span class="op">)</span></span></code></pre></div>
 </div>
-<div class="section level2">
-<h2 id="example">Example<a class="anchor" aria-label="anchor" href="#example"></a>
-</h2>
-<p>This is a basic example which shows you how to solve a common problem:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
-<span><span class="co">## basic example code</span></span></code></pre></div>
-<p>What is special about using <code>README.Rmd</code> instead of just <code>README.md</code>? You can include R chunks like so:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">cars</span><span class="op">)</span></span>
-<span><span class="co">#&gt;      speed           dist       </span></span>
-<span><span class="co">#&gt;  Min.   : 4.0   Min.   :  2.00  </span></span>
-<span><span class="co">#&gt;  1st Qu.:12.0   1st Qu.: 26.00  </span></span>
-<span><span class="co">#&gt;  Median :15.0   Median : 36.00  </span></span>
-<span><span class="co">#&gt;  Mean   :15.4   Mean   : 42.98  </span></span>
-<span><span class="co">#&gt;  3rd Qu.:19.0   3rd Qu.: 56.00  </span></span>
-<span><span class="co">#&gt;  Max.   :25.0   Max.   :120.00</span></span></code></pre></div>
-<p>You’ll still need to render <code>README.Rmd</code> regularly, to keep <code>README.md</code> up-to-date. <code>devtools::build_readme()</code> is handy for this.</p>
-<p>You can also embed plots, for example:</p>
-<p><img src="reference/figures/README-pressure-1.png" width="100%"></p>
-<p>In that case, don’t forget to commit and push the resulting figure files, so they display on GitHub and CRAN.</p>
+<div class="section level3">
+<h3 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>
+</h3>
+<p>The package requires:</p>
+<ul>
+<li>
+<strong>Core</strong>: <code>data.table</code>, <code>ggplot2</code>, <code>magrittr</code>, <code>progress</code>, <code>tidyselect</code>
+</li>
+<li>
+<strong>Suggested</strong>: <code>dplyr</code>, <code>gt</code>, <code>openxlsx</code>, <code>ggrepel</code>, <code>knitr</code>, <code>rmarkdown</code>
+</li>
+</ul>
+<p>All dependencies will be installed automatically when you install evolveTrial.</p>
+</div>
+<div class="section level3">
+<h3 id="development-installation">Development Installation<a class="anchor" aria-label="anchor" href="#development-installation"></a>
+</h3>
+<p>For development work with the latest features:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Clone the repository</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>git clone https<span class="sc">:</span><span class="er">//</span>github.com<span class="sc">/</span>naimurashid<span class="sc">/</span>evolveTrial.git</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co"># Load in R session</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">load_all</span>(<span class="st">"path/to/evolveTrial"</span>)</span></code></pre></div>
+</div>
 </div>
 <div class="section level2">
 <h2 id="diagnosing-interim-gating-choices">Diagnosing interim gating choices<a class="anchor" aria-label="anchor" href="#diagnosing-interim-gating-choices"></a>
 </h2>
 <p>When early stopping does not seem to occur during simulations, it is often because the information gates (minimum events, median follow-up, or required person-time) postpone the first informative interim look until late in the trial. The helper <code><a href="reference/estimate_vsref_gate_timing.html">estimate_vsref_gate_timing()</a></code> gives quick lower-bound heuristics for when those gates can all be satisfied under deterministic accrual.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">args</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
