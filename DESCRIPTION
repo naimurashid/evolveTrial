@@ -28,6 +28,10 @@ Imports:
     grid,
     magrittr,
     progress,
+    Rcpp,
     stats,
     tidyselect,
     utils
+LinkingTo: 
+    Rcpp,
+    RcppArmadillo
