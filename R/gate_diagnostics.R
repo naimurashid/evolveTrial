@@ -163,28 +163,16 @@ estimate_vsref_gate_timing <- function(args) {
     stop("Derived per-arm accrual rates must be positive and finite.")
   }
 
-  resolve_per_arm <- function(x, default = 0) {
-    if (is.null(x)) {
-      return(rep(default, length(target_arms)))
-    }
-    if (length(x) == 1 && is.null(names(x))) {
-      return(rep(x, length(target_arms)))
-    }
-    if (!is.null(names(x))) {
-      vals <- x[target_arms]
-      vals[is.na(vals)] <- default
-      return(as.numeric(vals))
-    }
-    if (length(x) == length(target_arms)) {
-      return(as.numeric(x))
-    }
-    stop("Unable to recycle values across arms for one of the gating parameters.")
-  }
 
-  min_events <- resolve_per_arm(args$min_events_per_arm, default = 0)
-  min_mfu    <- resolve_per_arm(args$min_median_followup_per_arm, default = 0)
-  min_pt_frac <- resolve_per_arm(args$min_person_time_frac_per_arm, default = 0)
-  max_total <- resolve_per_arm(args$max_total_patients_per_arm)
+
+  min_events <- resolve_gate_vec(args$min_events_per_arm, target_arms = target_arms,
+                                 all_arm_names = arm_names, default = 0, scale = FALSE)
+  min_mfu    <- resolve_gate_vec(args$min_median_followup_per_arm, target_arms = target_arms,
+                                 all_arm_names = arm_names, default = 0, scale = FALSE)
+  min_pt_frac <- resolve_gate_vec(args$min_person_time_frac_per_arm, target_arms = target_arms,
+                                  all_arm_names = arm_names, default = 0, scale = FALSE)
+  max_total <- resolve_gate_vec(args$max_total_patients_per_arm, target_arms = target_arms,
+                                 all_arm_names = arm_names, default = 0, scale = FALSE)
   max_follow <- args$max_follow_up_sim
   if (is.null(max_follow) || !is.finite(max_follow) || max_follow < 0) {
     max_follow <- 0

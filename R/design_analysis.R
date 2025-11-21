@@ -116,7 +116,7 @@ export_scenario_table_to_png <- function(results_df,
     stop("Package 'dplyr' is required. Install with install.packages('dplyr')")
   }
 
-  tbl <- tbl %>% dplyr::mutate(dplyr::across(tidyselect::where(is.numeric), ~ round(.x, 2)))
+
   
   gt_tbl <- gt::gt(tbl) %>%
     gt::tab_header(
@@ -202,7 +202,7 @@ calibrate_alpha <- function(base_args, scens_null, thr_grid_interim = c(0.9, 0.9
   base_args$num_simulations <- sims
   for (ti in thr_grid_interim) for (tf in thr_grid_final) {
     args <- base_args
-    args$efficacy_threshold_current_prob_hc <- ti
+    args$efficacy_threshold_hc_prob <- ti
     args$final_success_posterior_prob_threshold <- tf
     res <- run_scenarios(args, scens_null, parallel = TRUE, seed = 123)
     # Type I = early+final efficacy for the experimental arm(s) under null scenario
@@ -273,7 +273,7 @@ grid_calibrate <- function(base_args,
     args_i <- base_args
     
     # --- thresholds being calibrated ---
-    args_i$efficacy_threshold_current_prob_hc <- ti
+    args_i$efficacy_threshold_hc_prob <- ti
     args_i$final_success_posterior_prob_threshold <- tf
     
     # --- require superiority margin for Triplet only (Doublet stays at null) ---
@@ -536,7 +536,7 @@ adopt_calibration <- function(cal, base_args, null_med, alt_med, which = 1L) {
   
   args_star <- base_args
   # success thresholds from calibration
-  args_star$efficacy_threshold_current_prob_hc     <- best$interim_thr
+  args_star$efficacy_threshold_hc_prob     <- best$interim_thr
   args_star$final_success_posterior_prob_threshold <- best$final_thr
   # set Triplet superiority margin (absolute months)
   args_star$median_pfs_success_threshold_arms <- c(
@@ -726,11 +726,11 @@ explore_early_stopping_from_cal <- function(
       base     = row$fut_base,
       delta    = row$fut_delta
     )
-    args_i$posterior_futility_threshold_hc <- row$fut_thr
+    args_i$futility_threshold_hc_prob <- row$fut_thr
     
     # global gates
-    args_i$min_events_for_analysis <- row$min_events
-    args_i$min_median_followup     <- row$min_medFU
+    args_i$min_events_hc <- row$min_events
+    args_i$min_median_followup_hc <- row$min_medFU
     
     # per-arm gates
     args_i$min_events_per_arm             <- row$min_events_per_arm
@@ -902,9 +902,9 @@ recommend_design_from_early <- function(df,
 apply_recommended_to_args <- function(args_star, rec_row) {
   stopifnot(nrow(rec_row) == 1L)
   a <- args_star
-  a$posterior_futility_threshold_hc <- rec_row$fut_thr
-  a$min_events_for_analysis         <- rec_row$min_events
-  a$min_median_followup             <- rec_row$min_medFU
+  a$futility_threshold_hc_prob <- rec_row$fut_thr
+  a$min_events_hc         <- rec_row$min_events
+  a$min_median_followup_hc             <- rec_row$min_medFU
   a$interim_calendar_beat           <- rec_row$beat
   
   # NEW: carry per-arm gates if present

@@ -60,6 +60,12 @@ calculate_current_probs_hc <- function(slArm, args, arm_name) {
 
 interim_check <- function(state, current_time, args, diagnostics = FALSE) {
   if (isTRUE(args$compare_arms_option)) {
+    return(interim_check_vs_ref(state, current_time, args, diagnostics))
+  } else {
+    return(interim_check_hc(state, current_time, args, diagnostics))
+  }
+}
+interim_check_vs_ref <- function(state, current_time, args, diagnostics = FALSE) {
     reference_arm <- args$reference_arm_name
     if (is.null(reference_arm) || !reference_arm %in% names(state$registries)) {
       stop("interim_check(): args$reference_arm_name must reference an existing arm.")
@@ -136,9 +142,9 @@ interim_check <- function(state, current_time, args, diagnostics = FALSE) {
     }
 
     return(state)
-  }
+}
 
-  # HC path (single-arm)
+interim_check_hc <- function(state, current_time, args, diagnostics = FALSE) {
   for (arm in args$arm_names) {
     if (state$arm_status[arm] != "recruiting") next
 
@@ -150,8 +156,8 @@ interim_check <- function(state, current_time, args, diagnostics = FALSE) {
     pt_total <- sum(slA$metrics$person_time_per_interval)
 
     min_pat <- coalesce_num(args$min_patients_for_analysis, 0)
-    min_events <- coalesce_num(args$min_events_for_analysis, 0)
-    min_median_fu <- coalesce_num(args$min_median_followup, 0)
+    min_events <- coalesce_num(args$min_events_hc, 0)
+    min_median_fu <- coalesce_num(args$min_median_followup_hc, 0)
 
     # Use shared gate resolution helper with proportional scaling
     min_pt_frac_vec <- resolve_gate_vec(
@@ -196,24 +202,24 @@ interim_check <- function(state, current_time, args, diagnostics = FALSE) {
     if (diagnostics) {
       message(sprintf("[t=%.2f] HC %s PrEff>=%.3f: %.3f | PrFut>=%.3f: %.3f",
                       current_time, arm,
-                      coalesce_num(args$efficacy_threshold_current_prob_hc, NA_real_),
+                      coalesce_num(args$efficacy_threshold_hc_prob, NA_real_),
                       pr_eff,
-                      coalesce_num(args$posterior_futility_threshold_hc, NA_real_),
+                      coalesce_num(args$futility_threshold_hc_prob, NA_real_),
                       pr_fut))
     }
 
-    if (!is.null(args$efficacy_threshold_current_prob_hc) &&
-        is.finite(args$efficacy_threshold_current_prob_hc) &&
-        pr_eff >= args$efficacy_threshold_current_prob_hc) {
+    if (!is.null(args$efficacy_threshold_hc_prob) &&
+        is.finite(args$efficacy_threshold_hc_prob) &&
+        pr_eff >= args$efficacy_threshold_hc_prob) {
       state$arm_status[arm] <- "stopped_efficacy"
       state$stop_efficacy_per_sim_row[arm] <- 1L
       state$sim_final_n_current_run[arm] <- state$enrolled_counts[arm]
       next
     }
 
-    if (!is.null(args$posterior_futility_threshold_hc) &&
-        is.finite(args$posterior_futility_threshold_hc) &&
-        pr_fut >= args$posterior_futility_threshold_hc) {
+    if (!is.null(args$futility_threshold_hc_prob) &&
+        is.finite(args$futility_threshold_hc_prob) &&
+        pr_fut >= args$futility_threshold_hc_prob) {
       state$arm_status[arm] <- "stopped_futility"
       state$stop_futility_per_sim_row[arm] <- 1L
       state$sim_final_n_current_run[arm] <- state$enrolled_counts[arm]

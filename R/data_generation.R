@@ -1,4 +1,4 @@
-`%||%` <- function(a, b) if (!is.null(a)) a else b
+
 
 cum_person_time_arm <- function(state, arm, current_time, max_follow_up, interval_cutpoints) {
   sl <- slice_arm_data_at_time(state$registries[[arm]], current_time, max_follow_up, interval_cutpoints)
@@ -43,8 +43,7 @@ simulate_piecewise_exponential_data <- function(
     censor_max_time = NULL,
     start_id = 1
 ) {
-  # Simulates PFS times from a piecewise exponential distribution and applies censoring.
-  # The LAST interval is treated as open-ended (extends to infinity).
+
 
   num_intervals <- length(interval_cutpoints) - 1
   interval_lengths <- diff(interval_cutpoints)

@@ -14,10 +14,7 @@
 #' @return Median survival time (numeric scalar, possibly Inf).
 #' @keywords internal
 calculate_median_survival_piecewise <- function(hazard_rates, interval_lengths) {
-  #' Computes the median survival time for a piecewise exponential model.
-  #' If the 0.5 survival is not reached by the end of the last interval,
-  #' we *continue past the last cutpoint* with the last interval's hazard (open-ended tail).
-  #' Only return Inf if the last hazard is exactly zero.
+
   
   if (length(hazard_rates) != length(interval_lengths)) {
     stop("hazard_rates and interval_lengths must have the same length.")
@@ -83,8 +80,7 @@ draw_posterior_hazard_samples <- function(
     prior_beta_params,
     num_samples = 1000
 ) {
-  #' Draws samples from the posterior distribution of hazard rates for each interval
-  #' in a Bayesian piecewise exponential model with Gamma priors.
+
   
   if (!all(sapply(list(events_per_interval, person_time_per_interval, prior_alpha_params, prior_beta_params),
                   length) == num_intervals)) {

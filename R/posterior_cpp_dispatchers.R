@@ -278,7 +278,3 @@ sample_vs_ref_medians_ph_r <- function(slCtrl, slTrt, args, num_samples) {
   list(medCtrl = med_ctrl, medTrt = med_trt, logHR = beta_draws)
 }
 
-# Define %||% operator if not already defined
-if (!exists("%||%", mode = "function")) {
-  `%||%` <- function(x, y) if (is.null(x)) y else x
-}

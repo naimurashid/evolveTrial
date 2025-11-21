@@ -211,48 +211,16 @@ run_simulation_pure <- function(
   # ---- PARAMETER DEPRECATION HANDLING ----------------------------------------
   # Map old parameter names to new harmonized names with warnings
 
-  # efficacy_threshold_current_prob_hc → efficacy_threshold_hc_prob
-  if (!is.null(efficacy_threshold_current_prob_hc) && is.null(efficacy_threshold_hc_prob)) {
-    warning("Parameter 'efficacy_threshold_current_prob_hc' is deprecated. ",
-            "Use 'efficacy_threshold_hc_prob' instead.",
-            call. = FALSE)
-    efficacy_threshold_hc_prob <- efficacy_threshold_current_prob_hc
-  } else if (is.null(efficacy_threshold_hc_prob)) {
-    efficacy_threshold_hc_prob <- efficacy_threshold_current_prob_hc
-  }
 
-  # posterior_futility_threshold_hc → futility_threshold_hc_prob
-  if (!is.null(posterior_futility_threshold_hc) && is.null(futility_threshold_hc_prob)) {
-    warning("Parameter 'posterior_futility_threshold_hc' is deprecated. ",
-            "Use 'futility_threshold_hc_prob' instead.",
-            call. = FALSE)
-    futility_threshold_hc_prob <- posterior_futility_threshold_hc
-  } else if (is.null(futility_threshold_hc_prob)) {
-    futility_threshold_hc_prob <- posterior_futility_threshold_hc
-  }
 
-  # min_events_for_analysis → min_events_hc
-  if (!is.null(min_events_for_analysis) && is.null(min_events_hc)) {
-    warning("Parameter 'min_events_for_analysis' is deprecated. ",
-            "Use 'min_events_hc' instead.",
-            call. = FALSE)
-    min_events_hc <- min_events_for_analysis
-  } else if (is.null(min_events_hc)) {
-    min_events_hc <- min_events_for_analysis
-  }
-  # Default to 0 if both NULL
+
+
+
+  # Default to 0 if NULL
   if (is.null(min_events_hc)) min_events_hc <- 0
 
-  # min_median_followup → min_median_followup_hc
-  if (!is.null(min_median_followup) && is.null(min_median_followup_hc)) {
-    warning("Parameter 'min_median_followup' is deprecated. ",
-            "Use 'min_median_followup_hc' instead.",
-            call. = FALSE)
-    min_median_followup_hc <- min_median_followup
-  } else if (is.null(min_median_followup_hc)) {
-    min_median_followup_hc <- min_median_followup
-  }
-  # Default to 0 if both NULL
+
+  # Default to 0 if NULL
   if (is.null(min_median_followup_hc)) min_median_followup_hc <- 0
 
   # min_patients_for_analysis default
@@ -318,12 +286,12 @@ run_simulation_pure <- function(
     num_posterior_draws = num_posterior_draws,
     num_posterior_draws_interim = num_draws_interim,
     min_patients_for_analysis = min_patients_for_analysis,
-    min_events_for_analysis = min_events_hc,  # Use new harmonized name
-    min_median_followup = min_median_followup_hc,  # Use new harmonized name
+    min_events_hc = min_events_hc,  # Use new harmonized name
+    min_median_followup_hc = min_median_followup_hc,  # Use new harmonized name
     null_median_arms = null_median_arms,
     futility_median_arms = futility_median_arms,
-    efficacy_threshold_current_prob_hc = efficacy_threshold_hc_prob,  # Use new harmonized name
-    posterior_futility_threshold_hc = futility_threshold_hc_prob,  # Use new harmonized name
+    efficacy_threshold_hc_prob = efficacy_threshold_hc_prob,  # Use new harmonized name
+    futility_threshold_hc_prob = futility_threshold_hc_prob,  # Use new harmonized name
     efficacy_threshold_vs_ref_prob = efficacy_threshold_vs_ref_prob,
     futility_threshold_vs_ref_prob = futility_threshold_vs_ref_prob,
     compare_arms_futility_margin = compare_arms_futility_margin,

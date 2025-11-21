@@ -10,7 +10,7 @@
 #' @return A list with `events_per_interval` and `person_time_per_interval` vectors.
 #' @keywords internal
 calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
-  #' Recalculates events and person-time using a more efficient data.table approach.
+
   num_intervals <- length(interval_cutpoints) - 1
   if (nrow(patient_data) == 0) {
     return(list(
@@ -131,13 +131,22 @@ slice_arm_data_at_time <- function(registry_df, calendar_time, max_follow_up, in
 
 gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
   # Arm names: take control from args$reference_arm_name; treatment is "the other one"
-  ctrl_name <- args$reference_arm_name %||% "Doublet"
-  arm_names <- args$arm_names
-  if (is.null(arm_names) || length(arm_names) == 0) {
-    arm_names <- c("Doublet", "Triplet")
+  if (is.null(args$reference_arm_name)) {
+    stop("args$reference_arm_name must be provided for vs-reference gates.")
   }
+  ctrl_name <- args$reference_arm_name
+
+  if (is.null(args$arm_names) || length(args$arm_names) == 0) {
+    stop("args$arm_names must be provided for vs-reference gates.")
+  }
+  arm_names <- args$arm_names
+
   trt_candidates <- arm_names[arm_names != ctrl_name]
-  trt_name <- if (length(trt_candidates) > 0) trt_candidates[1] else "Triplet"
+  if (length(trt_candidates) == 0) {
+    stop("No experimental arms found for vs-reference gates (after excluding reference arm).")
+  }
+  # Assuming only one treatment arm is being evaluated against the reference at a time
+  trt_name <- trt_candidates[1]
 
   # thresholds (per-arm gates) - use shared helper from gate_diagnostics.R
   arms <- c(ctrl_name, trt_name)
@@ -180,30 +189,19 @@ gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
   ptC  <- coalesce_num(slCtrl$metrics$person_time_total, 0)
   ptT  <- coalesce_num(slTrt$metrics$person_time_total, 0)
 
-  # denominators (person-time caps) — handle unnamed vectors safely
+  # denominators (person-time caps)
   mtn <- args$max_total_patients_per_arm
   max_follow <- coalesce_num(args$max_follow_up_sim, 0)
-  if (!is.null(mtn) && (is.null(names(mtn)) || any(!nzchar(names(mtn))))) {
-    if (!is.null(arm_names) && length(mtn) == length(arm_names)) {
-      names(mtn) <- arm_names
-    }
-  }
+
   if (is.null(mtn)) {
-    maxPT_C <- 0; maxPT_T <- 0
-  } else if (!is.null(names(mtn)) &&
-             all(c(ctrl_name, trt_name) %in% names(mtn))) {
-    maxPT_C <- coalesce_num(mtn[[ctrl_name]], 0) * max_follow
-    maxPT_T <- coalesce_num(mtn[[trt_name]],  0) * max_follow
-  } else {
-    idx_ctrl <- match(ctrl_name, arm_names)
-    idx_trt  <- match(trt_name,  arm_names)
-    if (is.na(idx_ctrl) || idx_ctrl > length(mtn)) idx_ctrl <- 1L
-    if (is.na(idx_trt)  || idx_trt  > length(mtn)) {
-      idx_trt <- if (length(mtn) >= 2L) 2L else idx_ctrl
-    }
-    maxPT_C <- coalesce_num(as.numeric(mtn[idx_ctrl]), 0) * max_follow
-    maxPT_T <- coalesce_num(as.numeric(mtn[idx_trt]),  0) * max_follow
+    stop("args$max_total_patients_per_arm must be provided for vs-reference gates.")
   }
+  if (is.null(names(mtn)) || !all(c(ctrl_name, trt_name) %in% names(mtn))) {
+    stop("args$max_total_patients_per_arm must be a named vector containing all arm names.")
+  }
+
+  maxPT_C <- coalesce_num(mtn[[ctrl_name]], 0) * max_follow
+  maxPT_T <- coalesce_num(mtn[[trt_name]],  0) * max_follow
 
   fracC <- if (maxPT_C > 0) ptC / maxPT_C else 0
   fracT <- if (maxPT_T > 0) ptT / maxPT_T else 0
