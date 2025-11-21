@@ -35,7 +35,10 @@
 #' @param max_total_patients_per_arm Named integer vector of per-arm sample size
 #'   caps.
 #' @param min_patients_for_analysis Minimum number of patients required to
-#'   evaluate an arm in the single-arm path.
+#'   evaluate an arm in the single-arm path. If not specified, defaults to 0,
+#'   allowing interim analyses to occur even with very few patients. Set this
+#'   to a higher value to prevent interim analyses until a certain number of
+#'   patients have been enrolled.
 #' @param efficacy_stopping_rule_hc Logical; enable interim efficacy checks for
 #'   the historical-control path.
 #' @param efficacy_threshold_current_prob_hc **DEPRECATED**. Use
