@@ -9,7 +9,7 @@ utils::globalVariables(c(
   "alpha", "power", "ExpN_alt", "PET_Fut_null", "PET_Fut_alt", "PET_Eff_null", "fut_thr",
   "min_events", "min_medFU", "beat", "pt_milestones", "latest_calendar_look",
   "margin_abs", "interim_thr", "final_thr", "interim_lab", "final_lab",
-  "frontier", "True_Median", "Exp_N", "Pr_Reach_Max_N", "Type_I_Error_or_Power",
+  "frontier", "True_Median", "Exp_N", "Exp_Events", "Pr_Reach_Max_N", "Type_I_Error_or_Power",
   "PET_Efficacy", "PET_Futility", "Pr_Final_Efficacy", "Pr_Final_Futility",
   "scenario", "Arm_Name", "margin_lab", "min_events_per_arm",
   "min_median_followup_per_arm", "min_person_time_frac_per_arm",

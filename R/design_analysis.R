@@ -19,6 +19,7 @@ pretty_scenario_matrix <- function(results_df) {
     True_Median         = mean(True_Median, na.rm = TRUE),
     Max_Planned_N       = max(Exp_N, na.rm = TRUE),
     Exp_N               = mean(Exp_N, na.rm = TRUE),
+    Exp_Events          = mean(Exp_Events, na.rm = TRUE),
     Pr_Reach_Max_N      = mean(Pr_Reach_Max_N, na.rm = TRUE),
     Type_I_Error_or_Power = mean(Type_I_Error_or_Power, na.rm = TRUE),
     PET_Efficacy        = mean(PET_Efficacy, na.rm = TRUE),
@@ -31,7 +32,7 @@ pretty_scenario_matrix <- function(results_df) {
   wide <- data.table::dcast(
     tbl,
     scenario ~ Arm_Name,
-    value.var = c("True_Median", "Exp_N", "Pr_Reach_Max_N",
+    value.var = c("True_Median", "Exp_N", "Exp_Events", "Pr_Reach_Max_N",
                   "Type_I_Error_or_Power", "PET_Efficacy", "PET_Futility",
                   "Pr_Final_Efficacy", "Pr_Final_Futility"),
     fun.aggregate = mean
@@ -303,6 +304,8 @@ grid_calibrate <- function(base_args,
       power = power_hat,
       ExpN_null = mean(r_null$Exp_N),
       ExpN_alt  = mean(r_alt$Exp_N),
+      ExpEvents_null = mean(r_null$Exp_Events),
+      ExpEvents_alt  = mean(r_alt$Exp_Events),
       PET_Eff_null = mean(r_null$PET_Efficacy),
       PET_Eff_alt  = mean(r_alt$PET_Efficacy),
       PET_Fut_null = mean(r_null$PET_Futility),
@@ -385,7 +388,9 @@ evaluate_ph_grid <- function(base_args, grid, scens, sims = 2000,
                         PET_Fut_null = mean(PET_Futility[scenario == 1]),
                         PET_Fut_alt  = mean(PET_Futility[scenario == 2]),
                         ExpN_null    = mean(Exp_N[scenario == 1]),
-                        ExpN_alt     = mean(Exp_N[scenario == 2]))]
+                        ExpN_alt     = mean(Exp_N[scenario == 2]),
+                        ExpEvents_null = mean(Exp_Events[scenario == 1]),
+                        ExpEvents_alt  = mean(Exp_Events[scenario == 2]))]
 
     ctrl_null <- res_dt[scenario == 1 & Arm_Name == ref_arm, mean(Exp_N)]
     ctrl_alt  <- res_dt[scenario == 2 & Arm_Name == ref_arm, mean(Exp_N)]

@@ -244,6 +244,7 @@ run_simulation_pure <- function(
     Pr_Final_Futility = 0,
     Pr_Final_Inconclusive = 0,
     Exp_N = 0,
+    Exp_Events = 0,
     stringsAsFactors = FALSE
   )
   
@@ -322,6 +323,7 @@ run_simulation_pure <- function(
   interval_lengths_base <- diff(interval_cutpoints_sim)
 
   sum_final_n       <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_events  <- setNames(numeric(length(arm_names)), arm_names)
   sum_stop_efficacy <- setNames(numeric(length(arm_names)), arm_names)
   sum_stop_futility <- setNames(numeric(length(arm_names)), arm_names)
   sum_final_efficacy <- setNames(numeric(length(arm_names)), arm_names)
@@ -337,6 +339,7 @@ run_simulation_pure <- function(
       set.seed(seed)
     }
     chunk_sum_final_n <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_events <- setNames(numeric(length(arm_names)), arm_names)
     chunk_sum_stop_eff <- setNames(numeric(length(arm_names)), arm_names)
     chunk_sum_stop_fut <- setNames(numeric(length(arm_names)), arm_names)
     chunk_sum_final_eff <- setNames(numeric(length(arm_names)), arm_names)
@@ -567,15 +570,23 @@ run_simulation_pure <- function(
       }
 
       final_n_vec <- setNames(numeric(length(arm_names)), arm_names)
+      final_events_vec <- setNames(numeric(length(arm_names)), arm_names)
       for (arm in arm_names) {
         final_n_vec[arm] <- if (is.na(state$sim_final_n_current_run[arm])) {
           state$enrolled_counts[arm]
         } else {
           state$sim_final_n_current_run[arm]
         }
+        # Compute final events for this arm
+        arm_slice_for_events <- slice_arm_data_at_time(
+          state$registries[[arm]], final_time,
+          max_follow_up_sim, interval_cutpoints_current
+        )
+        final_events_vec[arm] <- arm_slice_for_events$metrics$events_total
       }
 
       chunk_sum_final_n <- chunk_sum_final_n + final_n_vec
+      chunk_sum_final_events <- chunk_sum_final_events + final_events_vec
       chunk_sum_stop_eff <- chunk_sum_stop_eff + state$stop_efficacy_per_sim_row
       chunk_sum_stop_fut <- chunk_sum_stop_fut + state$stop_futility_per_sim_row
       chunk_sum_final_eff <- chunk_sum_final_eff + final_eff_vec
@@ -587,6 +598,7 @@ run_simulation_pure <- function(
 
     list(
       sum_final_n = chunk_sum_final_n,
+      sum_final_events = chunk_sum_final_events,
       sum_stop_eff = chunk_sum_stop_eff,
       sum_stop_fut = chunk_sum_stop_fut,
       sum_final_eff = chunk_sum_final_eff,
@@ -599,6 +611,10 @@ run_simulation_pure <- function(
   aggregate_results <- function(partials) {
     for (res in partials) {
       sum_final_n       <<- sum_final_n + res$sum_final_n
+      # Defensive: handle workers running old code without sum_final_events
+      if (!is.null(res$sum_final_events)) {
+        sum_final_events  <<- sum_final_events + res$sum_final_events
+      }
       sum_stop_efficacy <<- sum_stop_efficacy + res$sum_stop_eff
       sum_stop_futility <<- sum_stop_futility + res$sum_stop_fut
       sum_final_efficacy <<- sum_final_efficacy + res$sum_final_eff
@@ -693,8 +709,9 @@ run_simulation_pure <- function(
     results_data$Pr_Final_Futility[j]       <- final_fut
     results_data$Pr_Final_Inconclusive[j]   <- final_inc
     results_data$Exp_N[j]                   <- sum_final_n[arm] * inv_num_sims
+    results_data$Exp_Events[j]              <- sum_final_events[arm] * inv_num_sims
   }
-  
+
   results_data
 }
 
