@@ -74,7 +74,9 @@ calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
 make_state <- function(arm_names, max_total_patients_per_arm) {
   # PERFORMANCE: Pre-allocate registries with capacity to avoid rbind copies
   # Use 1.2x max capacity as buffer for safety
+  # FIX: as.integer() strips names, so preserve them explicitly
   capacity <- as.integer(ceiling(max_total_patients_per_arm * 1.2))
+  names(capacity) <- names(max_total_patients_per_arm)
 
   # Create pre-allocated registry for one arm
   create_preallocated_registry <- function(cap) {
@@ -90,7 +92,7 @@ make_state <- function(arm_names, max_total_patients_per_arm) {
     arm_status = setNames(rep("recruiting", length(arm_names)), arm_names),
     enrolled_counts = setNames(rep(0L, length(arm_names)), arm_names),
     registries = setNames(
-      lapply(arm_names, function(a) create_preallocated_registry(capacity)),
+      lapply(arm_names, function(a) create_preallocated_registry(capacity[a])),
       arm_names
     ),
     # Track next available row index for each arm's registry (for O(1) insertion)
