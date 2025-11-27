@@ -36,11 +36,96 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="evolvetrial-development-version">evolveTrial (development version)<a class="anchor" aria-label="anchor" href="#evolvetrial-development-version"></a></h2>
-<ul><li>Initial CRAN submission.</li>
-<li>Reorganized the adaptive simulation engine into modular R scripts so the main branch mirrors the helper structure used locally.</li>
+<h2 class="pkg-version" data-toc-text="0.0.0.9000" id="evolvetrial-0009000">evolveTrial 0.0.0.9000<a class="anchor" aria-label="anchor" href="#evolvetrial-0009000"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-0-0-0-9000">Breaking Changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-0-0-9000"></a></h3>
+<ul><li><p><strong>Single-arm gate scaling</strong>: Single-arm (<code>compare_arms_option = FALSE</code>) now applies proportional scaling to <code>min_events_per_arm</code> and <code>min_person_time_frac_per_arm</code> based on <code>randomization_probs</code>, matching vs-reference behavior. Arms with lower randomization probabilities automatically get proportionally lower gates when scalar gate values are provided.</p></li>
+<li>
+<p><strong>Parameter naming harmonization</strong>: Updated parameter names for consistency across comparison paths:</p>
+<ul><li>
+<code>efficacy_threshold_current_prob_hc</code> → <code>efficacy_threshold_hc_prob</code>
+</li>
+<li>
+<code>posterior_futility_threshold_hc</code> → <code>futility_threshold_hc_prob</code>
+</li>
+<li>
+<code>min_events_for_analysis</code> → <code>min_events_hc</code>
+</li>
+<li>
+<code>min_median_followup</code> → <code>min_median_followup_hc</code>
+</li>
+</ul></li>
 </ul></div>
-  </main></div>
+<div class="section level3">
+<h3 id="deprecated-parameters-0-0-0-9000">Deprecated Parameters<a class="anchor" aria-label="anchor" href="#deprecated-parameters-0-0-0-9000"></a></h3>
+<p>Old parameter names are still supported with deprecation warnings. Users should migrate to new names:</p>
+<table class="table"><colgroup><col width="40%"><col width="40%"><col width="19%"></colgroup><thead><tr class="header"><th>Old Parameter Name</th>
+<th>New Parameter Name</th>
+<th>Context</th>
+</tr></thead><tbody><tr class="odd"><td><code>efficacy_threshold_current_prob_hc</code></td>
+<td><code>efficacy_threshold_hc_prob</code></td>
+<td>Single-arm efficacy threshold</td>
+</tr><tr class="even"><td><code>posterior_futility_threshold_hc</code></td>
+<td><code>futility_threshold_hc_prob</code></td>
+<td>Single-arm futility threshold</td>
+</tr><tr class="odd"><td><code>min_events_for_analysis</code></td>
+<td><code>min_events_hc</code></td>
+<td>Single-arm minimum events gate</td>
+</tr><tr class="even"><td><code>min_median_followup</code></td>
+<td><code>min_median_followup_hc</code></td>
+<td>Single-arm minimum median followup gate</td>
+</tr></tbody></table></div>
+<div class="section level3">
+<h3 id="new-features-0-0-0-9000">New Features<a class="anchor" aria-label="anchor" href="#new-features-0-0-0-9000"></a></h3>
+<ul><li><p>Added <code><a href="../reference/resolve_gate_vec.html">resolve_gate_vec()</a></code> internal helper (in <code>R/gate_diagnostics.R</code>) for unified gate parameter resolution with optional proportional scaling across both comparison paths.</p></li>
+<li>
+<p>Added comprehensive test suites for single-arm scenarios:</p>
+<ul><li>
+<code>test-single-arm-gates.R</code>: Basic edge cases with proportional scaling, rebalancing, and multiple gates</li>
+<li>
+<code>test-single-arm-regression.R</code>: Null/alternative scenarios, early stopping, and final analysis validation</li>
+<li>
+<code>test-path-parity.R</code>: Parity tests ensuring single-arm and vs-reference paths maintain consistent behavior</li>
+</ul></li>
+</ul></div>
+<div class="section level3">
+<h3 id="code-quality-0-0-0-9000">Code Quality<a class="anchor" aria-label="anchor" href="#code-quality-0-0-0-9000"></a></h3>
+<ul><li><p>Removed unused functions: <code>run_single_arm_interim()</code>, <code>slice_arm_at_time()</code>, and <code>posterior_scalar_draws()</code> from <code>R/state_management.R</code> (no longer needed after refactoring).</p></li>
+<li><p>Consolidated gate resolution logic: Both vs-reference and single-arm paths now use the same <code><a href="../reference/resolve_gate_vec.html">resolve_gate_vec()</a></code> helper, eliminating code duplication.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="package-maintenance-0-0-0-9000">Package Maintenance<a class="anchor" aria-label="anchor" href="#package-maintenance-0-0-0-9000"></a></h3>
+<ul><li>Fixed R CMD check warnings and notes for CRAN compliance:
+<ul><li>Removed non-ASCII characters (emojis, Greek letters, smart quotes) from source code</li>
+<li>Replaced <code><a href="https://rdrr.io/r/base/library.html" class="external-link">library()</a></code> calls with <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code> + <code>::</code> for proper package dependencies</li>
+<li>Reorganized DESCRIPTION: moved optional packages (gt, dplyr, openxlsx, etc.) to Suggests</li>
+<li>Removed unused imports (ggpubr, survival, survminer)</li>
+<li>Added VignetteBuilder field for proper vignette support</li>
+</ul></li>
+<li>Documentation improvements:
+<ul><li>Added complete <code>@param</code> documentation for internal helper functions</li>
+<li>Fixed documentation mismatches in <code><a href="../reference/explore_early_stopping_from_cal.html">explore_early_stopping_from_cal()</a></code>
+</li>
+<li>Added <code>@keywords internal</code> tags for non-exported functions</li>
+</ul></li>
+<li>Code quality enhancements:
+<ul><li>Added <code><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">stats::rnorm</a></code> to namespace imports</li>
+<li>Added missing global variable declarations</li>
+<li>Updated .Rbuildignore to exclude development files</li>
+<li>Improved test coverage with actual utility function tests</li>
+</ul></li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-0-0-9000">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-0-0-9000"></a></h3>
+<ul><li>None in this development version</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-0-0-0-9000-1">New Features<a class="anchor" aria-label="anchor" href="#new-features-0-0-0-9000-1"></a></h3>
+<ul><li>None in this development version (package in active development)</li>
+</ul></div>
+</div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

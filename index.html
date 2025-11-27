@@ -56,14 +56,27 @@
 </h1></div>
 <!-- badges: start -->
 
-<p><strong>evolveTrial</strong> provides utilities for designing and simulating Bayesian adaptive platform and umbrella clinical trials. The package includes tools for:</p>
+<p><strong>evolveTrial</strong> provides utilities for designing and simulating Bayesian adaptive platform and umbrella clinical trials with time-to-event endpoints. The package supports the ARPA-H ADAPT breast cancer platform trial design.</p>
+<div class="section level2">
+<h2 id="key-features">Key Features<a class="anchor" aria-label="anchor" href="#key-features"></a>
+</h2>
 <ul>
-<li>Simulating multi-arm adaptive trials with time-to-event endpoints</li>
-<li>Bayesian decision rules for efficacy and futility stopping</li>
-<li>Piecewise exponential hazard models with proportional hazards</li>
-<li>Interim analysis timing and information gates</li>
-<li>Operating characteristic summaries and diagnostics</li>
+<li>
+<strong>Multi-arm adaptive trials</strong>: Simulate trials comparing experimental arms to a reference arm with proportional hazards</li>
+<li>
+<strong>Single-arm vs historical control</strong>: Evaluate efficacy relative to historical benchmarks</li>
+<li>
+<strong>Bayesian decision rules</strong>: Interim stopping for efficacy or futility based on posterior probabilities</li>
+<li>
+<strong>Piecewise exponential hazards</strong>: Flexible time-to-event modeling with interval-specific hazards</li>
+<li>
+<strong>Information gates</strong>: Control interim timing via minimum events, median follow-up, and person-time requirements</li>
+<li>
+<strong>Operating characteristics</strong>: Type I error, power, expected sample size, and probability of early termination</li>
+<li>
+<strong>C++ acceleration</strong>: Posterior sampling and hazard computations via Rcpp for high performance</li>
 </ul>
+</div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -130,6 +143,230 @@
 <span></span>
 <span><span class="fu"><a href="reference/estimate_vsref_gate_timing.html">estimate_vsref_gate_timing</a></span><span class="op">(</span><span class="va">args</span><span class="op">)</span></span></code></pre></div>
 <p>For the configuration above the joint lower bound is roughly 18 months, meaning that with 3-month calendar beats the first eligible interim look will occur near the sixth look. Adjusting the information gates (for example by lowering the person-time fraction or the minimum median follow-up) yields earlier opportunities for efficacy/futility stopping.</p>
+</div>
+<div class="section level2">
+<h2 id="minimal-working-examples">Minimal Working Examples<a class="anchor" aria-label="anchor" href="#minimal-working-examples"></a>
+</h2>
+<div class="section level3">
+<h3 id="example-1-multi-arm-trial-experimental-vs-reference">Example 1: Multi-arm Trial (Experimental vs Reference)<a class="anchor" aria-label="anchor" href="#example-1-multi-arm-trial-experimental-vs-reference"></a>
+</h3>
+<p>Simulate a two-arm trial comparing Triplet therapy against Doublet (reference) with interim efficacy and futility stopping:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Define trial arguments</span></span>
+<span><span class="va">args</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>  <span class="co"># Arm configuration</span></span>
+<span>  arm_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Doublet"</span>, <span class="st">"Triplet"</span><span class="op">)</span>,</span>
+<span>  reference_arm_name <span class="op">=</span> <span class="st">"Doublet"</span>,</span>
+<span>  randomization_probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>Doublet <span class="op">=</span> <span class="fl">0.5</span>, Triplet <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>,</span>
+<span>  overall_accrual_rate <span class="op">=</span> <span class="fl">3</span>,</span>
+<span></span>
+<span>  <span class="co"># Sample size limits</span></span>
+<span>  max_total_patients_per_arm <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>Doublet <span class="op">=</span> <span class="fl">70</span>, Triplet <span class="op">=</span> <span class="fl">70</span><span class="op">)</span>,</span>
+<span>  max_follow_up_sim <span class="op">=</span> <span class="fl">24</span>,</span>
+<span></span>
+<span>  <span class="co"># Piecewise hazards (8 3-month intervals)</span></span>
+<span>  pw_hazards <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>    Doublet <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0.12</span>, <span class="fl">8</span><span class="op">)</span>,  <span class="co"># Median ~6 months</span></span>
+<span>    Triplet <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0.077</span>, <span class="fl">8</span><span class="op">)</span>  <span class="co"># Median ~9 months (HR = 0.67)</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  interval_width <span class="op">=</span> <span class="fl">3</span>,</span>
+<span></span>
+<span>  <span class="co"># Bayesian decision thresholds</span></span>
+<span>  efficacy_prob_threshold_vsref <span class="op">=</span> <span class="fl">0.99</span>,</span>
+<span>  futility_prob_threshold_vsref <span class="op">=</span> <span class="fl">0.10</span>,</span>
+<span></span>
+<span>  <span class="co"># Information gates</span></span>
+<span>  min_events_per_arm <span class="op">=</span> <span class="fl">8</span>,</span>
+<span>  min_median_followup_per_arm <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  min_person_time_frac_per_arm <span class="op">=</span> <span class="fl">0.15</span>,</span>
+<span></span>
+<span>  <span class="co"># Interim schedule</span></span>
+<span>  beat_interval <span class="op">=</span> <span class="fl">3</span>,</span>
+<span></span>
+<span>  <span class="co"># MCMC settings</span></span>
+<span>  n_posterior_draws <span class="op">=</span> <span class="fl">5000</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Run Monte Carlo simulation (100 replicates for demo)</span></span>
+<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">run_single_scenario</span><span class="op">(</span><span class="va">args</span>, n_sim <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">2025</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># View key operating characteristics</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Power: ~80%, Type I error: ~10%, Expected N: ~85 per arm</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="example-2-single-arm-vs-historical-control">Example 2: Single-arm vs Historical Control<a class="anchor" aria-label="anchor" href="#example-2-single-arm-vs-historical-control"></a>
+</h3>
+<p>Evaluate a single experimental arm against a historical median survival:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Define trial arguments for single-arm design</span></span>
+<span><span class="va">args_sa</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>  <span class="co"># Arm configuration (vs historical control)</span></span>
+<span>  arm_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Control"</span>, <span class="st">"Experimental"</span><span class="op">)</span>,</span>
+<span>  reference_arm_name <span class="op">=</span> <span class="st">"Control"</span>,</span>
+<span>  use_historical_control <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  randomization_probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>Control <span class="op">=</span> <span class="fl">0</span>, Experimental <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  overall_accrual_rate <span class="op">=</span> <span class="fl">2</span>,</span>
+<span></span>
+<span>  <span class="co"># Sample size</span></span>
+<span>  max_total_patients_per_arm <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>Control <span class="op">=</span> <span class="fl">0</span>, Experimental <span class="op">=</span> <span class="fl">60</span><span class="op">)</span>,</span>
+<span>  max_follow_up_sim <span class="op">=</span> <span class="fl">24</span>,</span>
+<span></span>
+<span>  <span class="co"># Hazards: Historical median 6 months, experimental median 9 months</span></span>
+<span>  pw_hazards <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>    Control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0.116</span>, <span class="fl">8</span><span class="op">)</span>,      <span class="co"># Historical: median 6 mo</span></span>
+<span>    Experimental <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0.077</span>, <span class="fl">8</span><span class="op">)</span>  <span class="co"># Expected: median 9 mo</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  interval_width <span class="op">=</span> <span class="fl">3</span>,</span>
+<span></span>
+<span>  <span class="co"># Decision thresholds vs historical</span></span>
+<span>  efficacy_prob_threshold_hc <span class="op">=</span> <span class="fl">0.95</span>,</span>
+<span>  futility_prob_threshold_hc <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span></span>
+<span>  <span class="co"># Information gates</span></span>
+<span>  min_events_hc <span class="op">=</span> <span class="fl">15</span>,</span>
+<span></span>
+<span>  <span class="co"># Interim schedule</span></span>
+<span>  beat_interval <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  n_posterior_draws <span class="op">=</span> <span class="fl">5000</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Run simulation</span></span>
+<span><span class="va">result_sa</span> <span class="op">&lt;-</span> <span class="fu">run_single_scenario</span><span class="op">(</span><span class="va">args_sa</span>, n_sim <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">2025</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># View operating characteristics</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">result_sa</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="example-3-grid-search-for-optimal-thresholds">Example 3: Grid Search for Optimal Thresholds<a class="anchor" aria-label="anchor" href="#example-3-grid-search-for-optimal-thresholds"></a>
+</h3>
+<p>Find efficacy/futility thresholds that meet operating characteristic targets:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Base trial configuration</span></span>
+<span><span class="va">args</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>  arm_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Control"</span>, <span class="st">"Experimental"</span><span class="op">)</span>,</span>
+<span>  reference_arm_name <span class="op">=</span> <span class="st">"Control"</span>,</span>
+<span>  use_historical_control <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  randomization_probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>Control <span class="op">=</span> <span class="fl">0</span>, Experimental <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  overall_accrual_rate <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  max_total_patients_per_arm <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>Control <span class="op">=</span> <span class="fl">0</span>, Experimental <span class="op">=</span> <span class="fl">60</span><span class="op">)</span>,</span>
+<span>  max_follow_up_sim <span class="op">=</span> <span class="fl">24</span>,</span>
+<span>  pw_hazards <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>    Control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0.116</span>, <span class="fl">8</span><span class="op">)</span>,</span>
+<span>    Experimental <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0.077</span>, <span class="fl">8</span><span class="op">)</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  interval_width <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  min_events_hc <span class="op">=</span> <span class="fl">15</span>,</span>
+<span>  beat_interval <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  n_posterior_draws <span class="op">=</span> <span class="fl">5000</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Define threshold grid</span></span>
+<span><span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span></span>
+<span>  efficacy_prob_threshold_hc <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.90</span>, <span class="fl">0.95</span>, <span class="fl">0.99</span><span class="op">)</span>,</span>
+<span>  futility_prob_threshold_hc <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.10</span>, <span class="fl">0.15</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Evaluate grid (use evaluate_hc_grid for historical control)</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">evaluate_hc_grid</span><span class="op">(</span></span>
+<span>  base_args <span class="op">=</span> <span class="va">args</span>,</span>
+<span>  grid <span class="op">=</span> <span class="va">grid</span>,</span>
+<span>  n_sim <span class="op">=</span> <span class="fl">500</span>,</span>
+<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">2025</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Filter feasible designs (type I &lt;= 0.10, power &gt;= 0.80)</span></span>
+<span><span class="va">feasible</span> <span class="op">&lt;-</span> <span class="fu">filter_feasible_designs</span><span class="op">(</span></span>
+<span>  <span class="va">results</span>,</span>
+<span>  alpha_cap <span class="op">=</span> <span class="fl">0.10</span>,</span>
+<span>  power_floor <span class="op">=</span> <span class="fl">0.80</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Recommend optimal design (minimizes expected N)</span></span>
+<span><span class="va">best</span> <span class="op">&lt;-</span> <span class="fu">recommend_design</span><span class="op">(</span><span class="va">feasible</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">best</span><span class="op">)</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level2">
+<h2 id="key-functions">Key Functions<a class="anchor" aria-label="anchor" href="#key-functions"></a>
+</h2>
+<table class="table">
+<colgroup>
+<col width="52%">
+<col width="47%">
+</colgroup>
+<thead><tr class="header">
+<th>Function</th>
+<th>Purpose</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>run_single_scenario()</code></td>
+<td>Simulate a single trial configuration</td>
+</tr>
+<tr class="even">
+<td><code><a href="reference/run_scenarios.html">run_scenarios()</a></code></td>
+<td>Simulate multiple scenario configurations</td>
+</tr>
+<tr class="odd">
+<td><code>evaluate_hc_grid()</code></td>
+<td>Grid search for single-arm vs historical control</td>
+</tr>
+<tr class="even">
+<td><code><a href="reference/evaluate_ph_grid.html">evaluate_ph_grid()</a></code></td>
+<td>Grid search for multi-arm proportional hazards</td>
+</tr>
+<tr class="odd">
+<td><code>filter_feasible_designs()</code></td>
+<td>Filter designs meeting alpha/power constraints</td>
+</tr>
+<tr class="even">
+<td><code>recommend_design()</code></td>
+<td>Select optimal design from feasible set</td>
+</tr>
+<tr class="odd">
+<td><code><a href="reference/estimate_vsref_gate_timing.html">estimate_vsref_gate_timing()</a></code></td>
+<td>Diagnose information gate timing</td>
+</tr>
+<tr class="even">
+<td><code>summarise_arm_level_OCs()</code></td>
+<td>Summarize operating characteristics</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section level2">
+<h2 id="package-structure">Package Structure<a class="anchor" aria-label="anchor" href="#package-structure"></a>
+</h2>
+<pre><code>evolveTrial/
+├── R/
+│   ├── simulation_driver.R      # Main simulation functions
+│   ├── design_analysis.R        # Grid search and optimization
+│   ├── gate_diagnostics.R       # Information gate utilities
+│   ├── interim_logic.R          # Stopping rule implementation
+│   ├── posterior_helpers.R      # Bayesian posterior computations
+│   └── data_generation.R        # Time-to-event data generation
+├── src/
+│   └── *.cpp                    # C++ acceleration code
+└── vignettes/
+    └── design-overview.Rmd      # Detailed methodology</code></pre>
+</div>
+<div class="section level2">
+<h2 id="related-packages">Related Packages<a class="anchor" aria-label="anchor" href="#related-packages"></a>
+</h2>
+<ul>
+<li>
+<strong>evolveBO</strong>: Bayesian optimization for calibrating evolveTrial designs</li>
+<li>
+<strong>adaptive-trial-bo-paper</strong>: Research manuscript and case studies</li>
+</ul>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="license">

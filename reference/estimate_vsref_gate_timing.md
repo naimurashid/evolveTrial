@@ -15,7 +15,8 @@ estimate_vsref_gate_timing(args)
 - args:
 
   A named list following the structure passed into
-  `run_simulation_pure()` / `run_scenarios()`. The function uses entries
+  [`run_simulation_pure()`](run_simulation_pure.md) /
+  [`run_scenarios()`](run_scenarios.md). The function uses entries
   relevant to vs-reference gating, namely `arm_names`,
   `reference_arm_name`, `overall_accrual_rate`, `randomization_probs`,
   `max_total_patients_per_arm`, `max_follow_up_sim`,

@@ -46,24 +46,45 @@
 
       <dl><dt>
 
-          <code><a href="calculate_interval_metrics_fast.html">calculate_interval_metrics_fast()</a></code>
+          <code><a href="adopt_calibration.html">adopt_calibration()</a></code>
 
         </dt>
-        <dd>Recalculates events and person-time using a more efficient data.table approach.</dd>
+        <dd>Adopt a calibrated design configuration</dd>
 
         <dt>
 
-          <code><a href="calculate_median_survival_piecewise.html">calculate_median_survival_piecewise()</a></code>
+          <code><a href="apply_recommended_to_args.html">apply_recommended_to_args()</a></code>
 
         </dt>
-        <dd>Computes the median survival time for a piecewise exponential model. If the 0.5 survival is not reached by the end of the last interval, we <em>continue past the last cutpoint</em> with the last interval's hazard (open-ended tail). Only return Inf if the last hazard is exactly zero.</dd>
+        <dd>Apply a recommended early-stopping configuration to the argument list</dd>
 
         <dt>
 
-          <code><a href="draw_posterior_hazard_samples.html">draw_posterior_hazard_samples()</a></code>
+          <code><a href="calculate_median_survival_matrix_cpp.html">calculate_median_survival_matrix_cpp()</a></code>
 
         </dt>
-        <dd>Draws samples from the posterior distribution of hazard rates for each interval in a Bayesian piecewise exponential model with Gamma priors.</dd>
+        <dd>Calculate median survival for multiple hazard samples (C++ implementation)</dd>
+
+        <dt>
+
+          <code><a href="calculate_median_survival_piecewise_cpp.html">calculate_median_survival_piecewise_cpp()</a></code>
+
+        </dt>
+        <dd>Calculate median survival for piecewise exponential model (C++ implementation)</dd>
+
+        <dt>
+
+          <code><a href="calibrate_alpha.html">calibrate_alpha()</a></code>
+
+        </dt>
+        <dd>Calibrate interim and final thresholds for single-arm designs</dd>
+
+        <dt>
+
+          <code><a href="draw_posterior_hazard_samples_cpp.html">draw_posterior_hazard_samples_cpp()</a></code>
+
+        </dt>
+        <dd>Draw posterior hazard samples (C++ implementation)</dd>
 
         <dt>
 
@@ -71,6 +92,167 @@
 
         </dt>
         <dd>Estimate when the vs-reference interim gates can be satisfied</dd>
+
+        <dt>
+
+          <code><a href="evaluate_ph_grid.html">evaluate_ph_grid()</a></code>
+
+        </dt>
+        <dd>Evaluate PH-based grid of designs</dd>
+
+        <dt>
+
+          <code><a href="exp_arms_from_args.html">exp_arms_from_args()</a></code>
+
+        </dt>
+        <dd>Extract experimental arm names from an argument list</dd>
+
+        <dt>
+
+          <code><a href="explore_early_stopping_from_cal.html">explore_early_stopping_from_cal()</a></code>
+
+        </dt>
+        <dd>Explore early stopping knobs around a calibrated design</dd>
+
+        <dt>
+
+          <code><a href="export_scenario_table_to_excel.html">export_scenario_table_to_excel()</a></code>
+
+        </dt>
+        <dd>Export a scenario summary table to Excel</dd>
+
+        <dt>
+
+          <code><a href="export_scenario_table_to_png.html">export_scenario_table_to_png()</a></code>
+
+        </dt>
+        <dd>Render the scenario summary table to a PNG image</dd>
+
+        <dt>
+
+          <code><a href="filter_early_grid.html">filter_early_grid()</a></code>
+
+        </dt>
+        <dd>Filter early-stopping designs by operating targets</dd>
+
+        <dt>
+
+          <code><a href="grid_calibrate.html">grid_calibrate()</a></code>
+
+        </dt>
+        <dd>Calibrate historical-control thresholds over a grid</dd>
+
+        <dt>
+
+          <code><a href="ph_beta_mode_var.html">ph_beta_mode_var()</a></code>
+
+        </dt>
+        <dd>Compute mode and variance of log-HR posterior for PH model (DISPATCHER)</dd>
+
+        <dt>
+
+          <code><a href="ph_beta_mode_var_cpp.html">ph_beta_mode_var_cpp()</a></code>
+
+        </dt>
+        <dd>Compute mode and variance of log-HR posterior for PH model (C++ implementation)</dd>
+
+        <dt>
+
+          <code><a href="plot_calibration.html">plot_calibration()</a></code>
+
+        </dt>
+        <dd>Plot power versus type I error for calibration grids</dd>
+
+        <dt>
+
+          <code><a href="plot_early_tradeoff.html">plot_early_tradeoff()</a></code>
+
+        </dt>
+        <dd>Plot early-stopping trade-offs</dd>
+
+        <dt>
+
+          <code><a href="pretty_scenario_matrix.html">pretty_scenario_matrix()</a></code>
+
+        </dt>
+        <dd>Summarise simulation output by scenario and arm</dd>
+
+        <dt>
+
+          <code><a href="recommend_design_from_early.html">recommend_design_from_early()</a></code>
+
+        </dt>
+        <dd>Recommend a single early-stopping design</dd>
+
+        <dt>
+
+          <code><a href="run_scenarios.html">run_scenarios()</a></code>
+
+        </dt>
+        <dd>Evaluate a design across multiple scenarios</dd>
+
+        <dt>
+
+          <code><a href="run_simulation_pure.html">run_simulation_pure()</a></code>
+
+        </dt>
+        <dd>Run a full set of evolveTrial simulations for a design specification</dd>
+
+        <dt>
+
+          <code><a href="sample_vs_ref_medians_independent.html">sample_vs_ref_medians_independent()</a></code>
+
+        </dt>
+        <dd>Sample medians for vs-ref independent model (DISPATCHER)</dd>
+
+        <dt>
+
+          <code><a href="sample_vs_ref_medians_independent_cpp.html">sample_vs_ref_medians_independent_cpp()</a></code>
+
+        </dt>
+        <dd>Sample medians for vs-ref independent model (C++ implementation)</dd>
+
+        <dt>
+
+          <code><a href="sample_vs_ref_medians_ph.html">sample_vs_ref_medians_ph()</a></code>
+
+        </dt>
+        <dd>Sample medians for vs-ref PH model (DISPATCHER)</dd>
+
+        <dt>
+
+          <code><a href="sample_vs_ref_medians_ph_cpp.html">sample_vs_ref_medians_ph_cpp()</a></code>
+
+        </dt>
+        <dd>Sample medians for vs-ref PH model (C++ implementation)</dd>
+
+        <dt>
+
+          <code><a href="scenarios_from_grid.html">scenarios_from_grid()</a></code>
+
+        </dt>
+        <dd>Build scenario overrides from a grid of design choices</dd>
+
+        <dt>
+
+          <code><a href="set_futility_medians.html">set_futility_medians()</a></code>
+
+        </dt>
+        <dd>Adjust futility medians for experimental arms</dd>
+
+        <dt>
+
+          <code><a href="test_armadillo_random.html">test_armadillo_random()</a></code>
+
+        </dt>
+        <dd>Test Armadillo matrix operations</dd>
+
+        <dt>
+
+          <code><a href="test_rcpp_sum.html">test_rcpp_sum()</a></code>
+
+        </dt>
+        <dd>Test Rcpp setup</dd>
       </dl></div>
   </main></div>
 
