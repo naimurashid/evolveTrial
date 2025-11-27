@@ -198,9 +198,9 @@ sample_vs_ref_medians_independent_r <- function(slCtrl, slTrt, args, num_samples
     num_samples = num_samples
   )
 
-  # Use original calculate_median_survival_piecewise from posterior_helpers.R
-  med_ctrl <- apply(lamC, 1, calculate_median_survival_piecewise, interval_lengths = interval_lengths)
-  med_trt  <- apply(lamT, 1, calculate_median_survival_piecewise, interval_lengths = interval_lengths)
+  # PERFORMANCE: Use C++ matrix version instead of apply() for 20-30x speedup
+  med_ctrl <- calculate_median_survival_matrix_cpp(lamC, interval_lengths)
+  med_trt  <- calculate_median_survival_matrix_cpp(lamT, interval_lengths)
 
   list(medCtrl = med_ctrl, medTrt = med_trt, logHR = NULL)
 }

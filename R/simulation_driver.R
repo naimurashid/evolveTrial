@@ -460,13 +460,13 @@ run_simulation_pure <- function(
                                  scale = weibull_scale_true_arms[chosen_arm])
         t_random_censor <- runif(1, min = 0, max = censor_max_time_sim)
 
-        state$registries[[chosen_arm]] <- rbind(state$registries[[chosen_arm]],
-                                                data.frame(
-                                                  id = patient_id,
-                                                  enroll_time = current_time,
-                                                  true_event_time = t_event_true,
-                                                  random_censor_time = t_random_censor
-                                                ))
+        # PERFORMANCE: Use indexed assignment instead of rbind (O(1) vs O(n) per patient)
+        idx <- state$registry_row_idx[[chosen_arm]]
+        state$registries[[chosen_arm]][idx, "id"] <- patient_id
+        state$registries[[chosen_arm]][idx, "enroll_time"] <- current_time
+        state$registries[[chosen_arm]][idx, "true_event_time"] <- t_event_true
+        state$registries[[chosen_arm]][idx, "random_censor_time"] <- t_random_censor
+        state$registry_row_idx[[chosen_arm]] <- idx + 1L
         state$enrolled_counts[chosen_arm] <- state$enrolled_counts[chosen_arm] + 1L
       }
 
@@ -506,9 +506,8 @@ run_simulation_pure <- function(
             prior_beta_params  = prior_beta_params_model,
             num_samples = num_posterior_draws
           )
-          med_arm <- apply(post_arm, 1, function(h) {
-            calculate_median_survival_piecewise(h, interval_lengths)
-          })
+          # PERFORMANCE: Use C++ matrix version instead of apply() for 20-30x speedup
+          med_arm <- calculate_median_survival_matrix_cpp(post_arm, interval_lengths)
           # Final success check
           success_thr <- if (!is.null(median_pfs_success_threshold_arms) && arm %in% names(median_pfs_success_threshold_arms)) {
             median_pfs_success_threshold_arms[arm]

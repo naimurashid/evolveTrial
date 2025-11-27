@@ -46,18 +46,16 @@ calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
   }
 
   # 2) Person-time per interval (left-closed, right-open)
-  pt_list <- lapply(1:num_intervals, function(i) {
-    lower_bound <- interval_cutpoints[i]
-    upper_bound <- interval_cutpoints[i + 1]
-    at_risk_dt <- dt[observed_time >= lower_bound]
-    if (nrow(at_risk_dt) == 0) {
-      return(data.table(interval_num = i, person_time = 0.0))
-    }
-    time_spent <- pmin(at_risk_dt$observed_time, upper_bound) - lower_bound
-    time_spent[time_spent < 0] <- 0
-    data.table(interval_num = i, person_time = sum(time_spent))
-  })
-  pt_summary <- rbindlist(pt_list)
+  # PERFORMANCE: Vectorized computation avoiding intermediate data.table copies
+  observed_times <- dt$observed_time
+  pt_per_interval <- vapply(1:num_intervals, function(i) {
+    lower <- interval_cutpoints[i]
+    upper <- interval_cutpoints[i + 1]
+    at_risk <- observed_times >= lower  # logical mask, no copy
+    if (!any(at_risk)) return(0)
+    sum(pmax(0, pmin(observed_times[at_risk], upper) - lower))
+  }, numeric(1))
+  pt_summary <- data.table(interval_num = 1:num_intervals, person_time = pt_per_interval)
 
   # 3) Merge to full vectors
   merged <- merge(results_template, event_counts, by = "interval_num", all.x = TRUE)
@@ -74,18 +72,29 @@ calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
 
 # 1) ---------- State container ----------
 make_state <- function(arm_names, max_total_patients_per_arm) {
+  # PERFORMANCE: Pre-allocate registries with capacity to avoid rbind copies
+  # Use 1.2x max capacity as buffer for safety
+  capacity <- as.integer(ceiling(max_total_patients_per_arm * 1.2))
+
+  # Create pre-allocated registry for one arm
+  create_preallocated_registry <- function(cap) {
+    data.frame(
+      id = rep(NA_integer_, cap),
+      enroll_time = rep(NA_real_, cap),
+      true_event_time = rep(NA_real_, cap),
+      random_censor_time = rep(NA_real_, cap)
+    )
+  }
+
   list(
     arm_status = setNames(rep("recruiting", length(arm_names)), arm_names),
     enrolled_counts = setNames(rep(0L, length(arm_names)), arm_names),
     registries = setNames(
-      replicate(length(arm_names),
-                data.frame(id = integer(0),
-                           enroll_time = numeric(0),
-                           true_event_time = numeric(0),
-                           random_censor_time = numeric(0)),
-                simplify = FALSE),
+      lapply(arm_names, function(a) create_preallocated_registry(capacity)),
       arm_names
     ),
+    # Track next available row index for each arm's registry (for O(1) insertion)
+    registry_row_idx = setNames(rep(1L, length(arm_names)), arm_names),
     # per-simulation outputs that interims mutate:
     stop_efficacy_per_sim_row = setNames(rep(0L, length(arm_names)), arm_names),
     stop_futility_per_sim_row = setNames(rep(0L, length(arm_names)), arm_names),
@@ -94,8 +103,18 @@ make_state <- function(arm_names, max_total_patients_per_arm) {
 }
 
 
+# Helper: Get active (non-NA) rows from pre-allocated registry
+# PERFORMANCE: Use this to trim pre-allocated registries before processing
+get_active_registry <- function(registry_df) {
+  if (nrow(registry_df) == 0) return(registry_df)
+  # Filter to only rows with valid id (non-NA)
+  registry_df[!is.na(registry_df$id), , drop = FALSE]
+}
+
 # --- slice_arm_data_at_time (UPDATED: tiny clarity tweak on nrow check) ---
 slice_arm_data_at_time <- function(registry_df, calendar_time, max_follow_up, interval_cutpoints) {
+  # PERFORMANCE: Handle pre-allocated registries by trimming NA rows first
+  registry_df <- get_active_registry(registry_df)
   if (nrow(registry_df) == 0) {
     return(list(
       patient_data = data.frame(observed_time = numeric(0), event_status = integer(0)),
