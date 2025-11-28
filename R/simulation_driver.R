@@ -490,12 +490,16 @@ run_simulation_pure <- function(
       final_eff_vec <- setNames(integer(length(arm_names)), arm_names)
       final_fut_vec <- setNames(integer(length(arm_names)), arm_names)
       final_inc_vec <- setNames(integer(length(arm_names)), arm_names)
+      # PERFORMANCE: Cache arm slices to avoid redundant slice_arm_data_at_time calls
+      cached_arm_slices <- list()
 
       for (arm in arm_names) {
         if (state$arm_status[arm] != "recruiting") next
 
         arm_slice <- slice_arm_data_at_time(state$registries[[arm]], final_time,
                                             max_follow_up_sim, interval_cutpoints_current)
+        # Cache for reuse when computing final events
+        cached_arm_slices[[arm]] <- arm_slice
 
         if (!compare_arms_option) {
           post_arm <- draw_posterior_hazard_samples(
@@ -576,11 +580,15 @@ run_simulation_pure <- function(
         } else {
           state$sim_final_n_current_run[arm]
         }
-        # Compute final events for this arm
-        arm_slice_for_events <- slice_arm_data_at_time(
-          state$registries[[arm]], final_time,
-          max_follow_up_sim, interval_cutpoints_current
-        )
+        # PERFORMANCE: Use cached slice if available, otherwise compute
+        if (arm %in% names(cached_arm_slices)) {
+          arm_slice_for_events <- cached_arm_slices[[arm]]
+        } else {
+          arm_slice_for_events <- slice_arm_data_at_time(
+            state$registries[[arm]], final_time,
+            max_follow_up_sim, interval_cutpoints_current
+          )
+        }
         final_events_vec[arm] <- arm_slice_for_events$metrics$events_total
       }
 

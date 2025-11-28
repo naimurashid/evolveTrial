@@ -151,7 +151,12 @@ sample_vs_ref_medians <- function(slCtrl, slTrt, args, num_samples,
 
 sample_vs_ref_medians_independent <- function(slCtrl, slTrt, args, num_samples,
                                                ctrl_cache = NULL) {
-  interval_lengths <- diff(args$interval_cutpoints_sim)
+  # PERFORMANCE: Use cached interval_lengths if available (multi-arm optimization)
+  if (!is.null(ctrl_cache) && !is.null(ctrl_cache$interval_lengths)) {
+    interval_lengths <- ctrl_cache$interval_lengths
+  } else {
+    interval_lengths <- diff(args$interval_cutpoints_sim)
+  }
 
   # PERFORMANCE: Use cached control posteriors if provided (multi-arm optimization)
   if (!is.null(ctrl_cache)) {
