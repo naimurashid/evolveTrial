@@ -1,3 +1,10 @@
+#' Null coalescing operator (for R < 4.4 compatibility)
+#' @keywords internal
+#' @noRd
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
+}
+
 #' @keywords internal
 #' @noRd
 utils::globalVariables(c(
