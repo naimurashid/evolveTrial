@@ -15,16 +15,6 @@ calculate_interval_metrics_fast(patient_data, interval_cutpoints)
 A list with \code{events_per_interval} and \code{person_time_per_interval} vectors.
 }
 \description{
-Recalculates events and person-time using a more efficient data.table approach.
+Recalculates events and person-time using lightweight base-R operations.
 }
-\keyword{Recalculates}
-\keyword{a}
-\keyword{and}
-\keyword{approach.}
-\keyword{data.table}
-\keyword{efficient}
-\keyword{events}
 \keyword{internal}
-\keyword{more}
-\keyword{person-time}
-\keyword{using}

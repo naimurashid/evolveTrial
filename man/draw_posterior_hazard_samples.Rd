@@ -48,25 +48,4 @@ Default: C++ for better performance.
 Draws samples from the posterior distribution of hazard rates for each interval
 in a Bayesian piecewise exponential model with Gamma priors.
 }
-\keyword{Bayesian}
-\keyword{Draws}
-\keyword{Gamma}
-\keyword{a}
-\keyword{distribution}
-\keyword{each}
-\keyword{exponential}
-\keyword{for}
-\keyword{from}
-\keyword{hazard}
-\keyword{in}
 \keyword{internal}
-\keyword{interval}
-\keyword{model}
-\keyword{of}
-\keyword{piecewise}
-\keyword{posterior}
-\keyword{priors.}
-\keyword{rates}
-\keyword{samples}
-\keyword{the}
-\keyword{with}

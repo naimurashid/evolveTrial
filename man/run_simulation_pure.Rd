@@ -63,7 +63,8 @@ run_simulation_pure(
   rebalance_after_events = NULL,
   parallel_replicates = FALSE,
   num_workers = NULL,
-  cluster_type = c("PSOCK", "FORK"),
+  cluster_type = c("auto", "PSOCK", "FORK"),
+  cluster = NULL,
   progress = interactive()
 )
 }
@@ -113,7 +114,10 @@ posterior draws used at interim looks.}
 caps.}
 
 \item{min_patients_for_analysis}{Minimum number of patients required to
-evaluate an arm in the single-arm path.}
+evaluate an arm in the single-arm path. If not specified, defaults to 0,
+allowing interim analyses to occur even with very few patients. Set this
+to a higher value to prevent interim analyses until a certain number of
+patients have been enrolled.}
 
 \item{efficacy_stopping_rule_hc}{Logical; enable interim efficacy checks for
 the historical-control path.}
@@ -227,13 +231,20 @@ planned person-time) triggering interim looks.}
 cut points are re-estimated once that number of events has accrued.}
 
 \item{parallel_replicates}{Logical; if \code{TRUE}, distribute Monte Carlo
-replicates across a parallel cluster (PSOCK by default).}
+replicates across a parallel cluster.}
 
 \item{num_workers}{Optional integer specifying the number of workers when
 \code{parallel_replicates = TRUE}. Defaults to \code{parallel::detectCores() - 1}.}
 
 \item{cluster_type}{Type of parallel cluster to spawn when distributing
-replicates. One of \code{"PSOCK"} (default) or \code{"FORK"}.}
+replicates. One of \code{"auto"} (default, uses FORK on Unix, PSOCK on Windows),
+\code{"PSOCK"}, or \code{"FORK"}. FORK clusters are faster on Linux/macOS as they
+share memory and don't require package loading in workers.}
+
+\item{cluster}{Optional pre-existing parallel cluster to reuse. When provided,
+the cluster is used for parallel execution and NOT stopped on exit. This
+enables cluster pooling for repeated calls (e.g., in Bayesian optimization).
+Create with \code{evolveTrial::create_simulation_cluster()} or \code{parallel::makeCluster()}.}
 
 \item{progress}{Logical; show the simulation progress bar when running
 sequentially. Automatically disabled for parallel replicate execution.}

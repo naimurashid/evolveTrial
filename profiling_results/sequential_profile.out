@@ -1,0 +1,7 @@
+sample.interval=10000
+"rgamma" "draw_posterior_hazard_samples" "calculate_current_probs_hc" "interim_check_hc" "interim_check" "simulate_chunk" "evolveTrial::run_simulation_pure" 
+"interim_check_hc" "interim_check" "simulate_chunk" "evolveTrial::run_simulation_pure" 
+"which" "is_eligible" "simulate_chunk" "evolveTrial::run_simulation_pure" 
+"$" "pmin" "slice_arm_data_at_time" "simulate_chunk" "evolveTrial::run_simulation_pure" 
+"structure" "as.data.frame.numeric" "as.data.frame" "data.frame" "create_preallocated_registry" "FUN" "lapply" "setNames" "make_state" "simulate_chunk" "evolveTrial::run_simulation_pure" 
+"simulate_chunk" "evolveTrial::run_simulation_pure" 

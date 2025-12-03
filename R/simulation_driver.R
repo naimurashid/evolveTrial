@@ -113,11 +113,17 @@
 #' @param rebalance_after_events Optional integer; when non-`NULL` the piecewise
 #'   cut points are re-estimated once that number of events has accrued.
 #' @param parallel_replicates Logical; if `TRUE`, distribute Monte Carlo
-#'   replicates across a parallel cluster (PSOCK by default).
+#'   replicates across a parallel cluster.
 #' @param num_workers Optional integer specifying the number of workers when
 #'   `parallel_replicates = TRUE`. Defaults to `parallel::detectCores() - 1`.
 #' @param cluster_type Type of parallel cluster to spawn when distributing
-#'   replicates. One of `"PSOCK"` (default) or `"FORK"`.
+#'   replicates. One of `"auto"` (default, uses FORK on Unix, PSOCK on Windows),
+#'   `"PSOCK"`, or `"FORK"`. FORK clusters are faster on Linux/macOS as they
+#'   share memory and don't require package loading in workers.
+#' @param cluster Optional pre-existing parallel cluster to reuse. When provided,
+#'   the cluster is used for parallel execution and NOT stopped on exit. This
+#'   enables cluster pooling for repeated calls (e.g., in Bayesian optimization).
+#'   Create with `evolveTrial::create_simulation_cluster()` or `parallel::makeCluster()`.
 #' @param progress Logical; show the simulation progress bar when running
 #'   sequentially. Automatically disabled for parallel replicate execution.
 #'
@@ -203,10 +209,16 @@ run_simulation_pure <- function(
     # replicate-level parallelisation
     parallel_replicates = FALSE,
     num_workers = NULL,
-    cluster_type = c("PSOCK", "FORK"),
+    cluster_type = c("auto", "PSOCK", "FORK"),
+    cluster = NULL,
     progress = interactive()
 ) {
   cluster_type <- match.arg(cluster_type)
+
+  # Auto-detect optimal cluster type: FORK on Unix (faster), PSOCK on Windows
+  if (cluster_type == "auto") {
+    cluster_type <- if (.Platform$OS.type == "unix") "FORK" else "PSOCK"
+  }
 
   # ---- PARAMETER DEPRECATION HANDLING ----------------------------------------
   # Map old parameter names to new harmonized names with warnings
@@ -652,18 +664,29 @@ run_simulation_pure <- function(
   chunk_results <- list()
 
   if (isTRUE(parallel_replicates) && num_simulations > 1) {
-    workers <- if (is.null(num_workers)) {
+    # Determine number of workers
+    # If external cluster is provided, use its size; otherwise use num_workers/detectCores
+    workers <- if (!is.null(cluster)) {
+      # Use the size of the supplied cluster
+      length(cluster)
+    } else if (is.null(num_workers)) {
       max(1L, parallel::detectCores() - 1L)
     } else {
       as.integer(num_workers)
     }
     workers <- max(1L, min(workers, num_simulations))
 
+    # Sequential threshold: parallel overhead exceeds benefit for small rep counts
+
+    # Based on profiling: cluster spawn/teardown ~5-10 sec, simulation ~1-2 ms/rep
+    # Threshold of 100 ensures parallel overhead is worthwhile
+    seq_threshold <- getOption("evolveTrial.sequential_threshold", 100L)
+
     # Check if parallelization is worthwhile
-    if (num_simulations < workers * 2) {
+    if (num_simulations < seq_threshold) {
       if (interactive()) {
         message("Few simulations (", num_simulations,
-                ") relative to workers (", workers,
+                ") below threshold (", seq_threshold,
                 "); running sequentially for efficiency")
       }
       chunk_results <- list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
@@ -676,23 +699,57 @@ run_simulation_pure <- function(
         pkg_name <- "evolveTrial"
       }
 
-      # Diagnostic for development workflow
-      if (interactive()) {
-        pkg_version <- tryCatch(
-          as.character(utils::packageVersion(pkg_name)),
-          error = function(e) "not installed"
-        )
-        message("Parallel execution: ", workers, " workers will load ",
-                pkg_name, " version ", pkg_version)
+      # Cluster pooling: reuse external cluster if provided
+      using_external_cluster <- !is.null(cluster)
+
+      if (using_external_cluster) {
+        cl <- cluster
+        # Do not stop external cluster on exit - caller is responsible
+
+        # Ensure package is loaded on external PSOCK clusters
+        # (FORK clusters inherit parent environment, so no loading needed)
+        # Check cluster type by examining the first node's class
+        cluster_class <- class(cl[[1]])[1]
+        is_psock <- grepl("SOCK", cluster_class, ignore.case = TRUE)
+
+        if (is_psock) {
+          # Check if package is already loaded on workers
+          pkg_loaded <- tryCatch({
+            test_result <- parallel::clusterCall(cl, function(pkg) {
+              isNamespaceLoaded(pkg)
+            }, pkg_name)
+            all(unlist(test_result))
+          }, error = function(e) FALSE)
+
+          if (!pkg_loaded) {
+            parallel::clusterCall(cl, function(pkg) {
+              suppressPackageStartupMessages(require(pkg, character.only = TRUE))
+              NULL
+            }, pkg_name)
+          }
+        }
+      } else {
+        # Diagnostic for development workflow
+        if (interactive()) {
+          pkg_version <- tryCatch(
+            as.character(utils::packageVersion(pkg_name)),
+            error = function(e) "not installed"
+          )
+          message("Parallel execution: ", workers, " workers (", cluster_type,
+                  ") will load ", pkg_name, " version ", pkg_version)
+        }
+
+        cl <- parallel::makeCluster(workers, type = cluster_type)
+        on.exit(parallel::stopCluster(cl), add = TRUE)
+
+        # Only load package for PSOCK clusters (FORK inherits parent environment)
+        if (cluster_type == "PSOCK") {
+          parallel::clusterCall(cl, function(pkg) {
+            suppressPackageStartupMessages(require(pkg, character.only = TRUE))
+            NULL
+          }, pkg_name)
+        }
       }
-
-      cl <- parallel::makeCluster(workers, type = cluster_type)
-      on.exit(parallel::stopCluster(cl), add = TRUE)
-
-      parallel::clusterCall(cl, function(pkg) {
-        suppressPackageStartupMessages(require(pkg, character.only = TRUE))
-        NULL
-      }, pkg_name)
 
       seed_list <- replicate(length(chunks), sample.int(.Machine$integer.max, 1L), simplify = TRUE)
 
@@ -907,4 +964,113 @@ rebalance_cutpoints_from_events <- function(event_times, max_follow_up, num_inte
     return(NULL)
   }
   q_vals
+}
+
+
+#' Create a reusable evolveTrial simulation cluster
+#'
+#' Creates a parallel cluster optimized for evolveTrial simulations. The cluster
+#' can be reused across multiple calls to `run_simulation_pure()` by passing it
+#' via the `cluster` parameter, avoiding the overhead of repeated cluster
+#' creation/destruction.
+#'
+#' @param workers Integer; number of worker processes. Defaults to
+#'   `parallel::detectCores() - 1`.
+#' @param cluster_type One of `"auto"` (default), `"FORK"`, or `"PSOCK"`. Auto
+#'   selects FORK on Unix systems (faster) and PSOCK on Windows.
+#'
+#' @return A parallel cluster object that can be passed to `run_simulation_pure()`
+#'   via the `cluster` parameter.
+#'
+#' @details This function is particularly useful for Bayesian optimization
+#'   workflows where `run_simulation_pure()` is called hundreds of times. By
+#'   creating the cluster once and reusing it, you can eliminate the 5-10 second
+#'   cluster spawn/teardown overhead per call.
+#'
+#'   FORK clusters (default on Unix) are significantly faster because:
+#'   - Worker processes inherit the parent environment (no package loading)
+#'   - Data is shared via copy-on-write (no serialization overhead)
+#'
+#'   Remember to call `release_cluster()` when done to free resources.
+#'
+#' @examples
+#' \dontrun{
+#' # Create cluster once
+#' cl <- create_simulation_cluster(workers = 8)
+#'
+#' # Use in repeated BO evaluations
+#' for (i in 1:100) {
+#'   result <- run_simulation_pure(
+#'     num_simulations = 500,
+#'     ...,
+#'     parallel_replicates = TRUE,
+#'     cluster = cl
+#'   )
+#' }
+#'
+#' # Clean up
+#' release_cluster(cl)
+#' }
+#'
+#' @seealso [release_cluster()], [run_simulation_pure()]
+#' @export
+create_simulation_cluster <- function(workers = NULL, cluster_type = c("auto", "FORK", "PSOCK")) {
+  cluster_type <- match.arg(cluster_type)
+
+  # Auto-detect optimal cluster type
+  if (cluster_type == "auto") {
+    cluster_type <- if (.Platform$OS.type == "unix") "FORK" else "PSOCK"
+  }
+
+  # Default workers
+  if (is.null(workers)) {
+    workers <- max(1L, parallel::detectCores() - 1L)
+  }
+  workers <- as.integer(workers)
+
+  # Create cluster
+  cl <- parallel::makeCluster(workers, type = cluster_type)
+
+  # For PSOCK clusters, pre-load evolveTrial package in workers
+  if (cluster_type == "PSOCK") {
+    pkg_name <- utils::packageName()
+    if (is.null(pkg_name) || identical(pkg_name, "")) {
+      pkg_name <- "evolveTrial"
+    }
+    parallel::clusterCall(cl, function(pkg) {
+      suppressPackageStartupMessages(require(pkg, character.only = TRUE))
+      NULL
+    }, pkg_name)
+  }
+
+  # Add class for identification
+  class(cl) <- c("evolveTrial_cluster", class(cl))
+
+  message("Created ", cluster_type, " cluster with ", workers, " workers")
+  cl
+}
+
+
+#' Release an evolveTrial simulation cluster
+#'
+#' Stops and releases resources for a cluster created by
+#' `create_simulation_cluster()`.
+#'
+#' @param cluster A cluster object created by `create_simulation_cluster()` or
+#'   `parallel::makeCluster()`.
+#'
+#' @return NULL invisibly.
+#'
+#' @seealso [create_simulation_cluster()]
+#' @export
+release_cluster <- function(cluster) {
+  if (!is.null(cluster)) {
+    tryCatch(
+      parallel::stopCluster(cluster),
+      error = function(e) {
+        warning("Failed to stop cluster: ", e$message)
+      }
+    )
+  }
+  invisible(NULL)
 }
