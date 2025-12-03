@@ -346,6 +346,28 @@ run_simulation_pure <- function(
     chunk_sum_final_fut <- setNames(numeric(length(arm_names)), arm_names)
     chunk_sum_final_inc <- setNames(numeric(length(arm_names)), arm_names)
 
+    # Lightweight helper for rebalancing: count events without interval metrics
+    extract_events_fast <- function(registry_df, calendar_time, max_follow_up) {
+      reg <- get_active_registry(registry_df)
+      if (nrow(reg) == 0) return(list(count = 0L, times = numeric(0)))
+
+      time_since_enroll <- pmax(0, calendar_time - reg$enroll_time)
+      time_available    <- pmin(time_since_enroll, max_follow_up)
+      active <- time_available > 0
+      if (!any(active)) return(list(count = 0L, times = numeric(0)))
+
+      time_available <- time_available[active]
+      te <- reg$true_event_time[active]
+      rc <- reg$random_censor_time[active]
+      observed_time <- pmin(te, rc, time_available)
+      events_mask <- te <= pmin(rc, time_available)
+
+      list(
+        count = sum(events_mask),
+        times = if (any(events_mask)) observed_time[events_mask] else numeric(0)
+      )
+    }
+
     for (sim_idx in sim_indices) {
       args_local <- base_args_for_interim
       # Reset cutpoints to baseline for each simulation (handles rebalancing correctly)
@@ -354,6 +376,7 @@ run_simulation_pure <- function(
       interval_lengths <- interval_lengths_base
       rebalance_threshold <- rebalance_after_events
       rebalance_done <- is.null(rebalance_threshold)
+      last_enroll_time <- 0
 
       state <- make_state(arm_names, max_total_patients_per_arm)
       current_time <- 0.0
@@ -370,19 +393,15 @@ run_simulation_pure <- function(
         current_time <- current_time + interarrival
 
         if (!rebalance_done && !is.null(rebalance_threshold)) {
-          total_events <- 0
+          total_events <- 0L
           event_times_all <- numeric(0)
           for (arm in arm_names) {
-            slice_tmp <- slice_arm_data_at_time(
-              state$registries[[arm]], current_time,
-              max_follow_up_sim, interval_cutpoints_current
+            ev_res <- extract_events_fast(
+              state$registries[[arm]], current_time, max_follow_up_sim
             )
-            total_events <- total_events + slice_tmp$metrics$events_total
-            if (nrow(slice_tmp$patient_data) > 0) {
-              ev_idx <- which(slice_tmp$patient_data$event_status == 1)
-              if (length(ev_idx) > 0) {
-                event_times_all <- c(event_times_all, slice_tmp$patient_data$observed_time[ev_idx])
-              }
+            total_events <- total_events + ev_res$count
+            if (ev_res$count > 0) {
+              event_times_all <- c(event_times_all, ev_res$times)
             }
           }
           if (total_events >= rebalance_threshold) {
@@ -468,11 +487,11 @@ run_simulation_pure <- function(
         state$registries[[chosen_arm]][idx, "random_censor_time"] <- t_random_censor
         state$registry_row_idx[[chosen_arm]] <- idx + 1L
         state$enrolled_counts[chosen_arm] <- state$enrolled_counts[chosen_arm] + 1L
+        last_enroll_time <- current_time
       }
 
       state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
 
-      last_enroll_time <- max(c(0, unlist(lapply(state$registries, function(df) df$enroll_time))), na.rm = TRUE)
       final_time <- last_enroll_time + min_follow_up_at_final
 
       if (!identical(interval_cutpoints_current, interval_cutpoints_sim)) {

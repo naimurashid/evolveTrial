@@ -1,8 +1,16 @@
 
 
 cum_person_time_arm <- function(state, arm, current_time, max_follow_up, interval_cutpoints) {
-  sl <- slice_arm_data_at_time(state$registries[[arm]], current_time, max_follow_up, interval_cutpoints)
-  sum(sl$patient_data$observed_time)
+  reg <- get_active_registry(state$registries[[arm]])
+  if (nrow(reg) == 0) return(0)
+  time_since_enroll <- pmax(0, current_time - reg$enroll_time)
+  time_available    <- pmin(time_since_enroll, max_follow_up)
+  active <- time_available > 0
+  if (!any(active)) return(0)
+  observed_time <- pmin(reg$true_event_time[active],
+                        reg$random_censor_time[active],
+                        time_available[active])
+  sum(observed_time)
 }
 
 cum_events_arm <- function(state, arm, current_time, max_follow_up, interval_cutpoints) {
@@ -115,4 +123,3 @@ simulate_piecewise_exponential_data <- function(
     event_status = event_status
   )
 }
-

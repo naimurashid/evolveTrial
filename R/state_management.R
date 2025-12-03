@@ -2,7 +2,7 @@
 # --- UPDATED: Fast interval metrics with robust event indexing ---
 #' Calculate interval-specific metrics from patient data
 #'
-#' Recalculates events and person-time using a more efficient data.table approach.
+#' Recalculates events and person-time using lightweight base-R operations.
 #'
 #' @param patient_data Data frame with columns `observed_time` and `event_status`.
 #' @param interval_cutpoints Numeric vector of interval boundaries.
@@ -10,62 +10,58 @@
 #' @return A list with `events_per_interval` and `person_time_per_interval` vectors.
 #' @keywords internal
 calculate_interval_metrics_fast <- function(patient_data, interval_cutpoints) {
-
-  num_intervals <- length(interval_cutpoints) - 1
+  num_intervals <- length(interval_cutpoints) - 1L
   if (nrow(patient_data) == 0) {
     return(list(
-      events_per_interval = rep(0, num_intervals),
+      events_per_interval = rep(0L, num_intervals),
       person_time_per_interval = rep(0, num_intervals)
     ))
   }
 
-  dt <- as.data.table(patient_data)
-  results_template <- data.table(interval_num = 1:num_intervals)
+  observed_times <- patient_data$observed_time
+  event_status   <- patient_data$event_status
 
-  # 1) Events per interval with bullet-proof indexing
-  if (nrow(dt[event_status == 1]) > 0) {
-    ev_times <- dt[event_status == 1, observed_time]
+  # 1) Events per interval using tabulate (avoids data.table/table overhead)
+  if (any(event_status == 1L)) {
+    event_times <- observed_times[event_status == 1L]
     idx <- findInterval(
-      ev_times,
+      event_times,
       interval_cutpoints,
       left.open = FALSE,        # [t_i, t_{i+1})
       rightmost.closed = FALSE
     )
-    # clamp into 1..num_intervals; drop zeros (events exactly at time 0)
-    idx <- idx[idx > 0]
+    idx <- idx[idx > 0L]
     if (length(idx) > 0) {
-      idx <- pmin(pmax(idx, 1L), num_intervals)
-      event_counts <- as.data.table(table(factor(idx, levels = 1:num_intervals)))
-      setnames(event_counts, c("interval_num", "events"))
-      event_counts[, interval_num := as.integer(as.character(interval_num))]
+      idx <- pmin(idx, num_intervals)
+      events_per_interval <- tabulate(idx, nbins = num_intervals)
     } else {
-      event_counts <- data.table(interval_num = 1:num_intervals, events = 0L)
+      events_per_interval <- integer(num_intervals)
     }
   } else {
-    event_counts <- data.table(interval_num = 1:num_intervals, events = 0L)
+    events_per_interval <- integer(num_intervals)
   }
 
   # 2) Person-time per interval (left-closed, right-open)
-  # PERFORMANCE: Vectorized computation avoiding intermediate data.table copies
-  observed_times <- dt$observed_time
-  pt_per_interval <- vapply(1:num_intervals, function(i) {
-    lower <- interval_cutpoints[i]
-    upper <- interval_cutpoints[i + 1]
-    at_risk <- observed_times >= lower  # logical mask, no copy
-    if (!any(at_risk)) return(0)
-    sum(pmax(0, pmin(observed_times[at_risk], upper) - lower))
-  }, numeric(1))
-  pt_summary <- data.table(interval_num = 1:num_intervals, person_time = pt_per_interval)
-
-  # 3) Merge to full vectors
-  merged <- merge(results_template, event_counts, by = "interval_num", all.x = TRUE)
-  merged <- merge(merged, pt_summary,   by = "interval_num", all.x = TRUE)
-  merged[is.na(events), events := 0L]
-  merged[is.na(person_time), person_time := 0]
+  lower <- interval_cutpoints[-length(interval_cutpoints)]
+  upper <- interval_cutpoints[-1L]
+  person_time_per_interval <- numeric(num_intervals)
+  if (length(observed_times) > 0) {
+    for (i in seq_len(num_intervals)) {
+      lo <- lower[i]
+      hi <- upper[i]
+      at_risk <- observed_times > lo
+      if (any(at_risk)) {
+        contrib <- pmin(observed_times[at_risk], hi) - lo
+        # guard against tiny negative values from floating point error
+        contrib[contrib < 0] <- 0
+        person_time_per_interval[i] <- sum(contrib)
+      }
+    }
+  }
 
   list(
-    events_per_interval = merged$events,
-    person_time_per_interval = merged$person_time
+    events_per_interval = events_per_interval,
+    person_time_per_interval = person_time_per_interval
   )
 }
 
