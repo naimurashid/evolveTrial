@@ -68,7 +68,8 @@ run_simulation_pure(
   rebalance_after_events = NULL,
   parallel_replicates = FALSE,
   num_workers = NULL,
-  cluster_type = c("PSOCK", "FORK"),
+  cluster_type = c("auto", "PSOCK", "FORK"),
+  cluster = NULL,
   progress = interactive()
 )
 ```
@@ -152,7 +153,10 @@ run_simulation_pure(
 - min_patients_for_analysis:
 
   Minimum number of patients required to evaluate an arm in the
-  single-arm path.
+  single-arm path. If not specified, defaults to 0, allowing interim
+  analyses to occur even with very few patients. Set this to a higher
+  value to prevent interim analyses until a certain number of patients
+  have been enrolled.
 
 - efficacy_stopping_rule_hc:
 
@@ -329,7 +333,7 @@ run_simulation_pure(
 - parallel_replicates:
 
   Logical; if `TRUE`, distribute Monte Carlo replicates across a
-  parallel cluster (PSOCK by default).
+  parallel cluster.
 
 - num_workers:
 
@@ -340,7 +344,19 @@ run_simulation_pure(
 - cluster_type:
 
   Type of parallel cluster to spawn when distributing replicates. One of
-  `"PSOCK"` (default) or `"FORK"`.
+  `"auto"` (default, uses FORK on Unix, PSOCK on Windows), `"PSOCK"`, or
+  `"FORK"`. FORK clusters are faster on Linux/macOS as they share memory
+  and don't require package loading in workers.
+
+- cluster:
+
+  Optional pre-existing parallel cluster to reuse. When provided, the
+  cluster is used for parallel execution and NOT stopped on exit. This
+  enables cluster pooling for repeated calls (e.g., in Bayesian
+  optimization). Create with
+  [`evolveTrial::create_simulation_cluster()`](create_simulation_cluster.md)
+  or
+  [`parallel::makeCluster()`](https://rdrr.io/r/parallel/makeCluster.html).
 
 - progress:
 

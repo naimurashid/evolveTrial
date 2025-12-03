@@ -113,7 +113,8 @@ characteristics are returned summarised per arm.</p>
 <span>  rebalance_after_events <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  parallel_replicates <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  num_workers <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  cluster_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"PSOCK"</span>, <span class="st">"FORK"</span><span class="op">)</span>,</span>
+<span>  cluster_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"PSOCK"</span>, <span class="st">"FORK"</span><span class="op">)</span>,</span>
+<span>  cluster <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  progress <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -202,7 +203,10 @@ caps.</p></dd>
 
 <dt id="arg-min-patients-for-analysis">min_patients_for_analysis<a class="anchor" aria-label="anchor" href="#arg-min-patients-for-analysis"></a></dt>
 <dd><p>Minimum number of patients required to
-evaluate an arm in the single-arm path.</p></dd>
+evaluate an arm in the single-arm path. If not specified, defaults to 0,
+allowing interim analyses to occur even with very few patients. Set this
+to a higher value to prevent interim analyses until a certain number of
+patients have been enrolled.</p></dd>
 
 
 <dt id="arg-efficacy-stopping-rule-hc">efficacy_stopping_rule_hc<a class="anchor" aria-label="anchor" href="#arg-efficacy-stopping-rule-hc"></a></dt>
@@ -394,7 +398,7 @@ cut points are re-estimated once that number of events has accrued.</p></dd>
 
 <dt id="arg-parallel-replicates">parallel_replicates<a class="anchor" aria-label="anchor" href="#arg-parallel-replicates"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, distribute Monte Carlo
-replicates across a parallel cluster (PSOCK by default).</p></dd>
+replicates across a parallel cluster.</p></dd>
 
 
 <dt id="arg-num-workers">num_workers<a class="anchor" aria-label="anchor" href="#arg-num-workers"></a></dt>
@@ -404,7 +408,16 @@ replicates across a parallel cluster (PSOCK by default).</p></dd>
 
 <dt id="arg-cluster-type">cluster_type<a class="anchor" aria-label="anchor" href="#arg-cluster-type"></a></dt>
 <dd><p>Type of parallel cluster to spawn when distributing
-replicates. One of <code>"PSOCK"</code> (default) or <code>"FORK"</code>.</p></dd>
+replicates. One of <code>"auto"</code> (default, uses FORK on Unix, PSOCK on Windows),
+<code>"PSOCK"</code>, or <code>"FORK"</code>. FORK clusters are faster on Linux/macOS as they
+share memory and don't require package loading in workers.</p></dd>
+
+
+<dt id="arg-cluster">cluster<a class="anchor" aria-label="anchor" href="#arg-cluster"></a></dt>
+<dd><p>Optional pre-existing parallel cluster to reuse. When provided,
+the cluster is used for parallel execution and NOT stopped on exit. This
+enables cluster pooling for repeated calls (e.g., in Bayesian optimization).
+Create with <code><a href="create_simulation_cluster.html">evolveTrial::create_simulation_cluster()</a></code> or <code><a href="https://rdrr.io/r/parallel/makeCluster.html" class="external-link">parallel::makeCluster()</a></code>.</p></dd>
 
 
 <dt id="arg-progress">progress<a class="anchor" aria-label="anchor" href="#arg-progress"></a></dt>

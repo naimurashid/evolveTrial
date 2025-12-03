@@ -1,7 +1,6 @@
 # Calculate interval-specific metrics from patient data
 
-Recalculates events and person-time using a more efficient data.table
-approach.
+Recalculates events and person-time using lightweight base-R operations.
 
 ## Usage
 
