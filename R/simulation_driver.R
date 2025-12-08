@@ -126,10 +126,21 @@
 #'   Create with `evolveTrial::create_simulation_cluster()` or `parallel::makeCluster()`.
 #' @param progress Logical; show the simulation progress bar when running
 #'   sequentially. Automatically disabled for parallel replicate execution.
+#' @param return_percentiles Logical; if `TRUE`, store per-replicate sample sizes
+#'   and return percentile summaries in addition to means. Default `FALSE`.
+#' @param percentile_probs Numeric vector of probabilities for percentile
+#'   computation when `return_percentiles = TRUE`. Default `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`
+#'   gives min, 25th, median, 75th, 90th, and max.
 #'
-#' @return A data frame with one row per arm and columns summarising operating
-#'   characteristics such as type I error / power, PETs, final decision
-#'   probabilities, and expected sample size.
+#' @return When `return_percentiles = FALSE` (default), a data frame with one row
+#'   per arm and columns summarising operating characteristics such as type I
+#'   error / power, PETs, final decision probabilities, and expected sample size.
+#'   When `return_percentiles = TRUE`, a list with two elements:
+#'   \describe{
+#'     \item{summary}{The same data frame as when `return_percentiles = FALSE`}
+#'     \item{percentiles}{A list with elements `N` (named list of percentile vectors
+#'       per arm) and `probs` (the probability values used)}
+#'   }
 #'
 #' @details When \code{parallel_replicates = TRUE}, results will vary based on
 #'   \code{num_workers} due to different random number stream partitioning.
@@ -211,7 +222,10 @@ run_simulation_pure <- function(
     num_workers = NULL,
     cluster_type = c("auto", "PSOCK", "FORK"),
     cluster = NULL,
-    progress = interactive()
+    progress = interactive(),
+    # percentile tracking
+    return_percentiles = FALSE,
+    percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0)
 ) {
   cluster_type <- match.arg(cluster_type)
 
@@ -344,6 +358,17 @@ run_simulation_pure <- function(
 
   tick_fun <- if (show_progress) function() pb$tick() else function() invisible(NULL)
 
+  # Percentile tracking: pre-allocate storage for raw per-replicate values (when enabled)
+  collect_raw_n <- isTRUE(return_percentiles)
+  all_final_n_raw <- NULL
+  if (collect_raw_n) {
+    all_final_n_raw <- vector("list", length(arm_names))
+    names(all_final_n_raw) <- arm_names
+    for (arm in arm_names) {
+      all_final_n_raw[[arm]] <- numeric(num_simulations)
+    }
+  }
+
   base_args_for_interim <- args
 
   simulate_chunk <- function(sim_indices, seed = NULL, tick = function() {}) {
@@ -357,6 +382,15 @@ run_simulation_pure <- function(
     chunk_sum_final_eff <- setNames(numeric(length(arm_names)), arm_names)
     chunk_sum_final_fut <- setNames(numeric(length(arm_names)), arm_names)
     chunk_sum_final_inc <- setNames(numeric(length(arm_names)), arm_names)
+
+    # Track per-replicate sample sizes for percentile calculation (when enabled)
+    chunk_final_n_raw <- if (collect_raw_n) {
+      tmp <- lapply(arm_names, function(arm) numeric(length(sim_indices)))
+      names(tmp) <- arm_names
+      tmp
+    } else {
+      NULL
+    }
 
     # Lightweight helper for rebalancing: count events without interval metrics
     extract_events_fast <- function(registry_df, calendar_time, max_follow_up) {
@@ -631,6 +665,14 @@ run_simulation_pure <- function(
       chunk_sum_final_fut <- chunk_sum_final_fut + final_fut_vec
       chunk_sum_final_inc <- chunk_sum_final_inc + final_inc_vec
 
+      # Store raw sample sizes for percentile calculation (when enabled)
+      if (!is.null(chunk_final_n_raw)) {
+        local_idx <- which(sim_indices == sim_idx)
+        for (arm in arm_names) {
+          chunk_final_n_raw[[arm]][local_idx] <- final_n_vec[arm]
+        }
+      }
+
       tick()
     }
 
@@ -642,11 +684,15 @@ run_simulation_pure <- function(
       sum_final_eff = chunk_sum_final_eff,
       sum_final_fut = chunk_sum_final_fut,
       sum_final_inc = chunk_sum_final_inc,
-      n_sims = length(sim_indices)
+      n_sims = length(sim_indices),
+      final_n_raw = chunk_final_n_raw  # NULL if not collecting
     )
   }
 
   aggregate_results <- function(partials) {
+    # Track position for raw value concatenation
+    raw_offset <- 0L
+
     for (res in partials) {
       sum_final_n       <<- sum_final_n + res$sum_final_n
       # Defensive: handle workers running old code without sum_final_events
@@ -658,6 +704,16 @@ run_simulation_pure <- function(
       sum_final_efficacy <<- sum_final_efficacy + res$sum_final_eff
       sum_final_futility <<- sum_final_futility + res$sum_final_fut
       sum_final_inconclusive <<- sum_final_inconclusive + res$sum_final_inc
+
+      # Combine raw vectors across chunks (when enabled)
+      if (!is.null(res$final_n_raw) && !is.null(all_final_n_raw)) {
+        chunk_size <- res$n_sims
+        for (arm in arm_names) {
+          idx_range <- (raw_offset + 1L):(raw_offset + chunk_size)
+          all_final_n_raw[[arm]][idx_range] <<- res$final_n_raw[[arm]]
+        }
+        raw_offset <- raw_offset + chunk_size
+      }
     }
   }
 
@@ -795,6 +851,32 @@ run_simulation_pure <- function(
     results_data$Exp_Events[j]              <- sum_final_events[arm] * inv_num_sims
   }
 
+  # Compute and return percentiles if requested
+  if (isTRUE(return_percentiles) && !is.null(all_final_n_raw)) {
+    percentiles_result <- lapply(arm_names, function(arm) {
+      stats::quantile(all_final_n_raw[[arm]], probs = percentile_probs, na.rm = TRUE)
+    })
+    names(percentiles_result) <- arm_names
+
+    # For multi-arm trials, also compute total N percentiles (sum per replicate, then quantile)
+    # This is the correct way to get total N percentiles - NOT by summing per-arm percentiles
+    total_n_percentiles <- NULL
+    if (length(arm_names) > 1) {
+      # Sum per-replicate across arms to get total N per replicate
+      total_n_per_rep <- Reduce(`+`, all_final_n_raw)
+      total_n_percentiles <- stats::quantile(total_n_per_rep, probs = percentile_probs, na.rm = TRUE)
+    }
+
+    return(list(
+      summary = results_data,
+      percentiles = list(
+        N = percentiles_result,
+        N_total = total_n_percentiles,  # NULL for single-arm, vector for multi-arm
+        probs = percentile_probs
+      )
+    ))
+  }
+
   results_data
 }
 
@@ -862,10 +944,19 @@ scenarios_from_grid <- function(choices) {
 #' @param parallel Logical; if `TRUE` uses `parallel::mclapply()` to distribute
 #'   scenarios across cores.
 #' @param seed Optional integer seed passed to `set.seed()` before simulations.
+#' @param return_percentiles Logical; if `TRUE`, collect per-replicate sample sizes
+#'   and return percentile summaries. Default `FALSE`.
+#' @param percentile_probs Numeric vector of probabilities for percentile
+#'   computation when `return_percentiles = TRUE`. Default `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`.
 #'
-#' @return A data.table/data.frame containing the combined operating
-#'   characteristic summaries.  A `scenario` column identifies the originating
-#'   scenario index.
+#' @return When `return_percentiles = FALSE` (default), a data.table/data.frame
+#'   containing the combined operating characteristic summaries with a `scenario`
+#'   column identifying the originating scenario index.
+#'   When `return_percentiles = TRUE`, a list with:
+#'   \describe{
+#'     \item{summary}{The combined summary data.table as when `return_percentiles = FALSE`}
+#'     \item{percentiles}{A list of percentile results, one per scenario}
+#'   }
 #'
 #' @examples
 #' \dontrun{
@@ -916,32 +1007,63 @@ scenarios_from_grid <- function(choices) {
 #' }
 #'
 #' @export
-run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL) {
+run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL,
+                          return_percentiles = FALSE,
+                          percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0)) {
   if (!is.null(seed)) set.seed(seed)
-  
+
   # keep only args that run_simulation_pure actually accepts
   rs_formals <- names(formals(run_simulation_pure))
-  
+
+  # Storage for percentiles if requested
+  all_percentiles <- if (return_percentiles) vector("list", length(scens)) else NULL
+
   run_one <- function(i) {
     over   <- scens[[i]]
     args_i <- utils::modifyList(base_args, over, keep.null = TRUE)
+    # Add percentile parameters
+    args_i$return_percentiles <- return_percentiles
+    args_i$percentile_probs <- percentile_probs
     args_i <- args_i[intersect(names(args_i), rs_formals)]
     res <- do.call(run_simulation_pure, args_i)
-    res$scenario <- i
-    res
+
+    if (return_percentiles) {
+      # Extract summary and percentiles separately
+      summary_df <- res$summary
+      summary_df$scenario <- i
+      list(summary = summary_df, percentiles = res$percentiles)
+    } else {
+      res$scenario <- i
+      res
+    }
   }
-  
+
   if (isTRUE(parallel)) {
     cores <- max(1L, parallel::detectCores() - 1L)
     out <- parallel::mclapply(seq_along(scens), run_one, mc.cores = cores)
   } else {
     out <- lapply(seq_along(scens), run_one)
   }
-  
+
+  if (return_percentiles) {
+    # Separate summaries and percentiles
+    all_summaries <- lapply(out, function(x) x$summary)
+    all_percentiles <- lapply(out, function(x) x$percentiles)
+
+    # Validate summaries
+    ok_types <- vapply(all_summaries, function(x) is.data.frame(x) || data.table::is.data.table(x), logical(1))
+    if (!all(ok_types)) stop("run_scenarios: one or more scenarios did not return a tabular result.")
+
+    return(list(
+      summary = data.table::rbindlist(all_summaries, use.names = TRUE, fill = TRUE),
+      percentiles = all_percentiles
+    ))
+  }
+
   # validate all returned items are tabular
   ok_types <- vapply(out, function(x) is.data.frame(x) || is.list(x) || data.table::is.data.table(x), logical(1))
   if (!all(ok_types)) stop("run_scenarios: one or more scenarios did not return a tabular result.")
-  
+
   data.table::rbindlist(out, use.names = TRUE, fill = TRUE)
 }
 
