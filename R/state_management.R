@@ -207,8 +207,11 @@ gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
   ptT  <- coalesce_num(slTrt$metrics$person_time_total, 0)
 
   # denominators (person-time caps)
+  # Use max_trial_time for denominator if available; otherwise fall back to max_follow_up_sim
+  # This ensures person-time gates are achievable when fu_time is set very high (e.g., 120 months)
+  # but max_trial_time limits actual trial duration (e.g., 72 months)
   mtn <- args$max_total_patients_per_arm
-  max_follow <- coalesce_num(args$max_follow_up_sim, 0)
+  max_follow <- coalesce_num(args$max_trial_time, coalesce_num(args$max_follow_up_sim, 0))
 
   if (is.null(mtn)) {
     stop("args$max_total_patients_per_arm must be provided for vs-reference gates.")

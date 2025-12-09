@@ -196,6 +196,9 @@ run_simulation_pure <- function(
     overall_accrual_rate,
     randomization_probs,
     min_follow_up_at_final = 0,
+    # NEW: max calendar time for entire trial (absolute cutoff from trial start)
+    # After enrollment completes, interims continue until early stop or this cutoff
+    max_trial_time = Inf,
     # legacy info gates + calendar-beat interims
     min_events_for_analysis = NULL,
     min_median_followup = NULL,
@@ -342,7 +345,9 @@ run_simulation_pure <- function(
     min_median_followup_per_arm = min_median_followup_per_arm,
     min_person_time_frac_per_arm = min_person_time_frac_per_arm,
     max_PT_per_arm = max_PT_per_arm,
-    rebalance_after_events = rebalance_after_events
+    rebalance_after_events = rebalance_after_events,
+    # max_trial_time for person-time gate denominator (when fu_time is very large)
+    max_trial_time = max_trial_time
   )
   
   num_intervals <- length(interval_cutpoints_sim) - 1
@@ -538,7 +543,28 @@ run_simulation_pure <- function(
 
       state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
 
-      final_time <- last_enroll_time + min_follow_up_at_final
+      # POST-ENROLLMENT INTERIM CHECKS: Continue checking until early stop or max_trial_time
+      # This allows decisions to be made after enrollment completes but before final analysis
+      # Note: Stops during this phase are NOT counted as PET (all patients already enrolled)
+      if (is.finite(max_trial_time) && any(state$arm_status == "recruiting")) {
+        post_enroll_time <- current_time
+        while (post_enroll_time < max_trial_time && any(state$arm_status == "recruiting")) {
+          post_enroll_time <- post_enroll_time + interim_calendar_beat
+          if (post_enroll_time >= max_trial_time) break
+          state <- interim_check(state, post_enroll_time, args_local, diagnostics = diagnostics)
+        }
+        # Update current_time to reflect post-enrollment interims
+        current_time <- min(post_enroll_time, max_trial_time)
+      }
+
+      # Determine final analysis time:
+      # - If max_trial_time is finite, use min(last_enroll + min_follow_up, max_trial_time)
+      # - Otherwise, use last_enroll + min_follow_up (original behavior)
+      final_time <- if (is.finite(max_trial_time)) {
+        min(last_enroll_time + min_follow_up_at_final, max_trial_time)
+      } else {
+        last_enroll_time + min_follow_up_at_final
+      }
 
       if (!identical(interval_cutpoints_current, interval_cutpoints_sim)) {
         interval_lengths <- diff(interval_cutpoints_current)

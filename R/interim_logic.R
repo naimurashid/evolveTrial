@@ -180,8 +180,11 @@ interim_check_hc <- function(state, current_time, args, diagnostics = FALSE) {
     min_pt_frac <- min_pt_frac_vec[[arm]] %||% 0
 
     # Calculate max person-time denominator for this arm
+    # Use max_trial_time for denominator if available; otherwise fall back to max_follow_up_sim
+    # This ensures person-time gates are achievable when fu_time is set very high (e.g., 120 months)
+    # but max_trial_time limits actual trial duration (e.g., 72 months)
     mtpa <- args$max_total_patients_per_arm
-    max_follow <- coalesce_num(args$max_follow_up_sim, 0)
+    max_follow <- coalesce_num(args$max_trial_time, coalesce_num(args$max_follow_up_sim, 0))
     if (!is.null(mtpa)) {
       if (!is.null(names(mtpa)) && arm %in% names(mtpa)) {
         maxPT_arm <- coalesce_num(mtpa[[arm]], 0) * max_follow
