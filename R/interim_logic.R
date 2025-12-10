@@ -137,6 +137,7 @@ interim_check_vs_ref <- function(state, current_time, args, diagnostics = FALSE)
         state$arm_status[trt_name] <- "stopped_efficacy"
         state$stop_efficacy_per_sim_row[trt_name] <- 1L
         state$sim_final_n_current_run[trt_name]   <- state$enrolled_counts[trt_name]
+        state$stop_time[trt_name] <- current_time  # Track when stop occurred
         next
       }
 
@@ -146,6 +147,7 @@ interim_check_vs_ref <- function(state, current_time, args, diagnostics = FALSE)
         state$arm_status[trt_name] <- "stopped_futility"
         state$stop_futility_per_sim_row[trt_name] <- 1L
         state$sim_final_n_current_run[trt_name]   <- state$enrolled_counts[trt_name]
+        state$stop_time[trt_name] <- current_time  # Track when stop occurred
         next
       }
     }
@@ -226,6 +228,7 @@ interim_check_hc <- function(state, current_time, args, diagnostics = FALSE) {
       state$arm_status[arm] <- "stopped_efficacy"
       state$stop_efficacy_per_sim_row[arm] <- 1L
       state$sim_final_n_current_run[arm] <- state$enrolled_counts[arm]
+      state$stop_time[arm] <- current_time  # Track when stop occurred
       next
     }
 
@@ -235,6 +238,7 @@ interim_check_hc <- function(state, current_time, args, diagnostics = FALSE) {
       state$arm_status[arm] <- "stopped_futility"
       state$stop_futility_per_sim_row[arm] <- 1L
       state$sim_final_n_current_run[arm] <- state$enrolled_counts[arm]
+      state$stop_time[arm] <- current_time  # Track when stop occurred
       next
     }
   }

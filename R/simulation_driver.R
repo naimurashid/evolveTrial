@@ -134,7 +134,8 @@
 #'
 #' @return When `return_percentiles = FALSE` (default), a data frame with one row
 #'   per arm and columns summarising operating characteristics such as type I
-#'   error / power, PETs, final decision probabilities, and expected sample size.
+#'   error / power, PETs, final decision probabilities, expected sample size,
+#'   expected events, and expected trial duration (calendar months).
 #'   When `return_percentiles = TRUE`, a list with two elements:
 #'   \describe{
 #'     \item{summary}{The same data frame as when `return_percentiles = FALSE`}
@@ -274,6 +275,7 @@ run_simulation_pure <- function(
     Pr_Final_Inconclusive = 0,
     Exp_N = 0,
     Exp_Events = 0,
+    Exp_Time = 0,  # Expected trial duration (calendar months)
     stringsAsFactors = FALSE
   )
   
@@ -360,6 +362,7 @@ run_simulation_pure <- function(
   sum_final_efficacy <- setNames(numeric(length(arm_names)), arm_names)
   sum_final_futility <- setNames(numeric(length(arm_names)), arm_names)
   sum_final_inconclusive <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_time <- 0  # Trial duration accumulator (calendar months)
 
   tick_fun <- if (show_progress) function() pb$tick() else function() invisible(NULL)
 
@@ -387,6 +390,7 @@ run_simulation_pure <- function(
     chunk_sum_final_eff <- setNames(numeric(length(arm_names)), arm_names)
     chunk_sum_final_fut <- setNames(numeric(length(arm_names)), arm_names)
     chunk_sum_final_inc <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_time <- 0  # Trial duration accumulator for this chunk
 
     # Track per-replicate sample sizes for percentile calculation (when enabled)
     chunk_final_n_raw <- if (collect_raw_n) {
@@ -558,9 +562,14 @@ run_simulation_pure <- function(
       }
 
       # Determine final analysis time:
+      # - If all arms stopped early (efficacy/futility), use max(stop_time) - the actual interim time
       # - If max_trial_time is finite, use min(last_enroll + min_follow_up, max_trial_time)
       # - Otherwise, use last_enroll + min_follow_up (original behavior)
-      final_time <- if (is.finite(max_trial_time)) {
+      all_stopped_early <- all(state$arm_status != "recruiting")
+      final_time <- if (all_stopped_early && any(!is.na(state$stop_time))) {
+        # Trial stopped early - use the time of the last stopping decision
+        max(state$stop_time, na.rm = TRUE)
+      } else if (is.finite(max_trial_time)) {
         min(last_enroll_time + min_follow_up_at_final, max_trial_time)
       } else {
         last_enroll_time + min_follow_up_at_final
@@ -690,6 +699,7 @@ run_simulation_pure <- function(
       chunk_sum_final_eff <- chunk_sum_final_eff + final_eff_vec
       chunk_sum_final_fut <- chunk_sum_final_fut + final_fut_vec
       chunk_sum_final_inc <- chunk_sum_final_inc + final_inc_vec
+      chunk_sum_final_time <- chunk_sum_final_time + final_time  # Trial duration
 
       # Store raw sample sizes for percentile calculation (when enabled)
       if (!is.null(chunk_final_n_raw)) {
@@ -710,6 +720,7 @@ run_simulation_pure <- function(
       sum_final_eff = chunk_sum_final_eff,
       sum_final_fut = chunk_sum_final_fut,
       sum_final_inc = chunk_sum_final_inc,
+      sum_final_time = chunk_sum_final_time,  # Trial duration
       n_sims = length(sim_indices),
       final_n_raw = chunk_final_n_raw  # NULL if not collecting
     )
@@ -730,6 +741,10 @@ run_simulation_pure <- function(
       sum_final_efficacy <<- sum_final_efficacy + res$sum_final_eff
       sum_final_futility <<- sum_final_futility + res$sum_final_fut
       sum_final_inconclusive <<- sum_final_inconclusive + res$sum_final_inc
+      # Defensive: handle workers running old code without sum_final_time
+      if (!is.null(res$sum_final_time)) {
+        sum_final_time <<- sum_final_time + res$sum_final_time
+      }
 
       # Combine raw vectors across chunks (when enabled)
       if (!is.null(res$final_n_raw) && !is.null(all_final_n_raw)) {
@@ -875,7 +890,10 @@ run_simulation_pure <- function(
     results_data$Pr_Final_Inconclusive[j]   <- final_inc
     results_data$Exp_N[j]                   <- sum_final_n[arm] * inv_num_sims
     results_data$Exp_Events[j]              <- sum_final_events[arm] * inv_num_sims
+    # Exp_Time is trial-level (same for all arms), set after loop
   }
+  # Expected trial duration (calendar months) - trial-level metric, same for all arms
+  results_data$Exp_Time <- sum_final_time * inv_num_sims
 
   # Compute and return percentiles if requested
   if (isTRUE(return_percentiles) && !is.null(all_final_n_raw)) {

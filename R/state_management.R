@@ -96,7 +96,9 @@ make_state <- function(arm_names, max_total_patients_per_arm) {
     # per-simulation outputs that interims mutate:
     stop_efficacy_per_sim_row = setNames(rep(0L, length(arm_names)), arm_names),
     stop_futility_per_sim_row = setNames(rep(0L, length(arm_names)), arm_names),
-    sim_final_n_current_run   = setNames(rep(NA_integer_, length(arm_names)), arm_names)
+    sim_final_n_current_run   = setNames(rep(NA_integer_, length(arm_names)), arm_names),
+    # Track calendar time when each arm stopped (for ET calculation)
+    stop_time = setNames(rep(NA_real_, length(arm_names)), arm_names)
   )
 }
 
