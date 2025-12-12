@@ -499,6 +499,11 @@ get_binary_metrics <- function(registry_df, stage = NULL) {
 #' @param use_simon_rules Use exact Simon counting rules instead of Bayesian
 #' @param alpha_prior Beta prior shape1 (default 1)
 #' @param beta_prior Beta prior shape2 (default 1)
+#' @param disable_interim_eff_stop If TRUE, do not stop for efficacy at interim
+#'   (only futility stopping at interim, efficacy only at final). This makes
+
+#'   the Bayesian design comparable to Simon's two-stage design which only
+#'   stops for futility at the interim.
 #' @param diagnostics Print diagnostic messages
 #'
 #' @return Data frame with operating characteristics per arm
@@ -518,6 +523,7 @@ run_simulation_binary <- function(
     use_simon_rules = FALSE,
     alpha_prior = 1,
     beta_prior = 1,
+    disable_interim_eff_stop = FALSE,
     diagnostics = FALSE,
     progress = interactive()
 ) {
@@ -599,6 +605,12 @@ run_simulation_binary <- function(
         )
         result1 <- binary_interim_decision(x1, n1, args, diagnostics = diagnostics)
         decision1 <- result1$decision
+
+        # If disable_interim_eff_stop is TRUE, convert interim efficacy to continue
+        # (efficacy will still be evaluated at final analysis)
+        if (disable_interim_eff_stop && decision1 == "stop_efficacy") {
+          decision1 <- "continue"
+        }
       }
 
       # Process stage 1 outcome
