@@ -60,6 +60,7 @@ Supports Simon-style designs with cohort-based enrollment.</p>
 <span>  use_simon_rules <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  alpha_prior <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  beta_prior <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  disable_interim_eff_stop <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  diagnostics <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  progress <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -123,6 +124,13 @@ Supports Simon-style designs with cohort-based enrollment.</p>
 
 <dt id="arg-beta-prior">beta_prior<a class="anchor" aria-label="anchor" href="#arg-beta-prior"></a></dt>
 <dd><p>Beta prior shape2 (default 1)</p></dd>
+
+
+<dt id="arg-disable-interim-eff-stop">disable_interim_eff_stop<a class="anchor" aria-label="anchor" href="#arg-disable-interim-eff-stop"></a></dt>
+<dd><p>If TRUE, do not stop for efficacy at interim
+(only futility stopping at interim, efficacy only at final). This makes
+the Bayesian design comparable to Simon's two-stage design which only
+stops for futility at the interim.</p></dd>
 
 
 <dt id="arg-diagnostics">diagnostics<a class="anchor" aria-label="anchor" href="#arg-diagnostics"></a></dt>

@@ -48,7 +48,14 @@ single table.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_scenarios</span><span class="op">(</span><span class="va">base_args</span>, <span class="va">scens</span>, parallel <span class="op">=</span> <span class="cn">FALSE</span>, seed <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_scenarios</span><span class="op">(</span></span>
+<span>  <span class="va">base_args</span>,</span>
+<span>  <span class="va">scens</span>,</span>
+<span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  return_percentiles <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  percentile_probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, <span class="fl">0.9</span>, <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -72,13 +79,30 @@ scenarios across cores.</p></dd>
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
 <dd><p>Optional integer seed passed to <code><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed()</a></code> before simulations.</p></dd>
 
+
+<dt id="arg-return-percentiles">return_percentiles<a class="anchor" aria-label="anchor" href="#arg-return-percentiles"></a></dt>
+<dd><p>Logical; if <code>TRUE</code>, collect per-replicate sample sizes
+and return percentile summaries. Default <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-percentile-probs">percentile_probs<a class="anchor" aria-label="anchor" href="#arg-percentile-probs"></a></dt>
+<dd><p>Numeric vector of probabilities for percentile
+computation when <code>return_percentiles = TRUE</code>. Default <code>c(0, 0.25, 0.5, 0.75, 0.9, 1.0)</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data.table/data.frame containing the combined operating
-characteristic summaries.  A <code>scenario</code> column identifies the originating
-scenario index.</p>
-    </div>
+    <p>When <code>return_percentiles = FALSE</code> (default), a data.table/data.frame
+containing the combined operating characteristic summaries with a <code>scenario</code>
+column identifying the originating scenario index.
+When <code>return_percentiles = TRUE</code>, a list with:</p><dl><dt>summary</dt>
+<dd><p>The combined summary data.table as when <code>return_percentiles = FALSE</code></p></dd>
+
+<dt>percentiles</dt>
+<dd><p>A list of percentile results, one per scenario</p></dd>
+
+
+</dl></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

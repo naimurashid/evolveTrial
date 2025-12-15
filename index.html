@@ -81,11 +81,53 @@
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
 <div class="section level3">
+<h3 id="prerequisites-for-compiling-c-code">Prerequisites for Compiling C++ Code<a class="anchor" aria-label="anchor" href="#prerequisites-for-compiling-c-code"></a>
+</h3>
+<p>This package contains C++ code (via Rcpp) that must be compiled during installation. <strong>Most users will need to install additional tools before installing evolveTrial.</strong></p>
+<div class="section level4">
+<h4 id="windows-users">Windows Users<a class="anchor" aria-label="anchor" href="#windows-users"></a>
+</h4>
+<p>You must install <strong>Rtools</strong> before installing packages with C++ code: 1. Download Rtools from: <a href="https://cran.r-project.org/bin/windows/Rtools/" class="external-link uri">https://cran.r-project.org/bin/windows/Rtools/</a> 2. Choose the version matching your R version (e.g., Rtools44 for R 4.4.x) 3. Run the installer with default settings 4. Restart R/RStudio after installation</p>
+<p>To verify Rtools is installed correctly:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Sys.which.html" class="external-link">Sys.which</a></span><span class="op">(</span><span class="st">"make"</span><span class="op">)</span></span>
+<span><span class="co"># Should return a path like "C:/rtools44/usr/bin/make.exe"</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="macos-users">macOS Users<a class="anchor" aria-label="anchor" href="#macos-users"></a>
+</h4>
+<p>You must install <strong>Xcode Command Line Tools</strong>:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Run this in Terminal (not R)</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="ex">xcode-select</span> <span class="at">--install</span></span></code></pre></div>
+<p>A dialog will appear - click “Install” and wait for completion (~5-10 minutes).</p>
+<p>For <strong>Apple Silicon Macs (M1/M2/M3)</strong>, you may also need gfortran:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="co"># Install Homebrew if not already installed</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="ex">/bin/bash</span> <span class="at">-c</span> <span class="st">"</span><span class="va">$(</span><span class="ex">curl</span> <span class="at">-fsSL</span> https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh<span class="va">)</span><span class="st">"</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co"># Install gfortran</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="ex">brew</span> install gcc</span></code></pre></div>
+<p>To verify your toolchain is ready:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># In R, check for C++ compiler</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/system.html" class="external-link">system</a></span><span class="op">(</span><span class="st">"clang++ --version"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="linux-users">Linux Users<a class="anchor" aria-label="anchor" href="#linux-users"></a>
+</h4>
+<p>Most Linux distributions include the necessary compilers. If not:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># Ubuntu/Debian</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">sudo</span> apt-get install r-base-dev</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co"># Fedora/RHEL</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">sudo</span> dnf install R-devel</span></code></pre></div>
+</div>
+</div>
+<div class="section level3">
 <h3 id="from-github-recommended">From GitHub (Recommended)<a class="anchor" aria-label="anchor" href="#from-github-recommended"></a>
 </h3>
 <p>Install the development version from GitHub using one of these methods:</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Using pak (fastest)</span></span>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Using pak (fastest, handles compilation automatically)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"naimurashid/evolveTrial"</span><span class="op">)</span></span>
 <span></span>
@@ -115,18 +157,36 @@
 <h3 id="development-installation">Development Installation<a class="anchor" aria-label="anchor" href="#development-installation"></a>
 </h3>
 <p>For development work with the latest features:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Clone the repository</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>git clone https<span class="sc">:</span><span class="er">//</span>github.com<span class="sc">/</span>naimurashid<span class="sc">/</span>evolveTrial.git</span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co"># Load in R session</span></span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">load_all</span>(<span class="st">"path/to/evolveTrial"</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Clone the repository</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>git clone https<span class="sc">:</span><span class="er">//</span>github.com<span class="sc">/</span>naimurashid<span class="sc">/</span>evolveTrial.git</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co"># Load in R session</span></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">load_all</span>(<span class="st">"path/to/evolveTrial"</span>)</span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="troubleshooting-installation">Troubleshooting Installation<a class="anchor" aria-label="anchor" href="#troubleshooting-installation"></a>
+</h3>
+<p><strong>“Error: compilation failed”</strong> or <strong>“make: not found”</strong> - Windows: Rtools is not installed or not on PATH. Reinstall Rtools and restart R. - macOS: Xcode Command Line Tools not installed. Run <code>xcode-select --install</code> in Terminal.</p>
+<p><strong>“fatal error: ‘RcppArmadillo.h’ file not found”</strong></p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Install RcppArmadillo first</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"RcppArmadillo"</span><span class="op">)</span></span>
+<span><span class="co"># Then retry evolveTrial installation</span></span></code></pre></div>
+<p><strong>“ld: library not found for -lgfortran”</strong> (macOS)</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Install gfortran via Homebrew</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="ex">brew</span> install gcc</span></code></pre></div>
+<p><strong>Installation hangs or times out</strong></p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Try installing without vignettes (faster)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"naimurashid/evolveTrial"</span>, build_vignettes <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p><strong>Still having issues?</strong> - Check that your R version is 4.0 or higher: <code>R.version.string</code> - Open an issue at: <a href="https://github.com/naimurashid/evolveTrial/issues" class="external-link uri">https://github.com/naimurashid/evolveTrial/issues</a></p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="diagnosing-interim-gating-choices">Diagnosing interim gating choices<a class="anchor" aria-label="anchor" href="#diagnosing-interim-gating-choices"></a>
 </h2>
 <p>When early stopping does not seem to occur during simulations, it is often because the information gates (minimum events, median follow-up, or required person-time) postpone the first informative interim look until late in the trial. The helper <code><a href="reference/estimate_vsref_gate_timing.html">estimate_vsref_gate_timing()</a></code> gives quick lower-bound heuristics for when those gates can all be satisfied under deterministic accrual.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">args</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
@@ -151,7 +211,7 @@
 <h3 id="example-1-multi-arm-trial-experimental-vs-reference">Example 1: Multi-arm Trial (Experimental vs Reference)<a class="anchor" aria-label="anchor" href="#example-1-multi-arm-trial-experimental-vs-reference"></a>
 </h3>
 <p>Simulate a two-arm trial comparing Triplet therapy against Doublet (reference) with interim efficacy and futility stopping:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Define trial arguments</span></span>
@@ -200,7 +260,7 @@
 <h3 id="example-2-single-arm-vs-historical-control">Example 2: Single-arm vs Historical Control<a class="anchor" aria-label="anchor" href="#example-2-single-arm-vs-historical-control"></a>
 </h3>
 <p>Evaluate a single experimental arm against a historical median survival:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Define trial arguments for single-arm design</span></span>
@@ -245,7 +305,7 @@
 <h3 id="example-3-grid-search-for-optimal-thresholds">Example 3: Grid Search for Optimal Thresholds<a class="anchor" aria-label="anchor" href="#example-3-grid-search-for-optimal-thresholds"></a>
 </h3>
 <p>Find efficacy/futility thresholds that meet operating characteristic targets:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Base trial configuration</span></span>

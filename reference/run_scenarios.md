@@ -7,7 +7,14 @@ and binds the results into a single table.
 ## Usage
 
 ``` r
-run_scenarios(base_args, scens, parallel = FALSE, seed = NULL)
+run_scenarios(
+  base_args,
+  scens,
+  parallel = FALSE,
+  seed = NULL,
+  return_percentiles = FALSE,
+  percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1)
+)
 ```
 
 ## Arguments
@@ -33,11 +40,31 @@ run_scenarios(base_args, scens, parallel = FALSE, seed = NULL)
   Optional integer seed passed to
   [`set.seed()`](https://rdrr.io/r/base/Random.html) before simulations.
 
+- return_percentiles:
+
+  Logical; if `TRUE`, collect per-replicate sample sizes and return
+  percentile summaries. Default `FALSE`.
+
+- percentile_probs:
+
+  Numeric vector of probabilities for percentile computation when
+  `return_percentiles = TRUE`. Default
+  `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`.
+
 ## Value
 
-A data.table/data.frame containing the combined operating characteristic
-summaries. A `scenario` column identifies the originating scenario
-index.
+When `return_percentiles = FALSE` (default), a data.table/data.frame
+containing the combined operating characteristic summaries with a
+`scenario` column identifying the originating scenario index. When
+`return_percentiles = TRUE`, a list with:
+
+- summary:
+
+  The combined summary data.table as when `return_percentiles = FALSE`
+
+- percentiles:
+
+  A list of percentile results, one per scenario
 
 ## Examples
 

@@ -95,6 +95,7 @@ characteristics are returned summarised per arm.</p>
 <span>  <span class="va">overall_accrual_rate</span>,</span>
 <span>  <span class="va">randomization_probs</span>,</span>
 <span>  min_follow_up_at_final <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  max_trial_time <span class="op">=</span> <span class="cn">Inf</span>,</span>
 <span>  min_events_for_analysis <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  min_median_followup <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  min_events_hc <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -115,7 +116,9 @@ characteristics are returned summarised per arm.</p>
 <span>  num_workers <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cluster_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"PSOCK"</span>, <span class="st">"FORK"</span><span class="op">)</span>,</span>
 <span>  cluster <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  progress <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  progress <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  return_percentiles <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  percentile_probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, <span class="fl">0.9</span>, <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -424,13 +427,33 @@ Create with <code><a href="create_simulation_cluster.html">evolveTrial::create_s
 <dd><p>Logical; show the simulation progress bar when running
 sequentially. Automatically disabled for parallel replicate execution.</p></dd>
 
+
+<dt id="arg-return-percentiles">return_percentiles<a class="anchor" aria-label="anchor" href="#arg-return-percentiles"></a></dt>
+<dd><p>Logical; if <code>TRUE</code>, store per-replicate sample sizes
+and return percentile summaries in addition to means. Default <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-percentile-probs">percentile_probs<a class="anchor" aria-label="anchor" href="#arg-percentile-probs"></a></dt>
+<dd><p>Numeric vector of probabilities for percentile
+computation when <code>return_percentiles = TRUE</code>. Default <code>c(0, 0.25, 0.5, 0.75, 0.9, 1.0)</code>
+gives min, 25th, median, 75th, 90th, and max.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data frame with one row per arm and columns summarising operating
-characteristics such as type I error / power, PETs, final decision
-probabilities, and expected sample size.</p>
-    </div>
+    <p>When <code>return_percentiles = FALSE</code> (default), a data frame with one row
+per arm and columns summarising operating characteristics such as type I
+error / power, PETs, final decision probabilities, expected sample size,
+expected events, and expected trial duration (calendar months).
+When <code>return_percentiles = TRUE</code>, a list with two elements:</p><dl><dt>summary</dt>
+<dd><p>The same data frame as when <code>return_percentiles = FALSE</code></p></dd>
+
+<dt>percentiles</dt>
+<dd><p>A list with elements <code>N</code> (named list of percentile vectors
+per arm) and <code>probs</code> (the probability values used)</p></dd>
+
+
+</dl></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>When <code>parallel_replicates = TRUE</code>, results will vary based on

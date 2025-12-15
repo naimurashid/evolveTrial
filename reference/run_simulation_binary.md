@@ -21,6 +21,7 @@ run_simulation_binary(
   use_simon_rules = FALSE,
   alpha_prior = 1,
   beta_prior = 1,
+  disable_interim_eff_stop = FALSE,
   diagnostics = FALSE,
   progress = interactive()
 )
@@ -83,6 +84,13 @@ run_simulation_binary(
 - beta_prior:
 
   Beta prior shape2 (default 1)
+
+- disable_interim_eff_stop:
+
+  If TRUE, do not stop for efficacy at interim (only futility stopping
+  at interim, efficacy only at final). This makes the Bayesian design
+  comparable to Simon's two-stage design which only stops for futility
+  at the interim.
 
 - diagnostics:
 

@@ -50,6 +50,7 @@ run_simulation_pure(
   overall_accrual_rate,
   randomization_probs,
   min_follow_up_at_final = 0,
+  max_trial_time = Inf,
   min_events_for_analysis = NULL,
   min_median_followup = NULL,
   min_events_hc = NULL,
@@ -70,7 +71,9 @@ run_simulation_pure(
   num_workers = NULL,
   cluster_type = c("auto", "PSOCK", "FORK"),
   cluster = NULL,
-  progress = interactive()
+  progress = interactive(),
+  return_percentiles = FALSE,
+  percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1)
 )
 ```
 
@@ -363,11 +366,33 @@ run_simulation_pure(
   Logical; show the simulation progress bar when running sequentially.
   Automatically disabled for parallel replicate execution.
 
+- return_percentiles:
+
+  Logical; if `TRUE`, store per-replicate sample sizes and return
+  percentile summaries in addition to means. Default `FALSE`.
+
+- percentile_probs:
+
+  Numeric vector of probabilities for percentile computation when
+  `return_percentiles = TRUE`. Default `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`
+  gives min, 25th, median, 75th, 90th, and max.
+
 ## Value
 
-A data frame with one row per arm and columns summarising operating
-characteristics such as type I error / power, PETs, final decision
-probabilities, and expected sample size.
+When `return_percentiles = FALSE` (default), a data frame with one row
+per arm and columns summarising operating characteristics such as type I
+error / power, PETs, final decision probabilities, expected sample size,
+expected events, and expected trial duration (calendar months). When
+`return_percentiles = TRUE`, a list with two elements:
+
+- summary:
+
+  The same data frame as when `return_percentiles = FALSE`
+
+- percentiles:
+
+  A list with elements `N` (named list of percentile vectors per arm)
+  and `probs` (the probability values used)
 
 ## Details
 
