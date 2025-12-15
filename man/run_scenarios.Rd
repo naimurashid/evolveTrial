@@ -4,7 +4,14 @@
 \alias{run_scenarios}
 \title{Evaluate a design across multiple scenarios}
 \usage{
-run_scenarios(base_args, scens, parallel = FALSE, seed = NULL)
+run_scenarios(
+  base_args,
+  scens,
+  parallel = FALSE,
+  seed = NULL,
+  return_percentiles = FALSE,
+  percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1)
+)
 }
 \arguments{
 \item{base_args}{Named list of arguments accepted by \code{run_simulation_pure()}.}
@@ -16,11 +23,22 @@ run_scenarios(base_args, scens, parallel = FALSE, seed = NULL)
 scenarios across cores.}
 
 \item{seed}{Optional integer seed passed to \code{set.seed()} before simulations.}
+
+\item{return_percentiles}{Logical; if \code{TRUE}, collect per-replicate sample sizes
+and return percentile summaries. Default \code{FALSE}.}
+
+\item{percentile_probs}{Numeric vector of probabilities for percentile
+computation when \code{return_percentiles = TRUE}. Default \code{c(0, 0.25, 0.5, 0.75, 0.9, 1.0)}.}
 }
 \value{
-A data.table/data.frame containing the combined operating
-characteristic summaries.  A \code{scenario} column identifies the originating
-scenario index.
+When \code{return_percentiles = FALSE} (default), a data.table/data.frame
+containing the combined operating characteristic summaries with a \code{scenario}
+column identifying the originating scenario index.
+When \code{return_percentiles = TRUE}, a list with:
+\describe{
+\item{summary}{The combined summary data.table as when \code{return_percentiles = FALSE}}
+\item{percentiles}{A list of percentile results, one per scenario}
+}
 }
 \description{
 Merges each scenario override list with \code{base_args}, runs

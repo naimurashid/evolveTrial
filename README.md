@@ -23,12 +23,66 @@ The package supports the ARPA-H ADAPT breast cancer platform trial design.
 
 ## Installation
 
+### Prerequisites for Compiling C++ Code
+
+This package contains C++ code (via Rcpp) that must be compiled during installation. **Most users will need to install additional tools before installing evolveTrial.**
+
+#### Windows Users
+
+You must install **Rtools** before installing packages with C++ code:
+1. Download Rtools from: https://cran.r-project.org/bin/windows/Rtools/
+2. Choose the version matching your R version (e.g., Rtools44 for R 4.4.x)
+3. Run the installer with default settings
+4. Restart R/RStudio after installation
+
+To verify Rtools is installed correctly:
+``` r
+Sys.which("make")
+# Should return a path like "C:/rtools44/usr/bin/make.exe"
+```
+
+#### macOS Users
+
+You must install **Xcode Command Line Tools**:
+``` bash
+# Run this in Terminal (not R)
+xcode-select --install
+```
+
+A dialog will appear - click "Install" and wait for completion (~5-10 minutes).
+
+For **Apple Silicon Macs (M1/M2/M3)**, you may also need gfortran:
+``` bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install gfortran
+brew install gcc
+```
+
+To verify your toolchain is ready:
+``` r
+# In R, check for C++ compiler
+system("clang++ --version")
+```
+
+#### Linux Users
+
+Most Linux distributions include the necessary compilers. If not:
+``` bash
+# Ubuntu/Debian
+sudo apt-get install r-base-dev
+
+# Fedora/RHEL
+sudo dnf install R-devel
+```
+
 ### From GitHub (Recommended)
 
 Install the development version from GitHub using one of these methods:
 
 ``` r
-# Using pak (fastest)
+# Using pak (fastest, handles compilation automatically)
 install.packages("pak")
 pak::pak("naimurashid/evolveTrial")
 
@@ -64,6 +118,35 @@ git clone https://github.com/naimurashid/evolveTrial.git
 # Load in R session
 devtools::load_all("path/to/evolveTrial")
 ```
+
+### Troubleshooting Installation
+
+**"Error: compilation failed"** or **"make: not found"**
+- Windows: Rtools is not installed or not on PATH. Reinstall Rtools and restart R.
+- macOS: Xcode Command Line Tools not installed. Run `xcode-select --install` in Terminal.
+
+**"fatal error: 'RcppArmadillo.h' file not found"**
+``` r
+# Install RcppArmadillo first
+install.packages("RcppArmadillo")
+# Then retry evolveTrial installation
+```
+
+**"ld: library not found for -lgfortran"** (macOS)
+``` bash
+# Install gfortran via Homebrew
+brew install gcc
+```
+
+**Installation hangs or times out**
+``` r
+# Try installing without vignettes (faster)
+remotes::install_github("naimurashid/evolveTrial", build_vignettes = FALSE)
+```
+
+**Still having issues?**
+- Check that your R version is 4.0 or higher: `R.version.string`
+- Open an issue at: https://github.com/naimurashid/evolveTrial/issues
 
 ## Diagnosing interim gating choices
 
