@@ -349,7 +349,13 @@ run_simulation_pure <- function(
     max_PT_per_arm = max_PT_per_arm,
     rebalance_after_events = rebalance_after_events,
     # max_trial_time for person-time gate denominator (when fu_time is very large)
-    max_trial_time = max_trial_time
+    max_trial_time = max_trial_time,
+    # Efficacy/futility stopping rule flags (single-arm HC analysis)
+    efficacy_stopping_rule_hc = efficacy_stopping_rule_hc,
+    futility_stopping_rule_hc = futility_stopping_rule_hc,
+    # Efficacy/futility stopping rule flags (vs-reference comparison)
+    efficacy_stopping_rule_vs_ref = efficacy_stopping_rule_vs_ref,
+    futility_stopping_rule_vs_ref = futility_stopping_rule_vs_ref
   )
   
   num_intervals <- length(interval_cutpoints_sim) - 1

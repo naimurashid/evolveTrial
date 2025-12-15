@@ -131,8 +131,9 @@ interim_check_vs_ref <- function(state, current_time, args, diagnostics = FALSE)
                         coalesce_num(args$futility_threshold_vs_ref_prob, NA_real_), coalesce_num(args$compare_arms_futility_margin, 0), pr_fut))
       }
 
-      # Success?
-      if (!is.null(args$efficacy_threshold_vs_ref_prob) && is.finite(args$efficacy_threshold_vs_ref_prob) &&
+      # Success? Only check interim efficacy if efficacy_stopping_rule_vs_ref is TRUE
+      if (isTRUE(args$efficacy_stopping_rule_vs_ref) &&
+          !is.null(args$efficacy_threshold_vs_ref_prob) && is.finite(args$efficacy_threshold_vs_ref_prob) &&
           pr_eff >= args$efficacy_threshold_vs_ref_prob) {
         state$arm_status[trt_name] <- "stopped_efficacy"
         state$stop_efficacy_per_sim_row[trt_name] <- 1L
@@ -222,7 +223,10 @@ interim_check_hc <- function(state, current_time, args, diagnostics = FALSE) {
                       pr_fut))
     }
 
-    if (!is.null(args$efficacy_threshold_hc_prob) &&
+    # Interim efficacy stopping: only if efficacy_stopping_rule_hc is TRUE (default FALSE)
+    # When FALSE (Simon-comparable), only futility stopping at interim; efficacy at final only
+    if (isTRUE(args$efficacy_stopping_rule_hc) &&
+        !is.null(args$efficacy_threshold_hc_prob) &&
         is.finite(args$efficacy_threshold_hc_prob) &&
         pr_eff >= args$efficacy_threshold_hc_prob) {
       state$arm_status[arm] <- "stopped_efficacy"
