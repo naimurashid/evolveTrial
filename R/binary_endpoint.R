@@ -315,7 +315,7 @@ simon_oc_exact <- function(n1, r1, n, r, p) {
 #' @param alpha Maximum type I error
 #' @param beta Maximum type II error (1 - power)
 #' @param n_max Maximum total sample size to search
-#' @param criterion "optimal" (minimize E[N] under null) or "minimax" (minimize max N)
+#' @param criterion "optimal" (minimize E\[N\] under null) or "minimax" (minimize max N)
 #'
 #' @return Data frame with design parameters and operating characteristics
 #' @export
@@ -505,6 +505,7 @@ get_binary_metrics <- function(registry_df, stage = NULL) {
 #'   the Bayesian design comparable to Simon's two-stage design which only
 #'   stops for futility at the interim.
 #' @param diagnostics Print diagnostic messages
+#' @param progress Show progress bar (default TRUE in interactive sessions)
 #'
 #' @return Data frame with operating characteristics per arm
 #' @export

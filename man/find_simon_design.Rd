@@ -24,7 +24,7 @@ find_simon_design(
 
 \item{n_max}{Maximum total sample size to search}
 
-\item{criterion}{"optimal" (minimize E\link{N} under null) or "minimax" (minimize max N)}
+\item{criterion}{"optimal" (minimize E[N] under null) or "minimax" (minimize max N)}
 }
 \value{
 Data frame with design parameters and operating characteristics

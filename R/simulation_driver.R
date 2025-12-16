@@ -83,6 +83,9 @@
 #' @param randomization_probs Named numeric vector of randomisation probabilities.
 #' @param min_follow_up_at_final Additional follow-up (months) required after
 #'   last enrolment before the final analysis.
+#' @param max_trial_time Maximum calendar time (months) for the entire trial.
+#'   After this cutoff from trial start, the trial terminates regardless of
+#'   other stopping rules. Default is `Inf` (no time limit).
 #' @param min_events_for_analysis **DEPRECATED**. Use \code{min_events_hc}
 #'   instead. Minimum events required for interim review (global gate).
 #' @param min_median_followup **DEPRECATED**. Use \code{min_median_followup_hc}

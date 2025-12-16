@@ -188,6 +188,10 @@ threshold for final futility declarations.}
 \item{min_follow_up_at_final}{Additional follow-up (months) required after
 last enrolment before the final analysis.}
 
+\item{max_trial_time}{Maximum calendar time (months) for the entire trial.
+After this cutoff from trial start, the trial terminates regardless of
+other stopping rules. Default is \code{Inf} (no time limit).}
+
 \item{min_events_for_analysis}{\strong{DEPRECATED}. Use \code{min_events_hc}
 instead. Minimum events required for interim review (global gate).}
 

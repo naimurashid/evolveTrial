@@ -83,6 +83,17 @@ draw_posterior_hazard_samples_r <- function(
 
 #' Compute mode and variance of log-HR posterior for PH model (DISPATCHER)
 #'
+#' @param E_C Events in control arm (vector by interval)
+#' @param PT_C Person-time in control arm (vector by interval)
+#' @param E_T Events in treatment arm (vector by interval)
+#' @param PT_T Person-time in treatment arm (vector by interval)
+#' @param alpha_prior Prior shape parameter for hazard (vector by interval)
+#' @param beta_prior Prior rate parameter for hazard (vector by interval)
+#' @param mu Prior mean for log-HR
+#' @param sigma Prior SD for log-HR
+#' @param tol Tolerance for Newton-Raphson convergence (default 1e-6)
+#' @param max_iter Maximum iterations for Newton-Raphson (default 50)
+#' @return Named list with mode and variance of log-HR posterior
 #' @export
 ph_beta_mode_var <- function(E_C, PT_C, E_T, PT_T, alpha_prior, beta_prior, mu, sigma,
                               tol = 1e-6, max_iter = 50) {
@@ -145,8 +156,18 @@ ph_beta_mode_var_r <- function(E_C, PT_C, E_T, PT_T, alpha_prior, beta_prior, mu
 
 #' Sample medians for vs-ref independent model (DISPATCHER)
 #'
+#' Routes to C++ or R implementation based on EVOLVETRIAL_USE_CPP.
+#' Samples hazards independently for each arm (no borrowing).
+#'
+#' @param slCtrl Control arm slice (list with metrics$events_per_interval, metrics$person_time_per_interval)
+#' @param slTrt Treatment arm slice (list with metrics$events_per_interval, metrics$person_time_per_interval)
+#' @param args List of simulation args including prior_alpha_params_model, prior_beta_params_model, interval_cutpoints_sim
+#' @param num_samples Number of posterior samples to draw
+#' @param ctrl_cache Optional cached control arm posteriors for multi-arm optimization (list with lamC, medCtrl, interval_lengths)
+#' @return List with medCtrl, medTrt (posterior median samples), and logHR (NULL for independent model)
 #' @export
-sample_vs_ref_medians_independent <- function(slCtrl, slTrt, args, num_samples) {
+sample_vs_ref_medians_independent <- function(slCtrl, slTrt, args, num_samples,
+                                               ctrl_cache = NULL) {
   if (.use_cpp_posterior()) {
     # Use C++ version
     interval_lengths <- diff(args$interval_cutpoints_sim)
@@ -207,6 +228,15 @@ sample_vs_ref_medians_independent_r <- function(slCtrl, slTrt, args, num_samples
 
 #' Sample medians for vs-ref PH model (DISPATCHER)
 #'
+#' Routes to C++ or R implementation based on EVOLVETRIAL_USE_CPP.
+#' Uses proportional hazards model for borrowing strength across arms.
+#'
+#' @param slCtrl Control arm slice (list with metrics$events_per_interval, metrics$person_time_per_interval)
+#' @param slTrt Treatment arm slice (list with metrics$events_per_interval, metrics$person_time_per_interval)
+#' @param args List of simulation args including prior_alpha_params_model, prior_beta_params_model,
+#'   interval_cutpoints_sim, ph_loghr_prior_mean, ph_loghr_prior_sd, num_posterior_draws
+#' @param num_samples Number of posterior samples to draw
+#' @return List with medCtrl, medTrt (posterior median samples), and logHR (log hazard ratio samples)
 #' @export
 sample_vs_ref_medians_ph <- function(slCtrl, slTrt, args, num_samples) {
   if (.use_cpp_posterior()) {

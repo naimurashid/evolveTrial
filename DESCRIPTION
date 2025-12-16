@@ -1,9 +1,12 @@
 Package: evolveTrial
 Title: Adaptive Clinical Trial Utilities
 Version: 0.0.0.9000
-Authors@R: person(given = "Naim", family = "Rashid",
-          email = "naim@unc.edu",
-          role = c("aut","cre"))
+Author: Naim Rashid [aut, cre]
+Maintainer: Naim Rashid <naim@unc.edu>
+Authors@R:
+    person(given = "Naim", family = "Rashid",
+           email = "naim@unc.edu",
+           role = c("aut","cre"))
 Description: Helpers for Bayesian adaptive platform/umbrella clinical trials, including simulation, decision rules, and reporting.
 License: MIT + file LICENSE
 Encoding: UTF-8

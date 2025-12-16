@@ -59,6 +59,8 @@ the Bayesian design comparable to Simon's two-stage design which only
 stops for futility at the interim.}
 
 \item{diagnostics}{Print diagnostic messages}
+
+\item{progress}{Show progress bar (default TRUE in interactive sessions)}
 }
 \value{
 Data frame with operating characteristics per arm

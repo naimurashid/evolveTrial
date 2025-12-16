@@ -17,6 +17,30 @@ ph_beta_mode_var(
   max_iter = 50
 )
 }
+\arguments{
+\item{E_C}{Events in control arm (vector by interval)}
+
+\item{PT_C}{Person-time in control arm (vector by interval)}
+
+\item{E_T}{Events in treatment arm (vector by interval)}
+
+\item{PT_T}{Person-time in treatment arm (vector by interval)}
+
+\item{alpha_prior}{Prior shape parameter for hazard (vector by interval)}
+
+\item{beta_prior}{Prior rate parameter for hazard (vector by interval)}
+
+\item{mu}{Prior mean for log-HR}
+
+\item{sigma}{Prior SD for log-HR}
+
+\item{tol}{Tolerance for Newton-Raphson convergence (default 1e-6)}
+
+\item{max_iter}{Maximum iterations for Newton-Raphson (default 50)}
+}
+\value{
+Named list with mode and variance of log-HR posterior
+}
 \description{
 Compute mode and variance of log-HR posterior for PH model (DISPATCHER)
 }

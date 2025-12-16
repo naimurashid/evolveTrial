@@ -6,6 +6,20 @@
 \usage{
 sample_vs_ref_medians_ph(slCtrl, slTrt, args, num_samples)
 }
+\arguments{
+\item{slCtrl}{Control arm slice (list with metrics$events_per_interval, metrics$person_time_per_interval)}
+
+\item{slTrt}{Treatment arm slice (list with metrics$events_per_interval, metrics$person_time_per_interval)}
+
+\item{args}{List of simulation args including prior_alpha_params_model, prior_beta_params_model,
+interval_cutpoints_sim, ph_loghr_prior_mean, ph_loghr_prior_sd, num_posterior_draws}
+
+\item{num_samples}{Number of posterior samples to draw}
+}
+\value{
+List with medCtrl, medTrt (posterior median samples), and logHR (log hazard ratio samples)
+}
 \description{
-Sample medians for vs-ref PH model (DISPATCHER)
+Routes to C++ or R implementation based on EVOLVETRIAL_USE_CPP.
+Uses proportional hazards model for borrowing strength across arms.
 }
