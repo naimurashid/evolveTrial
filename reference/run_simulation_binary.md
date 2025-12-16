@@ -96,6 +96,10 @@ run_simulation_binary(
 
   Print diagnostic messages
 
+- progress:
+
+  Show progress bar (default TRUE in interactive sessions)
+
 ## Value
 
 Data frame with operating characteristics per arm

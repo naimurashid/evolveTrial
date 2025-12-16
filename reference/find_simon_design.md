@@ -40,7 +40,7 @@ find_simon_design(
 
 - criterion:
 
-  "optimal" (minimize EN under null) or "minimax" (minimize max N)
+  "optimal" (minimize E\[N\] under null) or "minimax" (minimize max N)
 
 ## Value
 

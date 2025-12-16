@@ -56,8 +56,57 @@
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
+    <div class="section level2">
+    <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
-  </main></div>
+
+<dl><dt id="arg-e-c">E_C<a class="anchor" aria-label="anchor" href="#arg-e-c"></a></dt>
+<dd><p>Events in control arm (vector by interval)</p></dd>
+
+
+<dt id="arg-pt-c">PT_C<a class="anchor" aria-label="anchor" href="#arg-pt-c"></a></dt>
+<dd><p>Person-time in control arm (vector by interval)</p></dd>
+
+
+<dt id="arg-e-t">E_T<a class="anchor" aria-label="anchor" href="#arg-e-t"></a></dt>
+<dd><p>Events in treatment arm (vector by interval)</p></dd>
+
+
+<dt id="arg-pt-t">PT_T<a class="anchor" aria-label="anchor" href="#arg-pt-t"></a></dt>
+<dd><p>Person-time in treatment arm (vector by interval)</p></dd>
+
+
+<dt id="arg-alpha-prior">alpha_prior<a class="anchor" aria-label="anchor" href="#arg-alpha-prior"></a></dt>
+<dd><p>Prior shape parameter for hazard (vector by interval)</p></dd>
+
+
+<dt id="arg-beta-prior">beta_prior<a class="anchor" aria-label="anchor" href="#arg-beta-prior"></a></dt>
+<dd><p>Prior rate parameter for hazard (vector by interval)</p></dd>
+
+
+<dt id="arg-mu">mu<a class="anchor" aria-label="anchor" href="#arg-mu"></a></dt>
+<dd><p>Prior mean for log-HR</p></dd>
+
+
+<dt id="arg-sigma">sigma<a class="anchor" aria-label="anchor" href="#arg-sigma"></a></dt>
+<dd><p>Prior SD for log-HR</p></dd>
+
+
+<dt id="arg-tol">tol<a class="anchor" aria-label="anchor" href="#arg-tol"></a></dt>
+<dd><p>Tolerance for Newton-Raphson convergence (default 1e-6)</p></dd>
+
+
+<dt id="arg-max-iter">max_iter<a class="anchor" aria-label="anchor" href="#arg-max-iter"></a></dt>
+<dd><p>Maximum iterations for Newton-Raphson (default 50)</p></dd>
+
+</dl></div>
+    <div class="section level2">
+    <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
+    <p>Named list with mode and variance of log-HR posterior</p>
+    </div>
+
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

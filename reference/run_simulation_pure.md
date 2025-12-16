@@ -258,6 +258,12 @@ run_simulation_pure(
   Additional follow-up (months) required after last enrolment before the
   final analysis.
 
+- max_trial_time:
+
+  Maximum calendar time (months) for the entire trial. After this cutoff
+  from trial start, the trial terminates regardless of other stopping
+  rules. Default is `Inf` (no time limit).
+
 - min_events_for_analysis:
 
   **DEPRECATED**. Use `min_events_hc` instead. Minimum events required
