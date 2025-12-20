@@ -1,7 +1,7 @@
 # Hybrid Single-Arm to Multi-Arm Bayesian Adaptive Trial Design Specification
 
-**Version**: 1.0 **Date**: 2025-12-20 **Status**: Approved for
-Implementation
+**Version**: 1.1 **Date**: 2025-12-20 **Status**: IMPLEMENTED - All Core
+Components Complete
 
 ------------------------------------------------------------------------
 
@@ -434,6 +434,99 @@ For the ARPA-H ADAPT breast cancer platform trial:
 4.  **Futility action**: `drop_arm`
 5.  **P_conversion constraint**: \>= 0.10
 6.  **HR threshold**: 0.80 (20% improvement)
+
+------------------------------------------------------------------------
+
+## 13. Implementation Status
+
+### 13.1 Completed Components
+
+| Component             | File                                      | Status   | Tests                  |
+|-----------------------|-------------------------------------------|----------|------------------------|
+| Core simulator        | `R/hybrid_trial.R`                        | COMPLETE | 60 passing             |
+| SSR methods           | `R/hybrid_ssr.R`                          | COMPLETE | Included in unit tests |
+| Decision rules        | `R/hybrid_decisions.R`                    | COMPLETE | Included in unit tests |
+| BATON wrapper         | `R/warmstart_wrappers.R`                  | COMPLETE | Integration test       |
+| Bounds/constraints    | `R/scenario_configs.R`                    | COMPLETE | \-                     |
+| Aggregation           | `R/aggregation.R`                         | COMPLETE | \-                     |
+| Calibration scenarios | `R/hybrid_calibration_scenarios.R`        | COMPLETE | \-                     |
+| Unit tests            | `tests/testthat/test-hybrid-simulator.R`  | COMPLETE | 60 tests               |
+| Integration test      | `scripts/test_hybrid_integration.R`       | COMPLETE | 9 test sections        |
+| Production CSV        | `scenarios/cohortB_hybrid_production.csv` | COMPLETE | 11 scenarios           |
+
+### 13.2 Key Functions Implemented
+
+**evolveTrial Package:** - `create_hybrid_theta()` - Parameter structure
+with validation - `create_hybrid_state()` - State initialization with
+registries - `update_hybrid_state()` - Main state machine driver -
+`handle_state_single()` - SA phase logic -
+`handle_state_consider_conversion()` - PP evaluation -
+`handle_state_between()` - BA phase logic -
+`compute_pp_curve_predictive()` - Full Monte Carlo PP -
+`compute_pp_curve_posterior()` - Fast analytical PP -
+`evaluate_sa_efficacy()` - SA efficacy decision -
+`evaluate_sa_futility()` - SA futility decision -
+`evaluate_conversion_trigger()` - Trigger evaluation -
+`evaluate_ba_efficacy()` - BA efficacy decision -
+`apply_futility_action()` - Futility handling -
+`validate_exponential_ba()` - Closed-form validation -
+`compile_hybrid_results()` - Result compilation
+
+**BATON Integration:** - `create_hybrid_wrapper_simple()` - CSV-based
+wrapper factory - `get_hybrid_bounds()` - Parameter bounds by stage -
+`get_hybrid_constraints()` - OC constraints -
+`get_hybrid_calibration_scenarios()` - 5 calibration scenarios -
+`aggregate_hybrid_results()` - Multi-scenario aggregation -
+`compute_hybrid_objective()` - Objective with conversion penalty
+
+### 13.3 Usage
+
+**Run unit tests:**
+
+``` bash
+cd evolveTrial
+Rscript -e "testthat::test_file('tests/testthat/test-hybrid-simulator.R')"
+```
+
+**Run integration test:**
+
+``` bash
+cd adaptive-trial-bo-paper
+Rscript scripts/test_hybrid_integration.R
+```
+
+**Run production calibration:**
+
+``` bash
+cd adaptive-trial-bo-paper
+Rscript scripts/run_warmstart_scenarios.R \
+  scenarios/cohortB_hybrid_production.csv \
+  --filter-ids cohortB_hybrid_optimal
+```
+
+**Dry run (validate scenarios):**
+
+``` bash
+Rscript scripts/run_warmstart_scenarios.R \
+  scenarios/cohortB_hybrid_production.csv \
+  --dry-run
+```
+
+### 13.4 Production CSV Scenarios
+
+| Scenario ID                 | Description                   | Conversion Trigger |
+|-----------------------------|-------------------------------|--------------------|
+| cohortB_hybrid_optimal      | Minimize EN under alternative | any_single_success |
+| cohortB_hybrid_minimax      | Balance null/alt EN           | any_single_success |
+| cohortB_hybrid_fleming      | Balanced EN optimization      | any_single_success |
+| cohortB_hybrid_all_success  | Require all arms succeed      | all_single_success |
+| cohortB_hybrid_k_of_K       | k of K arms succeed           | k_of_K             |
+| cohortB_hybrid_posterior    | Fast posterior SSR            | any_single_success |
+| cohortB_hybrid_stop_on_fut  | Stop on any futility          | any_single_success |
+| cohortB_hybrid_continue_fut | Continue despite futility     | any_single_success |
+| cohortB_hybrid_strong       | Strong effect (HR=0.60)       | any_single_success |
+| cohortB_hybrid_moderate     | Moderate effect (HR=0.82)     | any_single_success |
+| cohortB_hybrid_weibull13    | Weibull shape=1.3             | any_single_success |
 
 ------------------------------------------------------------------------
 

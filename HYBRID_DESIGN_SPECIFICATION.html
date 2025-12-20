@@ -37,7 +37,7 @@
 
 <div id="hybrid-single-arm-to-multi-arm-bayesian-adaptive-trial-design-specification" class="section level1">
 
-<p><strong>Version</strong>: 1.0 <strong>Date</strong>: 2025-12-20 <strong>Status</strong>: Approved for Implementation</p>
+<p><strong>Version</strong>: 1.1 <strong>Date</strong>: 2025-12-20 <strong>Status</strong>: IMPLEMENTED - All Core Components Complete</p>
 <hr><div class="section level2">
 <h2 id="id_1-design-overview">1. Design Overview<a class="anchor" aria-label="anchor" href="#id_1-design-overview"></a></h2>
 <div class="section level3">
@@ -551,7 +551,119 @@ Find smallest N_add where PP(N_add) &gt;= pp_go</code></pre>
 <strong>P_conversion constraint</strong>: &gt;= 0.10</li>
 <li>
 <strong>HR threshold</strong>: 0.80 (20% improvement)</li>
-</ol><hr><p><strong>Document maintained by</strong>: evolveTrial development team <strong>Last updated</strong>: 2025-12-20</p>
+</ol><hr></div>
+<div class="section level2">
+<h2 id="id_13-implementation-status">13. Implementation Status<a class="anchor" aria-label="anchor" href="#id_13-implementation-status"></a></h2>
+<div class="section level3">
+<h3 id="id_131-completed-components">13.1 Completed Components<a class="anchor" aria-label="anchor" href="#id_131-completed-components"></a></h3>
+<table class="table"><colgroup><col width="34%"><col width="18%"><col width="25%"><col width="21%"></colgroup><thead><tr class="header"><th>Component</th>
+<th>File</th>
+<th>Status</th>
+<th>Tests</th>
+</tr></thead><tbody><tr class="odd"><td>Core simulator</td>
+<td><code>R/hybrid_trial.R</code></td>
+<td>COMPLETE</td>
+<td>60 passing</td>
+</tr><tr class="even"><td>SSR methods</td>
+<td><code>R/hybrid_ssr.R</code></td>
+<td>COMPLETE</td>
+<td>Included in unit tests</td>
+</tr><tr class="odd"><td>Decision rules</td>
+<td><code>R/hybrid_decisions.R</code></td>
+<td>COMPLETE</td>
+<td>Included in unit tests</td>
+</tr><tr class="even"><td>BATON wrapper</td>
+<td><code>R/warmstart_wrappers.R</code></td>
+<td>COMPLETE</td>
+<td>Integration test</td>
+</tr><tr class="odd"><td>Bounds/constraints</td>
+<td><code>R/scenario_configs.R</code></td>
+<td>COMPLETE</td>
+<td>-</td>
+</tr><tr class="even"><td>Aggregation</td>
+<td><code>R/aggregation.R</code></td>
+<td>COMPLETE</td>
+<td>-</td>
+</tr><tr class="odd"><td>Calibration scenarios</td>
+<td><code>R/hybrid_calibration_scenarios.R</code></td>
+<td>COMPLETE</td>
+<td>-</td>
+</tr><tr class="even"><td>Unit tests</td>
+<td><code>tests/testthat/test-hybrid-simulator.R</code></td>
+<td>COMPLETE</td>
+<td>60 tests</td>
+</tr><tr class="odd"><td>Integration test</td>
+<td><code>scripts/test_hybrid_integration.R</code></td>
+<td>COMPLETE</td>
+<td>9 test sections</td>
+</tr><tr class="even"><td>Production CSV</td>
+<td><code>scenarios/cohortB_hybrid_production.csv</code></td>
+<td>COMPLETE</td>
+<td>11 scenarios</td>
+</tr></tbody></table></div>
+<div class="section level3">
+<h3 id="id_132-key-functions-implemented">13.2 Key Functions Implemented<a class="anchor" aria-label="anchor" href="#id_132-key-functions-implemented"></a></h3>
+<p><strong>evolveTrial Package:</strong> - <code>create_hybrid_theta()</code> - Parameter structure with validation - <code>create_hybrid_state()</code> - State initialization with registries - <code>update_hybrid_state()</code> - Main state machine driver - <code>handle_state_single()</code> - SA phase logic - <code>handle_state_consider_conversion()</code> - PP evaluation - <code>handle_state_between()</code> - BA phase logic - <code>compute_pp_curve_predictive()</code> - Full Monte Carlo PP - <code>compute_pp_curve_posterior()</code> - Fast analytical PP - <code>evaluate_sa_efficacy()</code> - SA efficacy decision - <code>evaluate_sa_futility()</code> - SA futility decision - <code>evaluate_conversion_trigger()</code> - Trigger evaluation - <code>evaluate_ba_efficacy()</code> - BA efficacy decision - <code>apply_futility_action()</code> - Futility handling - <code>validate_exponential_ba()</code> - Closed-form validation - <code>compile_hybrid_results()</code> - Result compilation</p>
+<p><strong>BATON Integration:</strong> - <code>create_hybrid_wrapper_simple()</code> - CSV-based wrapper factory - <code>get_hybrid_bounds()</code> - Parameter bounds by stage - <code>get_hybrid_constraints()</code> - OC constraints - <code>get_hybrid_calibration_scenarios()</code> - 5 calibration scenarios - <code>aggregate_hybrid_results()</code> - Multi-scenario aggregation - <code>compute_hybrid_objective()</code> - Objective with conversion penalty</p>
+</div>
+<div class="section level3">
+<h3 id="id_133-usage">13.3 Usage<a class="anchor" aria-label="anchor" href="#id_133-usage"></a></h3>
+<p><strong>Run unit tests:</strong></p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="bu">cd</span> evolveTrial</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"testthat::test_file('tests/testthat/test-hybrid-simulator.R')"</span></span></code></pre></div>
+<p><strong>Run integration test:</strong></p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="bu">cd</span> adaptive-trial-bo-paper</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a><span class="ex">Rscript</span> scripts/test_hybrid_integration.R</span></code></pre></div>
+<p><strong>Run production calibration:</strong></p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="bu">cd</span> adaptive-trial-bo-paper</span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a><span class="ex">Rscript</span> scripts/run_warmstart_scenarios.R <span class="dt">\</span></span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a>  scenarios/cohortB_hybrid_production.csv <span class="dt">\</span></span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a>  <span class="at">--filter-ids</span> cohortB_hybrid_optimal</span></code></pre></div>
+<p><strong>Dry run (validate scenarios):</strong></p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="ex">Rscript</span> scripts/run_warmstart_scenarios.R <span class="dt">\</span></span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a>  scenarios/cohortB_hybrid_production.csv <span class="dt">\</span></span>
+<span id="cb21-3"><a href="#cb21-3" tabindex="-1"></a>  <span class="at">--dry-run</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="id_134-production-csv-scenarios">13.4 Production CSV Scenarios<a class="anchor" aria-label="anchor" href="#id_134-production-csv-scenarios"></a></h3>
+<table class="table"><colgroup><col width="28%"><col width="28%"><col width="42%"></colgroup><thead><tr class="header"><th>Scenario ID</th>
+<th>Description</th>
+<th>Conversion Trigger</th>
+</tr></thead><tbody><tr class="odd"><td>cohortB_hybrid_optimal</td>
+<td>Minimize EN under alternative</td>
+<td>any_single_success</td>
+</tr><tr class="even"><td>cohortB_hybrid_minimax</td>
+<td>Balance null/alt EN</td>
+<td>any_single_success</td>
+</tr><tr class="odd"><td>cohortB_hybrid_fleming</td>
+<td>Balanced EN optimization</td>
+<td>any_single_success</td>
+</tr><tr class="even"><td>cohortB_hybrid_all_success</td>
+<td>Require all arms succeed</td>
+<td>all_single_success</td>
+</tr><tr class="odd"><td>cohortB_hybrid_k_of_K</td>
+<td>k of K arms succeed</td>
+<td>k_of_K</td>
+</tr><tr class="even"><td>cohortB_hybrid_posterior</td>
+<td>Fast posterior SSR</td>
+<td>any_single_success</td>
+</tr><tr class="odd"><td>cohortB_hybrid_stop_on_fut</td>
+<td>Stop on any futility</td>
+<td>any_single_success</td>
+</tr><tr class="even"><td>cohortB_hybrid_continue_fut</td>
+<td>Continue despite futility</td>
+<td>any_single_success</td>
+</tr><tr class="odd"><td>cohortB_hybrid_strong</td>
+<td>Strong effect (HR=0.60)</td>
+<td>any_single_success</td>
+</tr><tr class="even"><td>cohortB_hybrid_moderate</td>
+<td>Moderate effect (HR=0.82)</td>
+<td>any_single_success</td>
+</tr><tr class="odd"><td>cohortB_hybrid_weibull13</td>
+<td>Weibull shape=1.3</td>
+<td>any_single_success</td>
+</tr></tbody></table><hr><p><strong>Document maintained by</strong>: evolveTrial development team <strong>Last updated</strong>: 2025-12-20</p>
+</div>
 </div>
 </div>
 
