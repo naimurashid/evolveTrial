@@ -249,10 +249,10 @@ during development.
 | Parameter    | Symbol  | Range          | Default | Description                              |
 |--------------|---------|----------------|---------|------------------------------------------|
 | SA efficacy  | eff_sa  | \[0.80, 0.99\] | 0.90    | Posterior prob threshold for SA efficacy |
-| SA futility  | fut_sa  | \[0.01, 0.20\] | 0.10    | Posterior prob threshold for SA futility |
+| SA futility  | fut_sa  | \[0.01, 0.25\] | 0.10    | Posterior prob threshold for SA futility |
 | HR threshold | c_k     | \[0.60, 0.90\] | 0.80    | Target HR vs historical                  |
 | Min events   | ev_sa   | \[5, 25\]      | 15      | Minimum events before SA interim         |
-| Max N        | nmax_sa | \[30, 80\]     | 40      | Maximum N in SA phase per arm            |
+| Max N        | nmax_sa | \[30, 100\]    | 40      | Maximum N in SA phase per arm            |
 
 ### 6.2 Conversion
 
@@ -261,16 +261,16 @@ during development.
 | PP go            | pp_go     | \[0.50, 0.90\] | 0.70    | PP threshold to proceed to BA  |
 | PP no-go         | pp_nogo   | \[0.10, 0.40\] | 0.20    | PP threshold to stop           |
 | Trigger          | trigger   | categorical    | “any”   | “any”, “all”, or “k_of_K”      |
-| Max additional N | max_add_n | \[30, 100\]    | 60      | Max additional patients for BA |
+| Max additional N | max_add_n | \[30, 120\]    | 60      | Max additional patients for BA |
 
 ### 6.3 Phase 2 (Between-Arm)
 
 | Parameter   | Symbol  | Range           | Default | Description                              |
 |-------------|---------|-----------------|---------|------------------------------------------|
-| BA efficacy | eff_ba  | \[0.95, 0.999\] | 0.975   | Posterior prob threshold for BA efficacy |
-| BA futility | fut_ba  | \[0.01, 0.10\]  | 0.05    | Posterior prob threshold for BA futility |
-| Min events  | ev_ba   | \[10, 35\]      | 15      | Minimum events before BA interim         |
-| Max N       | nmax_ba | \[40, 100\]     | 80      | Maximum N in BA phase per arm            |
+| BA efficacy | eff_ba  | \[0.90, 0.999\] | 0.975   | Posterior prob threshold for BA efficacy |
+| BA futility | fut_ba  | \[0.01, 0.15\]  | 0.05    | Posterior prob threshold for BA futility |
+| Min events  | ev_ba   | \[8, 35\]       | 15      | Minimum events before BA interim         |
+| Max N       | nmax_ba | \[40, 150\]     | 80      | Maximum N in BA phase per arm            |
 
 ### 6.4 Structural
 
@@ -456,21 +456,37 @@ For the ARPA-H ADAPT breast cancer platform trial:
 
 ### 13.2 Key Functions Implemented
 
-**evolveTrial Package:** - `create_hybrid_theta()` - Parameter structure
-with validation - `create_hybrid_state()` - State initialization with
-registries - `update_hybrid_state()` - Main state machine driver -
-`handle_state_single()` - SA phase logic -
-`handle_state_consider_conversion()` - PP evaluation -
-`handle_state_between()` - BA phase logic -
-`compute_pp_curve_predictive()` - Full Monte Carlo PP -
-`compute_pp_curve_posterior()` - Fast analytical PP -
-`evaluate_sa_efficacy()` - SA efficacy decision -
-`evaluate_sa_futility()` - SA futility decision -
-`evaluate_conversion_trigger()` - Trigger evaluation -
-`evaluate_ba_efficacy()` - BA efficacy decision -
-`apply_futility_action()` - Futility handling -
-`validate_exponential_ba()` - Closed-form validation -
-`compile_hybrid_results()` - Result compilation
+**evolveTrial Package:** -
+[`create_hybrid_theta()`](reference/create_hybrid_theta.md) - Parameter
+structure with validation -
+[`create_hybrid_state()`](reference/create_hybrid_state.md) - State
+initialization with registries -
+[`update_hybrid_state()`](reference/update_hybrid_state.md) - Main state
+machine driver -
+[`handle_state_single()`](reference/handle_state_single.md) - SA phase
+logic -
+[`handle_state_consider_conversion()`](reference/handle_state_consider_conversion.md) -
+PP evaluation -
+[`handle_state_between()`](reference/handle_state_between.md) - BA phase
+logic -
+[`compute_pp_curve_predictive()`](reference/compute_pp_curve_predictive.md) -
+Full Monte Carlo PP -
+[`compute_pp_curve_posterior()`](reference/compute_pp_curve_posterior.md) -
+Fast analytical PP -
+[`evaluate_sa_efficacy()`](reference/evaluate_sa_efficacy.md) - SA
+efficacy decision -
+[`evaluate_sa_futility()`](reference/evaluate_sa_futility.md) - SA
+futility decision -
+[`evaluate_conversion_trigger()`](reference/evaluate_conversion_trigger.md) -
+Trigger evaluation -
+[`evaluate_ba_efficacy()`](reference/evaluate_ba_efficacy.md) - BA
+efficacy decision -
+[`apply_futility_action()`](reference/apply_futility_action.md) -
+Futility handling -
+[`validate_exponential_ba()`](reference/validate_exponential_ba.md) -
+Closed-form validation -
+[`compile_hybrid_results()`](reference/compile_hybrid_results.md) -
+Result compilation
 
 **BATON Integration:** - `create_hybrid_wrapper_simple()` - CSV-based
 wrapper factory - `get_hybrid_bounds()` - Parameter bounds by stage -

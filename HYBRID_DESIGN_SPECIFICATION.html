@@ -272,7 +272,7 @@ Find smallest N_add where PP(N_add) &gt;= pp_go</code></pre>
 <td>Posterior prob threshold for SA efficacy</td>
 </tr><tr class="even"><td>SA futility</td>
 <td>fut_sa</td>
-<td>[0.01, 0.20]</td>
+<td>[0.01, 0.25]</td>
 <td>0.10</td>
 <td>Posterior prob threshold for SA futility</td>
 </tr><tr class="odd"><td>HR threshold</td>
@@ -287,7 +287,7 @@ Find smallest N_add where PP(N_add) &gt;= pp_go</code></pre>
 <td>Minimum events before SA interim</td>
 </tr><tr class="odd"><td>Max N</td>
 <td>nmax_sa</td>
-<td>[30, 80]</td>
+<td>[30, 100]</td>
 <td>40</td>
 <td>Maximum N in SA phase per arm</td>
 </tr></tbody></table></div>
@@ -315,7 +315,7 @@ Find smallest N_add where PP(N_add) &gt;= pp_go</code></pre>
 <td>“any”, “all”, or “k_of_K”</td>
 </tr><tr class="even"><td>Max additional N</td>
 <td>max_add_n</td>
-<td>[30, 100]</td>
+<td>[30, 120]</td>
 <td>60</td>
 <td>Max additional patients for BA</td>
 </tr></tbody></table></div>
@@ -328,22 +328,22 @@ Find smallest N_add where PP(N_add) &gt;= pp_go</code></pre>
 <th>Description</th>
 </tr></thead><tbody><tr class="odd"><td>BA efficacy</td>
 <td>eff_ba</td>
-<td>[0.95, 0.999]</td>
+<td>[0.90, 0.999]</td>
 <td>0.975</td>
 <td>Posterior prob threshold for BA efficacy</td>
 </tr><tr class="even"><td>BA futility</td>
 <td>fut_ba</td>
-<td>[0.01, 0.10]</td>
+<td>[0.01, 0.15]</td>
 <td>0.05</td>
 <td>Posterior prob threshold for BA futility</td>
 </tr><tr class="odd"><td>Min events</td>
 <td>ev_ba</td>
-<td>[10, 35]</td>
+<td>[8, 35]</td>
 <td>15</td>
 <td>Minimum events before BA interim</td>
 </tr><tr class="even"><td>Max N</td>
 <td>nmax_ba</td>
-<td>[40, 100]</td>
+<td>[40, 150]</td>
 <td>80</td>
 <td>Maximum N in BA phase per arm</td>
 </tr></tbody></table></div>
@@ -603,7 +603,7 @@ Find smallest N_add where PP(N_add) &gt;= pp_go</code></pre>
 </tr></tbody></table></div>
 <div class="section level3">
 <h3 id="id_132-key-functions-implemented">13.2 Key Functions Implemented<a class="anchor" aria-label="anchor" href="#id_132-key-functions-implemented"></a></h3>
-<p><strong>evolveTrial Package:</strong> - <code>create_hybrid_theta()</code> - Parameter structure with validation - <code>create_hybrid_state()</code> - State initialization with registries - <code>update_hybrid_state()</code> - Main state machine driver - <code>handle_state_single()</code> - SA phase logic - <code>handle_state_consider_conversion()</code> - PP evaluation - <code>handle_state_between()</code> - BA phase logic - <code>compute_pp_curve_predictive()</code> - Full Monte Carlo PP - <code>compute_pp_curve_posterior()</code> - Fast analytical PP - <code>evaluate_sa_efficacy()</code> - SA efficacy decision - <code>evaluate_sa_futility()</code> - SA futility decision - <code>evaluate_conversion_trigger()</code> - Trigger evaluation - <code>evaluate_ba_efficacy()</code> - BA efficacy decision - <code>apply_futility_action()</code> - Futility handling - <code>validate_exponential_ba()</code> - Closed-form validation - <code>compile_hybrid_results()</code> - Result compilation</p>
+<p><strong>evolveTrial Package:</strong> - <code><a href="reference/create_hybrid_theta.html">create_hybrid_theta()</a></code> - Parameter structure with validation - <code><a href="reference/create_hybrid_state.html">create_hybrid_state()</a></code> - State initialization with registries - <code><a href="reference/update_hybrid_state.html">update_hybrid_state()</a></code> - Main state machine driver - <code><a href="reference/handle_state_single.html">handle_state_single()</a></code> - SA phase logic - <code><a href="reference/handle_state_consider_conversion.html">handle_state_consider_conversion()</a></code> - PP evaluation - <code><a href="reference/handle_state_between.html">handle_state_between()</a></code> - BA phase logic - <code><a href="reference/compute_pp_curve_predictive.html">compute_pp_curve_predictive()</a></code> - Full Monte Carlo PP - <code><a href="reference/compute_pp_curve_posterior.html">compute_pp_curve_posterior()</a></code> - Fast analytical PP - <code><a href="reference/evaluate_sa_efficacy.html">evaluate_sa_efficacy()</a></code> - SA efficacy decision - <code><a href="reference/evaluate_sa_futility.html">evaluate_sa_futility()</a></code> - SA futility decision - <code><a href="reference/evaluate_conversion_trigger.html">evaluate_conversion_trigger()</a></code> - Trigger evaluation - <code><a href="reference/evaluate_ba_efficacy.html">evaluate_ba_efficacy()</a></code> - BA efficacy decision - <code><a href="reference/apply_futility_action.html">apply_futility_action()</a></code> - Futility handling - <code><a href="reference/validate_exponential_ba.html">validate_exponential_ba()</a></code> - Closed-form validation - <code><a href="reference/compile_hybrid_results.html">compile_hybrid_results()</a></code> - Result compilation</p>
 <p><strong>BATON Integration:</strong> - <code>create_hybrid_wrapper_simple()</code> - CSV-based wrapper factory - <code>get_hybrid_bounds()</code> - Parameter bounds by stage - <code>get_hybrid_constraints()</code> - OC constraints - <code>get_hybrid_calibration_scenarios()</code> - 5 calibration scenarios - <code>aggregate_hybrid_results()</code> - Multi-scenario aggregation - <code>compute_hybrid_objective()</code> - Objective with conversion penalty</p>
 </div>
 <div class="section level3">
