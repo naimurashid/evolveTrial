@@ -195,6 +195,7 @@ compute_pp_curve_predictive <- function(state, n_candidates, theta, base_args,
 #' @param n_outer Number of outer Monte Carlo samples
 #'
 #' @return Predictive probability
+#' @export
 compute_pp_predictive_full <- function(state, n_add, theta, base_args,
                                         scenario_params, n_outer = 1000) {
 

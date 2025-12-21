@@ -264,10 +264,10 @@ Use **posterior method** for quick feasibility checks during development.
 | Parameter | Symbol | Range | Default | Description |
 |-----------|--------|-------|---------|-------------|
 | SA efficacy | eff_sa | [0.80, 0.99] | 0.90 | Posterior prob threshold for SA efficacy |
-| SA futility | fut_sa | [0.01, 0.20] | 0.10 | Posterior prob threshold for SA futility |
+| SA futility | fut_sa | [0.01, 0.25] | 0.10 | Posterior prob threshold for SA futility |
 | HR threshold | c_k | [0.60, 0.90] | 0.80 | Target HR vs historical |
 | Min events | ev_sa | [5, 25] | 15 | Minimum events before SA interim |
-| Max N | nmax_sa | [30, 80] | 40 | Maximum N in SA phase per arm |
+| Max N | nmax_sa | [30, 100] | 40 | Maximum N in SA phase per arm |
 
 ### 6.2 Conversion
 
@@ -276,16 +276,16 @@ Use **posterior method** for quick feasibility checks during development.
 | PP go | pp_go | [0.50, 0.90] | 0.70 | PP threshold to proceed to BA |
 | PP no-go | pp_nogo | [0.10, 0.40] | 0.20 | PP threshold to stop |
 | Trigger | trigger | categorical | "any" | "any", "all", or "k_of_K" |
-| Max additional N | max_add_n | [30, 100] | 60 | Max additional patients for BA |
+| Max additional N | max_add_n | [30, 120] | 60 | Max additional patients for BA |
 
 ### 6.3 Phase 2 (Between-Arm)
 
 | Parameter | Symbol | Range | Default | Description |
 |-----------|--------|-------|---------|-------------|
-| BA efficacy | eff_ba | [0.95, 0.999] | 0.975 | Posterior prob threshold for BA efficacy |
-| BA futility | fut_ba | [0.01, 0.10] | 0.05 | Posterior prob threshold for BA futility |
-| Min events | ev_ba | [10, 35] | 15 | Minimum events before BA interim |
-| Max N | nmax_ba | [40, 100] | 80 | Maximum N in BA phase per arm |
+| BA efficacy | eff_ba | [0.90, 0.999] | 0.975 | Posterior prob threshold for BA efficacy |
+| BA futility | fut_ba | [0.01, 0.15] | 0.05 | Posterior prob threshold for BA futility |
+| Min events | ev_ba | [8, 35] | 15 | Minimum events before BA interim |
+| Max N | nmax_ba | [40, 150] | 80 | Maximum N in BA phase per arm |
 
 ### 6.4 Structural
 

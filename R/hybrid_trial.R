@@ -870,6 +870,7 @@ compute_pp_posterior <- function(state, n_add, theta, base_args) {
 #' @param scenario_params Scenario parameters
 #'
 #' @return Predictive probability
+#' @export
 compute_pp_predictive <- function(state, n_add, theta, base_args, scenario_params) {
 
   # This will be fully implemented in hybrid_ssr.R
