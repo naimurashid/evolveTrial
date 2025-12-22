@@ -758,11 +758,21 @@ compute_pwe_median <- function(lambda, interval_cutpoints) {
   # Find time where S(t) = 0.5
   # S(t) = exp(-cumulative hazard)
 
+  # Handle zero/negative hazards: if all zero, median is Inf
+  if (all(lambda <= 0)) {
+    return(Inf)
+  }
+
   cum_haz <- 0
   for (j in seq_along(lambda)) {
     int_start <- interval_cutpoints[j]
     int_end <- interval_cutpoints[j + 1]
     int_width <- int_end - int_start
+
+    # Skip zero hazard intervals
+    if (lambda[j] <= 0) {
+      next
+    }
 
     # Cumulative hazard at end of this interval
     cum_haz_end <- cum_haz + lambda[j] * int_width
@@ -779,9 +789,14 @@ compute_pwe_median <- function(lambda, interval_cutpoints) {
     cum_haz <- cum_haz_end
   }
 
-  # Median beyond last interval - extrapolate
-  remaining <- log(2) - cum_haz
+  # Median beyond last interval - only extrapolate if the LAST interval has positive hazard
+  # If trailing intervals have zero hazard, the survival curve is flat and median is Inf
   last_idx <- length(lambda)
+  if (lambda[last_idx] <= 0) {
+    return(Inf)
+  }
+
+  remaining <- log(2) - cum_haz
   interval_cutpoints[last_idx + 1] + remaining / lambda[last_idx]
 }
 
@@ -998,8 +1013,15 @@ simulate_future_arm_pwe <- function(n_patients, lambda, interval_cutpoints,
 #' @param lambda Hazard rates per interval
 #' @param interval_cutpoints Interval boundaries
 #'
-#' @return Survival time
+#' @return Survival time (Inf if no event possible due to zero hazards)
 simulate_pwe_survival <- function(lambda, interval_cutpoints) {
+
+  # Handle zero/negative hazards correctly:
+  # - Zero hazard in an interval means no events can occur there
+  # - If ALL hazards are zero/negative, return Inf (no event ever)
+  if (all(lambda <= 0)) {
+    return(Inf)
+  }
 
   u <- runif(1)
   cum_haz <- 0
@@ -1008,6 +1030,11 @@ simulate_pwe_survival <- function(lambda, interval_cutpoints) {
     int_start <- interval_cutpoints[j]
     int_end <- interval_cutpoints[j + 1]
     int_width <- int_end - int_start
+
+    # Skip intervals with zero/negative hazard (subject survives through them)
+    if (lambda[j] <= 0) {
+      next
+    }
 
     # Survival probability to end of interval
     # S(t) = exp(-cum_haz)
@@ -1028,8 +1055,18 @@ simulate_pwe_survival <- function(lambda, interval_cutpoints) {
     cum_haz <- cum_haz_end
   }
 
-  # Event beyond last interval - extrapolate
+  # Event beyond last interval - only extrapolate if the LAST interval has positive hazard
+
+  # If trailing intervals have zero hazard, the survival curve is flat after the last
+# positive hazard interval - no more events can occur, so return Inf
   last_idx <- length(lambda)
+  if (lambda[last_idx] <= 0) {
+    # Last interval has zero hazard - subject survives forever after passing through
+    # all positive hazard intervals without an event
+    return(Inf)
+  }
+
+  # Safe to extrapolate with last interval's hazard
   int_end <- interval_cutpoints[last_idx + 1]
   return(int_end - (log(u) + cum_haz) / lambda[last_idx])
 }

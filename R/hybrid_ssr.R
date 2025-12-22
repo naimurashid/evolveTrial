@@ -284,6 +284,9 @@ compute_pp_predictive_full <- function(state, n_add, theta, base_args,
 
 #' Simulate future arm data under PWE model
 #'
+#' Wrapper that delegates to simulate_future_arm_pwe() in hybrid_trial.R
+#' to avoid code duplication. Adds guard for n_patients <= 0.
+#'
 #' @param n_patients Number of patients to simulate
 #' @param lambda True hazard rates per interval
 #' @param interval_cutpoints Interval boundaries
@@ -294,92 +297,29 @@ compute_pp_predictive_full <- function(state, n_add, theta, base_args,
 simulate_future_arm_data <- function(n_patients, lambda, interval_cutpoints,
                                       accrual_rate, followup) {
 
-  n_intervals <- length(lambda)
-  events <- numeric(n_intervals)
-  exposure <- numeric(n_intervals)
-
+  # Guard for zero patients
   if (n_patients <= 0) {
-    return(list(events = events, exposure = exposure))
+    n_intervals <- length(lambda)
+    return(list(events = numeric(n_intervals), exposure = numeric(n_intervals)))
   }
 
-  # Enrollment times (uniform over enrollment period)
-  enrollment_duration <- n_patients / accrual_rate
-  enrollment_times <- sort(runif(n_patients, 0, enrollment_duration))
-
-  # Analysis time
-  analysis_time <- enrollment_duration + followup
-
-  for (p in seq_len(n_patients)) {
-    enroll_time <- enrollment_times[p]
-
-    # Simulate survival time under PWE
-    surv_time <- simulate_pwe_time(lambda, interval_cutpoints)
-
-    # Observed time (censored at analysis time)
-    max_obs_time <- analysis_time - enroll_time
-    observed_time <- min(surv_time, max_obs_time)
-    had_event <- surv_time <= max_obs_time
-
-    # Allocate to intervals
-    for (j in seq_len(n_intervals)) {
-      int_start <- interval_cutpoints[j]
-      int_end <- interval_cutpoints[j + 1]
-
-      # Exposure in this interval
-      exp_start <- max(0, int_start)
-      exp_end <- min(observed_time, int_end)
-
-      if (exp_end > exp_start) {
-        exposure[j] <- exposure[j] + (exp_end - exp_start)
-      }
-
-      # Event in this interval
-      if (had_event && surv_time >= int_start && surv_time < int_end) {
-        events[j] <- events[j] + 1
-      }
-    }
-  }
-
-  list(events = events, exposure = exposure)
+  # Use shared implementation from hybrid_trial.R
+  simulate_future_arm_pwe(n_patients, lambda, interval_cutpoints,
+                           accrual_rate, followup)
 }
 
 #' Simulate survival time from PWE model
 #'
-#' Uses inverse CDF method with piecewise constant hazard.
+#' Wrapper that delegates to simulate_pwe_survival() in hybrid_trial.R
+#' to avoid code duplication.
 #'
 #' @param lambda Hazard rates per interval
 #' @param interval_cutpoints Interval boundaries
 #'
-#' @return Survival time
+#' @return Survival time (Inf if no event possible due to zero hazards)
 simulate_pwe_time <- function(lambda, interval_cutpoints) {
-
-  u <- runif(1)
-  target <- -log(u)  # Cumulative hazard at event time
-
-  cum_haz <- 0
-
-  for (j in seq_along(lambda)) {
-    int_start <- interval_cutpoints[j]
-    int_end <- interval_cutpoints[j + 1]
-    int_width <- int_end - int_start
-
-    # Cumulative hazard added in this interval
-    delta_haz <- lambda[j] * int_width
-    cum_haz_end <- cum_haz + delta_haz
-
-    if (cum_haz_end >= target) {
-      # Event occurs in this interval
-      remaining <- target - cum_haz
-      return(int_start + remaining / lambda[j])
-    }
-
-    cum_haz <- cum_haz_end
-  }
-
-  # Event beyond last interval - extrapolate with last hazard
-  last_idx <- length(lambda)
-  remaining <- target - cum_haz
-  interval_cutpoints[last_idx + 1] + remaining / lambda[last_idx]
+  # Use shared implementation from hybrid_trial.R
+  simulate_pwe_survival(lambda, interval_cutpoints)
 }
 
 #' Compute between-arm posterior probability
@@ -669,39 +609,16 @@ compute_ba_posterior_pwe_mc <- function(a_exp, b_exp, a_ref, b_ref,
 
 #' Compute median survival from PWE hazards
 #'
+#' Wrapper that delegates to compute_pwe_median() in hybrid_trial.R
+#' to avoid code duplication.
+#'
 #' @param lambda Vector of hazard rates per interval
 #' @param interval_cutpoints Interval boundaries
 #'
 #' @return Median survival time
 compute_pwe_median_survival <- function(lambda, interval_cutpoints) {
-
-  # Find t where S(t) = 0.5
-  # S(t) = exp(-H(t)) where H(t) is cumulative hazard
-  target_cum_haz <- log(2)  # H(median) = log(2)
-
-  cum_haz <- 0
-
-  for (j in seq_along(lambda)) {
-    int_start <- interval_cutpoints[j]
-    int_end <- interval_cutpoints[j + 1]
-    int_width <- int_end - int_start
-
-    delta_haz <- lambda[j] * int_width
-    cum_haz_end <- cum_haz + delta_haz
-
-    if (cum_haz_end >= target_cum_haz) {
-      # Median is in this interval
-      remaining <- target_cum_haz - cum_haz
-      return(int_start + remaining / lambda[j])
-    }
-
-    cum_haz <- cum_haz_end
-  }
-
-  # Median beyond last interval
-  last_idx <- length(lambda)
-  remaining <- target_cum_haz - cum_haz
-  interval_cutpoints[last_idx + 1] + remaining / lambda[last_idx]
+  # Use shared implementation from hybrid_trial.R
+  compute_pwe_median(lambda, interval_cutpoints)
 }
 
 # ==============================================================================
