@@ -402,6 +402,8 @@ print(best)
 - [`calculate_median_survival_piecewise_cpp()`](calculate_median_survival_piecewise_cpp.md)
   : Calculate median survival for piecewise exponential model (C++
   implementation)
+- [`calculate_weibull_scale()`](calculate_weibull_scale.md) : Calculate
+  Weibull scale from median survival time
 - [`calibrate_alpha()`](calibrate_alpha.md) : Calibrate interim and
   final thresholds for single-arm designs
 - [`check_conversion_trigger()`](check_conversion_trigger.md) : Check if
