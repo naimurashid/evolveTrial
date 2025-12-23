@@ -12,7 +12,8 @@ compute_pp_predictive_full(
   theta,
   base_args,
   scenario_params,
-  n_outer = 1000
+  n_outer = 500,
+  use_antithetic = TRUE
 )
 ```
 
@@ -41,6 +42,10 @@ compute_pp_predictive_full(
 - n_outer:
 
   Number of outer Monte Carlo samples
+
+- use_antithetic:
+
+  Logical; use antithetic variates for variance reduction (default TRUE)
 
 ## Value
 

@@ -1,6 +1,7 @@
 # Simulate survival time from PWE model
 
-Uses inverse CDF method with piecewise constant hazard.
+Wrapper that delegates to simulate_pwe_survival() in hybrid_trial.R to
+avoid code duplication.
 
 ## Usage
 
@@ -20,4 +21,4 @@ simulate_pwe_time(lambda, interval_cutpoints)
 
 ## Value
 
-Survival time
+Survival time (Inf if no event possible due to zero hazards)

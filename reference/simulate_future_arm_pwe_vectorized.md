@@ -1,12 +1,12 @@
-# Simulate future arm data under PWE model
+# Simulate future arm data under PWE model (VECTORIZED)
 
-Wrapper that delegates to simulate_future_arm_pwe() in hybrid_trial.R to
-avoid code duplication. Adds guard for n_patients \<= 0.
+Vectorized version that simulates all patients at once. Much faster than
+the patient-by-patient loop.
 
 ## Usage
 
 ``` r
-simulate_future_arm_data(
+simulate_future_arm_pwe_vectorized(
   n_patients,
   lambda,
   interval_cutpoints,

@@ -51,7 +51,8 @@ Implements early stopping for efficiency when outcome is clear.</p>
 <span>  <span class="va">theta</span>,</span>
 <span>  <span class="va">base_args</span>,</span>
 <span>  <span class="va">scenario_params</span>,</span>
-<span>  n_outer <span class="op">=</span> <span class="fl">1000</span></span>
+<span>  n_outer <span class="op">=</span> <span class="fl">500</span>,</span>
+<span>  use_antithetic <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -81,6 +82,10 @@ Implements early stopping for efficiency when outcome is clear.</p>
 
 <dt id="arg-n-outer">n_outer<a class="anchor" aria-label="anchor" href="#arg-n-outer"></a></dt>
 <dd><p>Number of outer Monte Carlo samples</p></dd>
+
+
+<dt id="arg-use-antithetic">use_antithetic<a class="anchor" aria-label="anchor" href="#arg-use-antithetic"></a></dt>
+<dd><p>Logical; use antithetic variates for variance reduction (default TRUE)</p></dd>
 
 </dl></div>
     <div class="section level2">

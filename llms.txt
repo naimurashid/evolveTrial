@@ -418,12 +418,22 @@ print(best)
   hybrid trial results
 - [`compute_ba_posterior()`](compute_ba_posterior.md) : Compute
   between-arm posterior probability
+- [`compute_ba_posterior_cpp()`](compute_ba_posterior_cpp.md) : Compute
+  between-arm posterior probability (C++)
 - [`compute_ba_posterior_exponential()`](compute_ba_posterior_exponential.md)
   : Compute exact PP for exponential model (for validation)
 - [`compute_ba_posterior_pwe_mc()`](compute_ba_posterior_pwe_mc.md) :
   Monte Carlo comparison for PWE posteriors
+- [`compute_hybrid_oc_cpp()`](compute_hybrid_oc_cpp.md) : Compute hybrid
+  trial operating characteristics (C++ implementation)
+- [`compute_hybrid_oc_rcpp()`](compute_hybrid_oc_rcpp.md) : Compute
+  operating characteristics using Rcpp
 - [`compute_interval_metrics()`](compute_interval_metrics.md) : Compute
   interval-specific metrics from registry
+- [`compute_interval_metrics_vectorized()`](compute_interval_metrics_vectorized.md)
+  : Compute interval metrics (VECTORIZED)
+- [`compute_oc_lambda()`](compute_oc_lambda.md) : Compute OC with direct
+  lambda (hazard rate) input
 - [`compute_p_between_arm()`](compute_p_between_arm.md) : Compute
   between-arm posterior probability
 - [`compute_p_single_arm()`](compute_p_single_arm.md) : Compute
@@ -434,12 +444,18 @@ print(best)
   Compute PP curve using posterior method
 - [`compute_pp_curve_predictive()`](compute_pp_curve_predictive.md) :
   Compute PP curve using predictive probability method
+- [`compute_pp_efficacy_sa_cpp()`](compute_pp_efficacy_sa_cpp.md) :
+  Compute predictive probability for single-arm efficacy (C++)
+- [`compute_pp_futility_sa_cpp()`](compute_pp_futility_sa_cpp.md) :
+  Compute predictive probability for single-arm futility (C++)
 - [`compute_pp_posterior()`](compute_pp_posterior.md) : Compute PP using
   posterior method (fast approximation)
 - [`compute_pp_posterior_single()`](compute_pp_posterior_single.md) :
   Compute posterior-based PP for single N_add
 - [`compute_pp_predictive()`](compute_pp_predictive.md) : Compute PP
   using predictive method (Monte Carlo)
+- [`compute_pp_predictive_cpp()`](compute_pp_predictive_cpp.md) :
+  Compute predictive probability for hybrid trial conversion (C++)
 - [`compute_pp_predictive_full()`](compute_pp_predictive_full.md) :
   Compute predictive probability for a single N_add value
 - [`compute_pp_predictive_pwe()`](compute_pp_predictive_pwe.md) :
@@ -508,6 +524,8 @@ print(best)
   : Handle STATE_CONSIDER_CONVERSION phase
 - [`handle_state_single()`](handle_state_single.md) : Handle
   STATE_SINGLE phase
+- [`hybrid_sim_rcpp`](hybrid_sim_rcpp.md) : Rcpp-powered hybrid trial
+  simulation wrapper
 - [`is_trial_success()`](is_trial_success.md) : Determine if trial
   concluded with overall success
 - [`make_conversion_decision()`](make_conversion_decision.md) : Make
@@ -532,6 +550,10 @@ print(best)
   Recommend a single early-stopping design
 - [`release_cluster()`](release_cluster.md) : Release an evolveTrial
   simulation cluster
+- [`run_hybrid_simulations_cpp()`](run_hybrid_simulations_cpp.md) : Run
+  multiple hybrid trial simulations (C++ implementation)
+- [`run_hybrid_simulations_rcpp()`](run_hybrid_simulations_rcpp.md) :
+  Run hybrid simulations with Rcpp
 - [`run_scenarios()`](run_scenarios.md) : Evaluate a design across
   multiple scenarios
 - [`run_simulation_binary()`](run_simulation_binary.md) : Run binary
@@ -558,8 +580,18 @@ print(best)
   future arm data under PWE model
 - [`simulate_future_arm_pwe()`](simulate_future_arm_pwe.md) : Simulate
   future arm data under PWE model
+- [`simulate_future_arm_pwe_cpp()`](simulate_future_arm_pwe_cpp.md) :
+  Simulate future arm data under PWE model (C++)
+- [`simulate_future_arm_pwe_vectorized()`](simulate_future_arm_pwe_vectorized.md)
+  : Simulate future arm data under PWE model (VECTORIZED)
+- [`simulate_hybrid_trial_cpp()`](simulate_hybrid_trial_cpp.md) :
+  Simulate a single hybrid trial (C++ implementation)
 - [`simulate_pwe_survival()`](simulate_pwe_survival.md) : Simulate
   survival time from PWE model
+- [`simulate_pwe_survival_batch()`](simulate_pwe_survival_batch.md) :
+  Simulate multiple survival times from PWE model (VECTORIZED)
+- [`simulate_pwe_survival_batch_cpp()`](simulate_pwe_survival_batch_cpp.md)
+  : Simulate PWE survival times (C++ vectorized)
 - [`simulate_pwe_time()`](simulate_pwe_time.md) : Simulate survival time
   from PWE model
 - [`test_armadillo_random()`](test_armadillo_random.md) : Test Armadillo

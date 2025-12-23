@@ -20,4 +20,4 @@ simulate_pwe_survival(lambda, interval_cutpoints)
 
 ## Value
 
-Survival time
+Survival time (Inf if no event possible due to zero hazards)
