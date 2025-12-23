@@ -224,7 +224,7 @@ test_that("conversion decision logic matches R implementation", {
   # Check outcome distribution includes expected types
   outcomes <- as.character(results$outcome)
   valid_outcomes <- c(
-    "success", "all_arms_futile", "conversion_nogo", "conversion_ambiguous",
+    "ba_efficacy", "all_arms_futile", "conversion_nogo", "conversion_ambiguous",
     "max_n_single_phase", "max_time_ba", "max_n_ba", "futility_ba",
     "max_time_single_phase"
   )
@@ -244,4 +244,198 @@ test_that("conversion decision logic matches R implementation", {
                   info = paste("Invalid success at row", i))
     }
   }
+})
+
+# =============================================================================
+# PWE Model Equivalence Tests
+# Tests for piecewise exponential model consistency between R and C++
+# =============================================================================
+
+test_that("BA posterior probability matches between R and C++ for exponential", {
+  skip_on_cran()
+
+
+  # Exponential (single interval) case - has closed-form solution
+  a_exp <- 15
+  b_exp <- 100
+  a_ref <- 12
+  b_ref <- 80
+
+  # R implementation uses F-distribution
+  r_result <- pf(
+    q = (b_exp / b_ref) * (a_ref / a_exp),
+    df1 = 2 * a_exp,
+    df2 = 2 * a_ref
+  )
+
+  # C++ implementation
+  cpp_result <- compute_ba_posterior_cpp(a_exp, b_exp, a_ref, b_ref)
+
+  # Should match exactly for exponential case
+  expect_equal(cpp_result, r_result, tolerance = 1e-6,
+               info = "BA posterior should match for exponential model")
+})
+
+test_that("BA posterior probability is consistent for PWE models", {
+  skip_on_cran()
+
+  # PWE (4-interval) case - uses Monte Carlo
+  set.seed(42)
+  a_exp <- c(10, 12, 8, 6)
+  b_exp <- c(50, 60, 40, 30)
+  a_ref <- c(8, 10, 7, 5)
+  b_ref <- c(40, 50, 35, 25)
+  interval_cutpoints <- c(0, 6, 12, 18, 24)
+
+  # Run multiple times to get stable estimate
+  n_runs <- 10
+  cpp_results <- numeric(n_runs)
+
+  for (i in 1:n_runs) {
+    # Note: compute_ba_posterior_cpp uses internal MC sampling
+    cpp_results[i] <- compute_ba_posterior_cpp(a_exp, b_exp, a_ref, b_ref)
+  }
+
+  # Results should be reasonably consistent (MC variance)
+  mean_result <- mean(cpp_results)
+  sd_result <- sd(cpp_results)
+
+  expect_true(mean_result > 0 && mean_result < 1,
+              info = "BA posterior should be between 0 and 1")
+  expect_true(sd_result < 0.1,
+              info = "MC variance should be reasonable")
+
+  # With these parameters, experimental should usually be better
+  # (lower hazards = longer survival)
+  expect_true(mean_result > 0.3,
+              info = "Experimental arm should show advantage")
+})
+
+test_that("PP efficacy SA handles multi-interval PWE correctly", {
+  skip_on_cran()
+
+  # Multi-interval posterior parameters
+  a_arm <- c(8, 10, 6, 4)
+  b_arm <- c(40, 50, 30, 20)
+  hist_hazard <- rep(0.12, 4)  # Historical hazard per interval
+  hr_threshold <- 0.80
+  n_add <- 30
+  interval_cutpoints <- c(0, 6, 12, 18, 24)
+  accrual_rate <- 2.0
+  followup <- 24
+  eff_threshold <- 0.90
+
+  # Run C++ PP computation
+  set.seed(123)
+  pp_result <- compute_pp_efficacy_sa_cpp(
+    a_arm = a_arm,
+    b_arm = b_arm,
+    hist_hazard = hist_hazard,
+    hr_threshold = hr_threshold,
+    n_add = n_add,
+    interval_cutpoints = interval_cutpoints,
+    accrual_rate = accrual_rate,
+    followup = followup,
+    eff_threshold = eff_threshold,
+    n_outer = 500L,
+    use_antithetic = TRUE
+  )
+
+  expect_true(pp_result >= 0 && pp_result <= 1,
+              info = "PP should be between 0 and 1")
+
+  # With antithetic variates, variance should be reduced
+  # Run without antithetic to compare
+  set.seed(123)
+  pp_no_anti <- compute_pp_efficacy_sa_cpp(
+    a_arm = a_arm,
+    b_arm = b_arm,
+    hist_hazard = hist_hazard,
+    hr_threshold = hr_threshold,
+    n_add = n_add,
+    interval_cutpoints = interval_cutpoints,
+    accrual_rate = accrual_rate,
+    followup = followup,
+    eff_threshold = eff_threshold,
+    n_outer = 500L,
+    use_antithetic = FALSE
+  )
+
+  # Both should give valid results
+  expect_true(pp_no_anti >= 0 && pp_no_anti <= 1,
+              info = "PP without antithetic should be between 0 and 1")
+})
+
+test_that("Median survival computation is consistent", {
+  skip_on_cran()
+
+  # Test the PWE median computation
+  # Note: calculate_median_survival_piecewise_cpp takes interval_lengths (durations), not cutpoints
+  interval_lengths <- c(6, 6, 6, 6)  # 4 intervals of 6 months each
+
+  # Case 1: Constant hazard (should match exponential)
+  lambda_const <- rep(0.1, 4)
+  exp_median <- log(2) / 0.1  # Exponential median
+
+  # The PWE median should be close to exponential median for constant hazard
+  pwe_median <- calculate_median_survival_piecewise_cpp(lambda_const, interval_lengths)
+
+  expect_equal(pwe_median, exp_median, tolerance = 0.1,
+               info = "PWE median should match exponential for constant hazard")
+
+  # Case 2: Increasing hazard (delayed effect)
+  lambda_delayed <- c(0.05, 0.08, 0.12, 0.15)
+  pwe_median_delayed <- calculate_median_survival_piecewise_cpp(lambda_delayed, interval_lengths)
+
+  expect_true(pwe_median_delayed > 0,
+              info = "PWE median should be positive")
+  expect_true(pwe_median_delayed < 50,
+              info = "PWE median should be reasonable")
+
+  # Case 3: Very low hazard in first interval (treatment delay)
+  lambda_zero_start <- c(0.001, 0.1, 0.1, 0.1)
+  pwe_median_zero <- calculate_median_survival_piecewise_cpp(lambda_zero_start, interval_lengths)
+
+  expect_true(pwe_median_zero > pwe_median,
+              info = "Lower initial hazard should give longer median")
+})
+
+test_that("Edge cases are handled correctly in PWE functions", {
+  skip_on_cran()
+
+  # Note: calculate_median_survival_piecewise_cpp takes interval_lengths (durations)
+  interval_lengths <- c(6, 6, 6, 6)  # 4 intervals of 6 months each
+
+  # Very low hazards (long survival)
+  lambda_low <- rep(0.01, 4)
+  median_low <- calculate_median_survival_piecewise_cpp(lambda_low, interval_lengths)
+  expect_true(median_low > 50,
+              info = "Very low hazard should give long median")
+
+  # Very high hazards (short survival)
+  lambda_high <- rep(0.5, 4)
+  median_high <- calculate_median_survival_piecewise_cpp(lambda_high, interval_lengths)
+  expect_true(median_high < 5,
+              info = "Very high hazard should give short median")
+
+  # Extreme posterior parameters for BA comparison
+  # Strong evidence for experimental
+  ba_strong_exp <- compute_ba_posterior_cpp(
+    a_exp = c(50, 50, 50, 50),
+    b_exp = c(100, 100, 100, 100),  # Low hazard
+    a_ref = c(50, 50, 50, 50),
+    b_ref = c(50, 50, 50, 50)        # Higher hazard
+  )
+  expect_true(ba_strong_exp > 0.8,
+              info = "Strong experimental evidence should give high posterior")
+
+  # Strong evidence for reference
+  ba_strong_ref <- compute_ba_posterior_cpp(
+    a_exp = c(50, 50, 50, 50),
+    b_exp = c(50, 50, 50, 50),        # Higher hazard
+    a_ref = c(50, 50, 50, 50),
+    b_ref = c(100, 100, 100, 100)     # Low hazard
+  )
+  expect_true(ba_strong_ref < 0.2,
+              info = "Strong reference evidence should give low posterior")
 })

@@ -545,6 +545,16 @@ run_simulation_pure <- function(
 
         # PERFORMANCE: Use indexed assignment instead of rbind (O(1) vs O(n) per patient)
         idx <- state$registry_row_idx[[chosen_arm]]
+
+        # BOUNDS CHECK: Ensure we don't overflow pre-allocated registry
+        registry_capacity <- nrow(state$registries[[chosen_arm]])
+        if (idx > registry_capacity) {
+          stop(sprintf(
+            "Registry overflow for arm '%s': idx=%d exceeds capacity=%d. This may indicate max_total_patients_per_arm is too low or a logic error.",
+            chosen_arm, idx, registry_capacity
+          ), call. = FALSE)
+        }
+
         state$registries[[chosen_arm]][idx, "id"] <- patient_id
         state$registries[[chosen_arm]][idx, "enroll_time"] <- current_time
         state$registries[[chosen_arm]][idx, "true_event_time"] <- t_event_true

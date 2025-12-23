@@ -9,6 +9,21 @@ using namespace Rcpp;
 using namespace arma;
 
 // =============================================================================
+// BOUNDS CHECKING MACROS
+// =============================================================================
+
+#define CHECK_VEC_BOUNDS(vec, idx, func_name) \
+  if ((idx) < 0 || (idx) >= static_cast<int>((vec).n_elem)) { \
+    Rcpp::stop("[%s] Index %d out of bounds for vector of size %d", \
+               func_name, static_cast<int>(idx), static_cast<int>((vec).n_elem)); \
+  }
+
+#define CHECK_POSITIVE(val, name, func_name) \
+  if ((val) <= 0) { \
+    Rcpp::stop("[%s] %s must be positive, got %g", func_name, name, static_cast<double>(val)); \
+  }
+
+// =============================================================================
 // CONSTANTS
 // =============================================================================
 
@@ -105,7 +120,7 @@ struct TrialState {
   std::vector<double> sa_posterior_prob;
 
   // Conversion
-  std::string conversion_decision;  // "GO", "NO-GO", "AMBIGUOUS", "PENDING"
+  std::string conversion_decision;  // "GO", "NO_GO", "AMBIGUOUS", "PENDING"
   double pp_at_conversion;
   bool conversion_evaluated;  // Flag to ensure PP is only evaluated once
 
@@ -150,6 +165,12 @@ double compute_pp_predictive_internal(const arma::vec& a_exp, const arma::vec& b
 arma::vec simulate_pwe_survival_batch_internal(int n, const arma::vec& lambda,
                                                 const arma::vec& interval_cutpoints) {
   int n_intervals = lambda.n_elem;
+
+  // BOUNDS CHECK: interval_cutpoints must have n_intervals + 1 elements
+  if (static_cast<int>(interval_cutpoints.n_elem) != n_intervals + 1) {
+    Rcpp::stop("[simulate_pwe] interval_cutpoints size (%d) must equal lambda size + 1 (%d)",
+               static_cast<int>(interval_cutpoints.n_elem), n_intervals + 1);
+  }
 
   // Handle all zero hazards
   bool all_zero = true;
@@ -209,6 +230,12 @@ void compute_interval_metrics(const std::vector<PatientRecord>& patients,
                               int arm_idx,
                               arma::vec& events_out,
                               arma::vec& exposure_out) {
+  // BOUNDS CHECK: Need at least 2 cutpoints for 1 interval
+  if (interval_cutpoints.n_elem < 2) {
+    Rcpp::stop("[compute_interval_metrics] Need at least 2 interval cutpoints, got %d",
+               static_cast<int>(interval_cutpoints.n_elem));
+  }
+
   int n_intervals = interval_cutpoints.n_elem - 1;
   events_out.zeros(n_intervals);
   exposure_out.zeros(n_intervals);
@@ -537,6 +564,10 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
   bool use_pp_efficacy = (eff_method == "predictive");
   bool use_pp_futility = (fut_method == "predictive");
 
+  // Parse predictive probability futility threshold (default 0.5)
+  double pp_futility_threshold = theta_list.containsElementNamed("pp_futility_threshold") ?
+    as<double>(theta_list["pp_futility_threshold"]) : 0.5;
+
   // Parse futility action: "drop_arm" (default), "stop_trial", "continue"
   std::string futility_action = theta_list.containsElementNamed("futility_action") ?
     as<std::string>(theta_list["futility_action"]) : "drop_arm";
@@ -548,8 +579,19 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
     as<int>(theta_list["k_required"]) : 1;
 
   arma::vec interval_cutpoints = as<arma::vec>(base_args_list["interval_cutpoints_sim"]);
+
+  // INPUT VALIDATION: Check interval_cutpoints
+  if (interval_cutpoints.n_elem < 2) {
+    Rcpp::stop("[simulate_hybrid_trial_cpp] interval_cutpoints must have at least 2 elements");
+  }
+
   int n_intervals = interval_cutpoints.n_elem - 1;
   double accrual_rate = as<double>(base_args_list["overall_accrual_rate"]);
+
+  // INPUT VALIDATION: Check accrual_rate
+  if (accrual_rate <= 0) {
+    Rcpp::stop("[simulate_hybrid_trial_cpp] accrual_rate must be positive, got %g", accrual_rate);
+  }
   double followup = base_args_list.containsElementNamed("max_follow_up_sim") ?
     as<double>(base_args_list["max_follow_up_sim"]) : 24.0;
   double look_interval = base_args_list.containsElementNamed("look_interval") ?
@@ -562,6 +604,20 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
   arma::vec lambda_ref = as<arma::vec>(scenario_params_list["lambda_ref"]);
   arma::vec lambda_hist = scenario_params_list.containsElementNamed("lambda_hist") ?
     as<arma::vec>(scenario_params_list["lambda_hist"]) : lambda_ref;
+
+  // INPUT VALIDATION: Check lambda vector sizes match n_intervals
+  if (static_cast<int>(lambda_exp.n_elem) != n_intervals) {
+    Rcpp::stop("[simulate_hybrid_trial_cpp] lambda_exp size (%d) must equal n_intervals (%d)",
+               static_cast<int>(lambda_exp.n_elem), n_intervals);
+  }
+  if (static_cast<int>(lambda_ref.n_elem) != n_intervals) {
+    Rcpp::stop("[simulate_hybrid_trial_cpp] lambda_ref size (%d) must equal n_intervals (%d)",
+               static_cast<int>(lambda_ref.n_elem), n_intervals);
+  }
+  if (static_cast<int>(lambda_hist.n_elem) != n_intervals) {
+    Rcpp::stop("[simulate_hybrid_trial_cpp] lambda_hist size (%d) must equal n_intervals (%d)",
+               static_cast<int>(lambda_hist.n_elem), n_intervals);
+  }
 
   // Prior parameters - check both naming conventions for compatibility
   arma::vec prior_a;
@@ -751,7 +807,7 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
           }
           // Check futility (using p_fut, which is posterior or PP)
           // Note: For PP futility, high p_fut means high probability of eventual futility
-          else if (use_pp_futility ? (p_fut >= 0.5) : (p_single <= fut_sa)) {
+          else if (use_pp_futility ? (p_fut >= pp_futility_threshold) : (p_single <= fut_sa)) {
             state.sa_futility_reached[arm] = true;
 
             // Handle futility action (matches R handle_sa_futility)
@@ -864,7 +920,7 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
             state.current_state = STATE_BETWEEN;
           } else if (pp < pp_nogo) {
             // NO-GO: PP too low
-            state.conversion_decision = "NO-GO";
+            state.conversion_decision = "NO_GO";
             state.current_state = STATE_STOP;
             state.trial_outcome = "conversion_nogo";
             state.stop_reason = "PP too low for conversion";
@@ -895,7 +951,7 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
       if (p_between >= eff_ba) {
         state.ba_efficacy_reached[1] = true;
         state.current_state = STATE_STOP;
-        state.trial_outcome = "success";
+        state.trial_outcome = "ba_efficacy";
         state.stop_reason = "BA efficacy reached";
       } else if (p_between <= fut_ba) {
         state.ba_futility_reached[1] = true;
@@ -961,9 +1017,9 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
     is_success = is_success_exp;  // Default to experimental for backward compat
   } else {
     // Hybrid mode (default): BA efficacy OR SA efficacy with NO-GO
-    bool ba_efficacy = (state.trial_outcome == "success");
+    bool ba_efficacy = (state.trial_outcome == "ba_efficacy");
     bool sa_efficacy_nogo = state.sa_efficacy_reached[1] &&
-      (state.conversion_decision == "NO-GO" || state.conversion_decision == "AMBIGUOUS");
+      (state.conversion_decision == "NO_GO" || state.conversion_decision == "AMBIGUOUS");
     is_success_exp = ba_efficacy || sa_efficacy_nogo;
     is_success = is_success_exp;
   }

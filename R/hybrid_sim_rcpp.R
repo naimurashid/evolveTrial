@@ -52,7 +52,28 @@ compute_hybrid_oc_rcpp <- function(hybrid_theta, base_args, scenario_params,
 
   # Extract intervals from base_args
   interval_cutpoints <- base_args$interval_cutpoints_sim
+
+  # Validate interval_cutpoints
+  if (is.null(interval_cutpoints) || length(interval_cutpoints) < 2) {
+    stop("base_args$interval_cutpoints_sim must have at least 2 elements")
+  }
+
   n_intervals <- length(interval_cutpoints) - 1
+
+  # Validate required hybrid_theta parameters
+  required_theta <- c("eff_sa", "fut_sa", "ev_sa", "nmax_sa", "pp_go", "pp_nogo",
+                      "eff_ba", "fut_ba", "ev_ba", "nmax_ba")
+  missing_theta <- setdiff(required_theta, names(hybrid_theta))
+  if (length(missing_theta) > 0) {
+    stop("hybrid_theta is missing required parameters: ", paste(missing_theta, collapse = ", "))
+  }
+
+  # Validate required scenario_params
+  required_scenario <- c("historical_median", "ref_median", "exp_median")
+  missing_scenario <- setdiff(required_scenario, names(scenario_params))
+  if (length(missing_scenario) > 0) {
+    stop("scenario_params is missing required parameters: ", paste(missing_scenario, collapse = ", "))
+  }
 
   # Convert medians to piecewise exponential hazard rates
   # Using constant hazard per interval (exponential approximation)
@@ -70,14 +91,14 @@ compute_hybrid_oc_rcpp <- function(hybrid_theta, base_args, scenario_params,
   theta_cpp <- list(
     eff_sa = hybrid_theta$eff_sa,
     fut_sa = hybrid_theta$fut_sa,
-    hr_threshold_sa = hybrid_theta$hr_threshold_sa,
+    hr_threshold_sa = hybrid_theta$hr_threshold_sa %||% 0.8,
     ev_sa = as.integer(hybrid_theta$ev_sa),
     nmax_sa = as.integer(hybrid_theta$nmax_sa),
     conversion_trigger = hybrid_theta$conversion_trigger %||% "any_single_success",
     pp_go = hybrid_theta$pp_go,
     pp_nogo = hybrid_theta$pp_nogo,
     ss_method = hybrid_theta$ss_method %||% "posterior",
-    max_additional_n = as.integer(hybrid_theta$max_additional_n),
+    max_additional_n = as.integer(hybrid_theta$max_additional_n %||% 60L),
     eff_ba = hybrid_theta$eff_ba,
     fut_ba = hybrid_theta$fut_ba,
     ev_ba = as.integer(hybrid_theta$ev_ba),
@@ -243,7 +264,28 @@ run_hybrid_simulations_rcpp <- function(hybrid_theta, base_args, scenario_params
 
   # Extract intervals
   interval_cutpoints <- base_args$interval_cutpoints_sim
+
+  # Validate interval_cutpoints
+  if (is.null(interval_cutpoints) || length(interval_cutpoints) < 2) {
+    stop("base_args$interval_cutpoints_sim must have at least 2 elements")
+  }
+
   n_intervals <- length(interval_cutpoints) - 1
+
+  # Validate required hybrid_theta parameters
+  required_theta <- c("eff_sa", "fut_sa", "ev_sa", "nmax_sa", "pp_go", "pp_nogo",
+                      "eff_ba", "fut_ba", "ev_ba", "nmax_ba")
+  missing_theta <- setdiff(required_theta, names(hybrid_theta))
+  if (length(missing_theta) > 0) {
+    stop("hybrid_theta is missing required parameters: ", paste(missing_theta, collapse = ", "))
+  }
+
+  # Validate required scenario_params
+  required_scenario <- c("historical_median", "ref_median", "exp_median")
+  missing_scenario <- setdiff(required_scenario, names(scenario_params))
+  if (length(missing_scenario) > 0) {
+    stop("scenario_params is missing required parameters: ", paste(missing_scenario, collapse = ", "))
+  }
 
   # Convert medians to lambdas
   historical_median <- scenario_params$historical_median
@@ -258,14 +300,14 @@ run_hybrid_simulations_rcpp <- function(hybrid_theta, base_args, scenario_params
   theta_cpp <- list(
     eff_sa = hybrid_theta$eff_sa,
     fut_sa = hybrid_theta$fut_sa,
-    hr_threshold_sa = hybrid_theta$hr_threshold_sa,
+    hr_threshold_sa = hybrid_theta$hr_threshold_sa %||% 0.8,
     ev_sa = as.integer(hybrid_theta$ev_sa),
     nmax_sa = as.integer(hybrid_theta$nmax_sa),
     conversion_trigger = hybrid_theta$conversion_trigger %||% "any_single_success",
     pp_go = hybrid_theta$pp_go,
     pp_nogo = hybrid_theta$pp_nogo,
     ss_method = hybrid_theta$ss_method %||% "posterior",
-    max_additional_n = as.integer(hybrid_theta$max_additional_n),
+    max_additional_n = as.integer(hybrid_theta$max_additional_n %||% 60L),
     eff_ba = hybrid_theta$eff_ba,
     fut_ba = hybrid_theta$fut_ba,
     ev_ba = as.integer(hybrid_theta$ev_ba),
@@ -313,12 +355,20 @@ run_hybrid_simulations_rcpp <- function(hybrid_theta, base_args, scenario_params
   }
 
   # Aggregate results
+  # Guard against NaN when no conversions occurred
+  n_converted <- sum(results$converted)
+  ba_eff_rate <- if (n_converted > 0) {
+    mean(results$ba_efficacy[results$converted])
+  } else {
+    NA_real_
+  }
+
   list(
     power = mean(results$is_success),
     EN = mean(results$total_n),
     conversion_rate = mean(results$converted),
     sa_efficacy_rate = mean(results$sa_efficacy),
-    ba_efficacy_rate = mean(results$ba_efficacy[results$converted]),
+    ba_efficacy_rate = ba_eff_rate,
     outcome_distribution = table(results$outcome),
     trial_mode = trial_mode,
     efficacy_method = efficacy_method,
@@ -402,6 +452,12 @@ compute_oc_lambda <- function(theta, base_args,
 
   # Get interval info
   interval_cutpoints <- base_args$interval_cutpoints_sim
+
+  # Validate interval_cutpoints
+  if (is.null(interval_cutpoints) || length(interval_cutpoints) < 2) {
+    stop("base_args$interval_cutpoints_sim must have at least 2 elements")
+  }
+
   n_intervals <- length(interval_cutpoints) - 1
 
   # Validate lambda lengths
