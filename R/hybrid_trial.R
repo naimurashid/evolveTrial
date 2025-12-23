@@ -557,56 +557,8 @@ update_posteriors <- function(state, base_args) {
 #'
 #' @return List with events_per_interval and exposure_per_interval
 compute_interval_metrics <- function(registry, analysis_time, interval_cutpoints) {
-
-  n_intervals <- length(interval_cutpoints) - 1
-  events <- numeric(n_intervals)
-  exposure <- numeric(n_intervals)
-
-  for (i in seq_len(nrow(registry))) {
-    patient <- registry[i, ]
-
-    # Time since enrollment
-    entry_time <- 0
-    exit_time <- min(
-      patient$event_time - patient$enrollment_time,
-      analysis_time - patient$enrollment_time
-    )
-    exit_time <- max(exit_time, 0)
-
-    had_event <- patient$event &&
-      (patient$event_time <= analysis_time)
-
-    event_time_since_entry <- if (had_event) {
-      patient$event_time - patient$enrollment_time
-    } else {
-      Inf
-    }
-
-    # Allocate to intervals
-    for (j in seq_len(n_intervals)) {
-      int_start <- interval_cutpoints[j]
-      int_end <- interval_cutpoints[j + 1]
-
-      # Exposure in this interval
-      exp_start <- max(entry_time, int_start)
-      exp_end <- min(exit_time, int_end)
-
-      if (exp_end > exp_start) {
-        exposure[j] <- exposure[j] + (exp_end - exp_start)
-      }
-
-      # Event in this interval
-      if (had_event && event_time_since_entry >= int_start &&
-          event_time_since_entry < int_end) {
-        events[j] <- events[j] + 1
-      }
-    }
-  }
-
-  list(
-    events_per_interval = events,
-    exposure_per_interval = exposure
-  )
+  # Delegate to vectorized implementation for performance
+  compute_interval_metrics_vectorized(registry, analysis_time, interval_cutpoints)
 }
 
 #' Get historical hazard for an arm
@@ -963,49 +915,9 @@ compute_pp_predictive <- function(state, n_add, theta, base_args, scenario_param
 #' @return List with events and exposure per interval
 simulate_future_arm_pwe <- function(n_patients, lambda, interval_cutpoints,
                                      accrual_rate, followup) {
-
-  n_intervals <- length(lambda)
-  events <- numeric(n_intervals)
-  exposure <- numeric(n_intervals)
-
-  # Enrollment times
-  enrollment_duration <- n_patients / accrual_rate
-  enrollment_times <- sort(runif(n_patients, 0, enrollment_duration))
-
-  # Analysis time
-  analysis_time <- enrollment_duration + followup
-
-  for (p in seq_len(n_patients)) {
-    enroll_time <- enrollment_times[p]
-
-    # Simulate survival time under PWE
-    surv_time <- simulate_pwe_survival(lambda, interval_cutpoints)
-
-    # Observed time
-    observed_time <- min(surv_time, analysis_time - enroll_time)
-    had_event <- surv_time <= (analysis_time - enroll_time)
-
-    # Allocate to intervals
-    for (j in seq_len(n_intervals)) {
-      int_start <- interval_cutpoints[j]
-      int_end <- interval_cutpoints[j + 1]
-
-      # Exposure
-      exp_start <- max(0, int_start)
-      exp_end <- min(observed_time, int_end)
-
-      if (exp_end > exp_start) {
-        exposure[j] <- exposure[j] + (exp_end - exp_start)
-      }
-
-      # Event
-      if (had_event && surv_time >= int_start && surv_time < int_end) {
-        events[j] <- events[j] + 1
-      }
-    }
-  }
-
-  list(events = events, exposure = exposure)
+  # Delegate to vectorized implementation for performance
+  simulate_future_arm_pwe_vectorized(n_patients, lambda, interval_cutpoints,
+                                      accrual_rate, followup)
 }
 
 #' Simulate survival time from PWE model
@@ -1069,6 +981,217 @@ simulate_pwe_survival <- function(lambda, interval_cutpoints) {
   # Safe to extrapolate with last interval's hazard
   int_end <- interval_cutpoints[last_idx + 1]
   return(int_end - (log(u) + cum_haz) / lambda[last_idx])
+}
+
+# ==============================================================================
+# VECTORIZED PERFORMANCE OPTIMIZATIONS
+# ==============================================================================
+
+#' Simulate multiple survival times from PWE model (VECTORIZED)
+#'
+#' Generates n survival times in a single vectorized operation.
+#' Much faster than calling simulate_pwe_survival() n times.
+#'
+#' @param n Number of survival times to simulate
+#' @param lambda Hazard rates per interval
+#' @param interval_cutpoints Interval boundaries
+#'
+#' @return Vector of n survival times
+#' @export
+simulate_pwe_survival_batch <- function(n, lambda, interval_cutpoints) {
+
+  # Handle edge case: all zero hazards
+
+if (all(lambda <= 0)) {
+    return(rep(Inf, n))
+  }
+
+  n_intervals <- length(lambda)
+
+  # Pre-compute cumulative hazards at interval boundaries
+  int_widths <- diff(interval_cutpoints)
+
+  # Handle zero/negative hazards by treating them as zero contribution
+  lambda_safe <- pmax(lambda, 0)
+  interval_hazards <- lambda_safe * int_widths
+  cum_haz_boundaries <- c(0, cumsum(interval_hazards))
+
+  # Generate all uniform random values at once
+  u <- runif(n)
+
+  # Convert to target cumulative hazard: -log(u)
+  target_cum_haz <- -log(u)
+
+  # Find which interval each survival time falls in
+  # Using findInterval for vectorized lookup
+  interval_idx <- findInterval(target_cum_haz, cum_haz_boundaries,
+                                left.open = FALSE, rightmost.closed = FALSE)
+
+  # Clamp to valid range
+  interval_idx <- pmin(interval_idx, n_intervals)
+  interval_idx <- pmax(interval_idx, 1)
+
+  # Compute survival times
+  surv_times <- numeric(n)
+
+  for (j in 1:n_intervals) {
+    mask <- interval_idx == j
+    if (!any(mask)) next
+
+    if (lambda_safe[j] <= 0) {
+      # Zero hazard in this interval - event occurred at interval start
+      # (target cumulative hazard was reached exactly at this boundary)
+      surv_times[mask] <- interval_cutpoints[j]
+    } else {
+      # Time within interval: (target - cum_haz_at_start) / lambda
+      remaining_haz <- target_cum_haz[mask] - cum_haz_boundaries[j]
+      surv_times[mask] <- interval_cutpoints[j] + remaining_haz / lambda_safe[j]
+    }
+  }
+
+  # Handle events beyond last interval
+  beyond_last <- interval_idx > n_intervals |
+    (interval_idx == n_intervals & target_cum_haz > cum_haz_boundaries[n_intervals + 1])
+
+  if (any(beyond_last)) {
+    if (lambda_safe[n_intervals] <= 0) {
+      # Last interval has zero hazard - survival extends to infinity
+      # (no more hazard accumulation possible)
+      surv_times[beyond_last] <- Inf
+    } else {
+      remaining <- target_cum_haz[beyond_last] - cum_haz_boundaries[n_intervals + 1]
+      surv_times[beyond_last] <- interval_cutpoints[n_intervals + 1] +
+        remaining / lambda_safe[n_intervals]
+    }
+  }
+
+  surv_times
+}
+
+#' Compute interval metrics (VECTORIZED)
+#'
+#' Vectorized computation of events and exposure per interval.
+#' Much faster than the row-by-row loop version.
+#'
+#' @param registry Patient registry data frame
+#' @param analysis_time Current analysis time
+#' @param interval_cutpoints PWE interval boundaries
+#'
+#' @return List with events_per_interval and exposure_per_interval
+#' @export
+compute_interval_metrics_vectorized <- function(registry, analysis_time, interval_cutpoints) {
+
+  n_intervals <- length(interval_cutpoints) - 1
+
+  if (nrow(registry) == 0) {
+    return(list(
+      events_per_interval = numeric(n_intervals),
+      exposure_per_interval = numeric(n_intervals)
+    ))
+  }
+
+  # Vectorized time calculations - match original logic exactly
+  # exit_time = min(event_time - enrollment_time, analysis_time - enrollment_time)
+  time_to_event <- registry$event_time - registry$enrollment_time
+  time_to_analysis <- analysis_time - registry$enrollment_time
+
+  # Exit time is minimum of time to event and time to analysis (clamped to >= 0)
+  exit_times <- pmax(0, pmin(time_to_event, time_to_analysis))
+
+  # Event times for those who actually had an event before analysis
+  had_event <- registry$event & (registry$event_time <= analysis_time)
+  event_times_since_entry <- ifelse(had_event, time_to_event, Inf)
+
+  # Initialize results
+  events <- numeric(n_intervals)
+  exposure <- numeric(n_intervals)
+
+  # Process each interval (but vectorized across patients)
+  for (j in seq_len(n_intervals)) {
+    int_start <- interval_cutpoints[j]
+    int_end <- interval_cutpoints[j + 1]
+
+    # Exposure: time spent in this interval by each patient
+    # exp_start = max(0, int_start), exp_end = min(exit_time, int_end)
+    exp_start <- pmax(0, int_start)
+    exp_end <- pmin(exit_times, int_end)
+    interval_exposure <- pmax(0, exp_end - exp_start)
+    exposure[j] <- sum(interval_exposure)
+
+    # Events: count patients with event in this interval
+    events_in_interval <- had_event &
+      event_times_since_entry >= int_start &
+      event_times_since_entry < int_end
+    events[j] <- sum(events_in_interval)
+  }
+
+  list(
+    events_per_interval = events,
+    exposure_per_interval = exposure
+  )
+}
+
+#' Simulate future arm data under PWE model (VECTORIZED)
+#'
+#' Vectorized version that simulates all patients at once.
+#' Much faster than the patient-by-patient loop.
+#'
+#' @param n_patients Number of patients to simulate
+#' @param lambda True hazard rates per interval
+#' @param interval_cutpoints Interval boundaries
+#' @param accrual_rate Patients per month
+#' @param followup Follow-up time in months
+#'
+#' @return List with events and exposure per interval
+#' @export
+simulate_future_arm_pwe_vectorized <- function(n_patients, lambda, interval_cutpoints,
+                                                accrual_rate, followup) {
+
+  n_intervals <- length(lambda)
+
+  # Guard for zero patients
+  if (n_patients <= 0) {
+    return(list(events = numeric(n_intervals), exposure = numeric(n_intervals)))
+  }
+
+  # Enrollment times (vectorized)
+  enrollment_duration <- n_patients / accrual_rate
+  enrollment_times <- sort(runif(n_patients, 0, enrollment_duration))
+
+  # Analysis time
+  analysis_time <- enrollment_duration + followup
+
+  # Simulate all survival times at once (VECTORIZED)
+  surv_times <- simulate_pwe_survival_batch(n_patients, lambda, interval_cutpoints)
+
+  # Observed times (vectorized)
+  time_available <- analysis_time - enrollment_times
+  observed_times <- pmin(surv_times, time_available)
+  had_event <- surv_times <= time_available
+
+  # Event times for those who had events
+  event_times <- ifelse(had_event, surv_times, Inf)
+
+  # Compute interval metrics (vectorized)
+  events <- numeric(n_intervals)
+  exposure <- numeric(n_intervals)
+
+  for (j in seq_len(n_intervals)) {
+    int_start <- interval_cutpoints[j]
+    int_end <- interval_cutpoints[j + 1]
+
+    # Exposure in this interval (vectorized across all patients)
+    exp_start <- pmax(0, int_start)
+    exp_end <- pmin(observed_times, int_end)
+    interval_exposure <- pmax(0, exp_end - exp_start)
+    exposure[j] <- sum(interval_exposure)
+
+    # Events in this interval
+    events_in_interval <- had_event & event_times >= int_start & event_times < int_end
+    events[j] <- sum(events_in_interval)
+  }
+
+  list(events = events, exposure = exposure)
 }
 
 # ==============================================================================

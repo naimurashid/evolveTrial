@@ -11,6 +11,48 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// simulate_hybrid_trial_cpp
+List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenario_params_list);
+RcppExport SEXP _evolveTrial_simulate_hybrid_trial_cpp(SEXP theta_listSEXP, SEXP base_args_listSEXP, SEXP scenario_params_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type theta_list(theta_listSEXP);
+    Rcpp::traits::input_parameter< List >::type base_args_list(base_args_listSEXP);
+    Rcpp::traits::input_parameter< List >::type scenario_params_list(scenario_params_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(simulate_hybrid_trial_cpp(theta_list, base_args_list, scenario_params_list));
+    return rcpp_result_gen;
+END_RCPP
+}
+// run_hybrid_simulations_cpp
+DataFrame run_hybrid_simulations_cpp(int n_sim, List theta_list, List base_args_list, List scenario_params_list);
+RcppExport SEXP _evolveTrial_run_hybrid_simulations_cpp(SEXP n_simSEXP, SEXP theta_listSEXP, SEXP base_args_listSEXP, SEXP scenario_params_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n_sim(n_simSEXP);
+    Rcpp::traits::input_parameter< List >::type theta_list(theta_listSEXP);
+    Rcpp::traits::input_parameter< List >::type base_args_list(base_args_listSEXP);
+    Rcpp::traits::input_parameter< List >::type scenario_params_list(scenario_params_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(run_hybrid_simulations_cpp(n_sim, theta_list, base_args_list, scenario_params_list));
+    return rcpp_result_gen;
+END_RCPP
+}
+// compute_hybrid_oc_cpp
+List compute_hybrid_oc_cpp(int n_sim, List theta_list, List base_args_list, List scenario_params_list, List null_scenario_list);
+RcppExport SEXP _evolveTrial_compute_hybrid_oc_cpp(SEXP n_simSEXP, SEXP theta_listSEXP, SEXP base_args_listSEXP, SEXP scenario_params_listSEXP, SEXP null_scenario_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n_sim(n_simSEXP);
+    Rcpp::traits::input_parameter< List >::type theta_list(theta_listSEXP);
+    Rcpp::traits::input_parameter< List >::type base_args_list(base_args_listSEXP);
+    Rcpp::traits::input_parameter< List >::type scenario_params_list(scenario_params_listSEXP);
+    Rcpp::traits::input_parameter< List >::type null_scenario_list(null_scenario_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_hybrid_oc_cpp(n_sim, theta_list, base_args_list, scenario_params_list, null_scenario_list));
+    return rcpp_result_gen;
+END_RCPP
+}
 // draw_posterior_hazard_samples_cpp
 arma::mat draw_posterior_hazard_samples_cpp(int num_intervals, const arma::ivec& events_per_interval, const arma::vec& person_time_per_interval, const arma::vec& prior_alpha_params, const arma::vec& prior_beta_params, int num_samples);
 RcppExport SEXP _evolveTrial_draw_posterior_hazard_samples_cpp(SEXP num_intervalsSEXP, SEXP events_per_intervalSEXP, SEXP person_time_per_intervalSEXP, SEXP prior_alpha_paramsSEXP, SEXP prior_beta_paramsSEXP, SEXP num_samplesSEXP) {
@@ -109,6 +151,114 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// simulate_pwe_survival_batch_cpp
+arma::vec simulate_pwe_survival_batch_cpp(int n, const arma::vec& lambda, const arma::vec& interval_cutpoints);
+RcppExport SEXP _evolveTrial_simulate_pwe_survival_batch_cpp(SEXP nSEXP, SEXP lambdaSEXP, SEXP interval_cutpointsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type lambda(lambdaSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type interval_cutpoints(interval_cutpointsSEXP);
+    rcpp_result_gen = Rcpp::wrap(simulate_pwe_survival_batch_cpp(n, lambda, interval_cutpoints));
+    return rcpp_result_gen;
+END_RCPP
+}
+// simulate_future_arm_pwe_cpp
+List simulate_future_arm_pwe_cpp(int n_patients, const arma::vec& lambda, const arma::vec& interval_cutpoints, double accrual_rate, double followup);
+RcppExport SEXP _evolveTrial_simulate_future_arm_pwe_cpp(SEXP n_patientsSEXP, SEXP lambdaSEXP, SEXP interval_cutpointsSEXP, SEXP accrual_rateSEXP, SEXP followupSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n_patients(n_patientsSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type lambda(lambdaSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type interval_cutpoints(interval_cutpointsSEXP);
+    Rcpp::traits::input_parameter< double >::type accrual_rate(accrual_rateSEXP);
+    Rcpp::traits::input_parameter< double >::type followup(followupSEXP);
+    rcpp_result_gen = Rcpp::wrap(simulate_future_arm_pwe_cpp(n_patients, lambda, interval_cutpoints, accrual_rate, followup));
+    return rcpp_result_gen;
+END_RCPP
+}
+// compute_ba_posterior_cpp
+double compute_ba_posterior_cpp(const arma::vec& a_exp, const arma::vec& b_exp, const arma::vec& a_ref, const arma::vec& b_ref);
+RcppExport SEXP _evolveTrial_compute_ba_posterior_cpp(SEXP a_expSEXP, SEXP b_expSEXP, SEXP a_refSEXP, SEXP b_refSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::vec& >::type a_exp(a_expSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type b_exp(b_expSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type a_ref(a_refSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type b_ref(b_refSEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_ba_posterior_cpp(a_exp, b_exp, a_ref, b_ref));
+    return rcpp_result_gen;
+END_RCPP
+}
+// compute_pp_predictive_cpp
+double compute_pp_predictive_cpp(const arma::vec& a_exp, const arma::vec& b_exp, const arma::vec& a_ref, const arma::vec& b_ref, int n_add, const arma::vec& interval_cutpoints, double accrual_rate, double followup, double eff_ba, double pp_go, double pp_nogo, int n_outer, bool use_antithetic, bool use_early_stop);
+RcppExport SEXP _evolveTrial_compute_pp_predictive_cpp(SEXP a_expSEXP, SEXP b_expSEXP, SEXP a_refSEXP, SEXP b_refSEXP, SEXP n_addSEXP, SEXP interval_cutpointsSEXP, SEXP accrual_rateSEXP, SEXP followupSEXP, SEXP eff_baSEXP, SEXP pp_goSEXP, SEXP pp_nogoSEXP, SEXP n_outerSEXP, SEXP use_antitheticSEXP, SEXP use_early_stopSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::vec& >::type a_exp(a_expSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type b_exp(b_expSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type a_ref(a_refSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type b_ref(b_refSEXP);
+    Rcpp::traits::input_parameter< int >::type n_add(n_addSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type interval_cutpoints(interval_cutpointsSEXP);
+    Rcpp::traits::input_parameter< double >::type accrual_rate(accrual_rateSEXP);
+    Rcpp::traits::input_parameter< double >::type followup(followupSEXP);
+    Rcpp::traits::input_parameter< double >::type eff_ba(eff_baSEXP);
+    Rcpp::traits::input_parameter< double >::type pp_go(pp_goSEXP);
+    Rcpp::traits::input_parameter< double >::type pp_nogo(pp_nogoSEXP);
+    Rcpp::traits::input_parameter< int >::type n_outer(n_outerSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_antithetic(use_antitheticSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_early_stop(use_early_stopSEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_pp_predictive_cpp(a_exp, b_exp, a_ref, b_ref, n_add, interval_cutpoints, accrual_rate, followup, eff_ba, pp_go, pp_nogo, n_outer, use_antithetic, use_early_stop));
+    return rcpp_result_gen;
+END_RCPP
+}
+// compute_pp_efficacy_sa_cpp
+double compute_pp_efficacy_sa_cpp(const arma::vec& a_arm, const arma::vec& b_arm, const arma::vec& hist_hazard, double hr_threshold, int n_add, const arma::vec& interval_cutpoints, double accrual_rate, double followup, double eff_threshold, int n_outer, bool use_antithetic);
+RcppExport SEXP _evolveTrial_compute_pp_efficacy_sa_cpp(SEXP a_armSEXP, SEXP b_armSEXP, SEXP hist_hazardSEXP, SEXP hr_thresholdSEXP, SEXP n_addSEXP, SEXP interval_cutpointsSEXP, SEXP accrual_rateSEXP, SEXP followupSEXP, SEXP eff_thresholdSEXP, SEXP n_outerSEXP, SEXP use_antitheticSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::vec& >::type a_arm(a_armSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type b_arm(b_armSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type hist_hazard(hist_hazardSEXP);
+    Rcpp::traits::input_parameter< double >::type hr_threshold(hr_thresholdSEXP);
+    Rcpp::traits::input_parameter< int >::type n_add(n_addSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type interval_cutpoints(interval_cutpointsSEXP);
+    Rcpp::traits::input_parameter< double >::type accrual_rate(accrual_rateSEXP);
+    Rcpp::traits::input_parameter< double >::type followup(followupSEXP);
+    Rcpp::traits::input_parameter< double >::type eff_threshold(eff_thresholdSEXP);
+    Rcpp::traits::input_parameter< int >::type n_outer(n_outerSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_antithetic(use_antitheticSEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_pp_efficacy_sa_cpp(a_arm, b_arm, hist_hazard, hr_threshold, n_add, interval_cutpoints, accrual_rate, followup, eff_threshold, n_outer, use_antithetic));
+    return rcpp_result_gen;
+END_RCPP
+}
+// compute_pp_futility_sa_cpp
+double compute_pp_futility_sa_cpp(const arma::vec& a_arm, const arma::vec& b_arm, const arma::vec& hist_hazard, double hr_threshold, int n_add, const arma::vec& interval_cutpoints, double accrual_rate, double followup, double fut_threshold, int n_outer, bool use_antithetic);
+RcppExport SEXP _evolveTrial_compute_pp_futility_sa_cpp(SEXP a_armSEXP, SEXP b_armSEXP, SEXP hist_hazardSEXP, SEXP hr_thresholdSEXP, SEXP n_addSEXP, SEXP interval_cutpointsSEXP, SEXP accrual_rateSEXP, SEXP followupSEXP, SEXP fut_thresholdSEXP, SEXP n_outerSEXP, SEXP use_antitheticSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::vec& >::type a_arm(a_armSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type b_arm(b_armSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type hist_hazard(hist_hazardSEXP);
+    Rcpp::traits::input_parameter< double >::type hr_threshold(hr_thresholdSEXP);
+    Rcpp::traits::input_parameter< int >::type n_add(n_addSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type interval_cutpoints(interval_cutpointsSEXP);
+    Rcpp::traits::input_parameter< double >::type accrual_rate(accrual_rateSEXP);
+    Rcpp::traits::input_parameter< double >::type followup(followupSEXP);
+    Rcpp::traits::input_parameter< double >::type fut_threshold(fut_thresholdSEXP);
+    Rcpp::traits::input_parameter< int >::type n_outer(n_outerSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_antithetic(use_antitheticSEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_pp_futility_sa_cpp(a_arm, b_arm, hist_hazard, hr_threshold, n_add, interval_cutpoints, accrual_rate, followup, fut_threshold, n_outer, use_antithetic));
+    return rcpp_result_gen;
+END_RCPP
+}
 // test_rcpp_sum
 double test_rcpp_sum(const arma::vec& x);
 RcppExport SEXP _evolveTrial_test_rcpp_sum(SEXP xSEXP) {
@@ -133,12 +283,21 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_evolveTrial_simulate_hybrid_trial_cpp", (DL_FUNC) &_evolveTrial_simulate_hybrid_trial_cpp, 3},
+    {"_evolveTrial_run_hybrid_simulations_cpp", (DL_FUNC) &_evolveTrial_run_hybrid_simulations_cpp, 4},
+    {"_evolveTrial_compute_hybrid_oc_cpp", (DL_FUNC) &_evolveTrial_compute_hybrid_oc_cpp, 5},
     {"_evolveTrial_draw_posterior_hazard_samples_cpp", (DL_FUNC) &_evolveTrial_draw_posterior_hazard_samples_cpp, 6},
     {"_evolveTrial_calculate_median_survival_piecewise_cpp", (DL_FUNC) &_evolveTrial_calculate_median_survival_piecewise_cpp, 2},
     {"_evolveTrial_calculate_median_survival_matrix_cpp", (DL_FUNC) &_evolveTrial_calculate_median_survival_matrix_cpp, 2},
     {"_evolveTrial_ph_beta_mode_var_cpp", (DL_FUNC) &_evolveTrial_ph_beta_mode_var_cpp, 10},
     {"_evolveTrial_sample_vs_ref_medians_ph_cpp", (DL_FUNC) &_evolveTrial_sample_vs_ref_medians_ph_cpp, 10},
     {"_evolveTrial_sample_vs_ref_medians_independent_cpp", (DL_FUNC) &_evolveTrial_sample_vs_ref_medians_independent_cpp, 8},
+    {"_evolveTrial_simulate_pwe_survival_batch_cpp", (DL_FUNC) &_evolveTrial_simulate_pwe_survival_batch_cpp, 3},
+    {"_evolveTrial_simulate_future_arm_pwe_cpp", (DL_FUNC) &_evolveTrial_simulate_future_arm_pwe_cpp, 5},
+    {"_evolveTrial_compute_ba_posterior_cpp", (DL_FUNC) &_evolveTrial_compute_ba_posterior_cpp, 4},
+    {"_evolveTrial_compute_pp_predictive_cpp", (DL_FUNC) &_evolveTrial_compute_pp_predictive_cpp, 14},
+    {"_evolveTrial_compute_pp_efficacy_sa_cpp", (DL_FUNC) &_evolveTrial_compute_pp_efficacy_sa_cpp, 11},
+    {"_evolveTrial_compute_pp_futility_sa_cpp", (DL_FUNC) &_evolveTrial_compute_pp_futility_sa_cpp, 11},
     {"_evolveTrial_test_rcpp_sum", (DL_FUNC) &_evolveTrial_test_rcpp_sum, 1},
     {"_evolveTrial_test_armadillo_random", (DL_FUNC) &_evolveTrial_test_armadillo_random, 1},
     {NULL, NULL, 0}

@@ -10,7 +10,8 @@ compute_pp_predictive_full(
   theta,
   base_args,
   scenario_params,
-  n_outer = 1000
+  n_outer = 500,
+  use_antithetic = TRUE
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ compute_pp_predictive_full(
 \item{scenario_params}{Scenario parameters}
 
 \item{n_outer}{Number of outer Monte Carlo samples}
+
+\item{use_antithetic}{Logical; use antithetic variates for variance reduction (default TRUE)}
 }
 \value{
 Predictive probability

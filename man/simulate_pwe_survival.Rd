@@ -12,7 +12,7 @@ simulate_pwe_survival(lambda, interval_cutpoints)
 \item{interval_cutpoints}{Interval boundaries}
 }
 \value{
-Survival time
+Survival time (Inf if no event possible due to zero hazards)
 }
 \description{
 Simulate survival time from PWE model

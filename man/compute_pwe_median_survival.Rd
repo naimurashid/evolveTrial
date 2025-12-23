@@ -15,5 +15,6 @@ compute_pwe_median_survival(lambda, interval_cutpoints)
 Median survival time
 }
 \description{
-Compute median survival from PWE hazards
+Wrapper that delegates to compute_pwe_median() in hybrid_trial.R
+to avoid code duplication.
 }

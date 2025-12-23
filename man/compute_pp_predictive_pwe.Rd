@@ -10,7 +10,7 @@ compute_pp_predictive_pwe(
   theta,
   base_args,
   scenario_params,
-  n_outer = 1000,
+  n_outer = 500,
   n_inner = 250
 )
 }
