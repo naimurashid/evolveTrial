@@ -3,21 +3,9 @@
 Routes to C++ or R implementation based on EVOLVETRIAL_USE_CPP. Default:
 C++ for better performance.
 
-Draws samples from the posterior distribution of hazard rates for each
-interval in a Bayesian piecewise exponential model with Gamma priors.
-
 ## Usage
 
 ``` r
-draw_posterior_hazard_samples(
-  num_intervals,
-  events_per_interval,
-  person_time_per_interval,
-  prior_alpha_params,
-  prior_beta_params,
-  num_samples = 1000
-)
-
 draw_posterior_hazard_samples(
   num_intervals,
   events_per_interval,
@@ -32,31 +20,28 @@ draw_posterior_hazard_samples(
 
 - num_intervals:
 
-  Number of intervals in the piecewise model.
+  Number of intervals
 
 - events_per_interval:
 
-  Integer vector of observed events per interval.
+  Events per interval
 
 - person_time_per_interval:
 
-  Numeric vector of person-time at risk per interval.
+  Person-time per interval
 
 - prior_alpha_params:
 
-  Numeric vector of Gamma prior shape parameters.
+  Gamma prior shapes
 
 - prior_beta_params:
 
-  Numeric vector of Gamma prior rate parameters.
+  Gamma prior rates
 
 - num_samples:
 
-  Number of posterior samples to draw (default 1000).
+  Number of samples to draw
 
 ## Value
 
 Matrix of posterior hazard samples
-
-Matrix with `num_samples` rows and `num_intervals` columns of hazard
-samples.

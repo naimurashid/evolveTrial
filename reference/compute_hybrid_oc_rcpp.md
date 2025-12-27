@@ -23,7 +23,9 @@ compute_hybrid_oc_rcpp(
   trial_mode = "hybrid",
   efficacy_method = "posterior",
   futility_method = "posterior",
-  lambda_hist_per_arm = NULL
+  lambda_hist_per_arm = NULL,
+  parallel_replicates = FALSE,
+  num_workers = NULL
 )
 ```
 
@@ -65,6 +67,14 @@ compute_hybrid_oc_rcpp(
 - lambda_hist_per_arm:
 
   Optional list with per-arm historical lambdas (for dual_single_arm)
+
+- parallel_replicates:
+
+  Logical; if TRUE, distribute simulations across workers
+
+- num_workers:
+
+  Number of parallel workers (default: detectCores() - 1)
 
 ## Value
 

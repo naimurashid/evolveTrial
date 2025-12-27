@@ -154,6 +154,13 @@
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Named list of hybrid design parameters</p>
     </div>
+    <div class="section level2">
+    <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>
+    <p>LIMITATION: This implementation assumes exactly 2 arms (1 reference + 1 experimental).
+Key places that assume 2 arms:</p><ul><li><p>Event gate uses ev_ba * 2 (line ~422)</p></li>
+<li><p>BA comparison takes first non-reference arm only (lines ~652, ~849)</p></li>
+<li><p>See docs/TWO_ARM_ASSUMPTIONS.md in adaptive-trial-bo-paper for full audit.</p></li>
+</ul></div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

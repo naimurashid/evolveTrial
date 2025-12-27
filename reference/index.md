@@ -92,6 +92,8 @@
   design parameter structure
 - [`create_simulation_cluster()`](create_simulation_cluster.md) : Create
   a reusable evolveTrial simulation cluster
+- [`draw_posterior_hazard_samples()`](draw_posterior_hazard_samples.md)
+  : Draw posterior hazard samples (DISPATCHER)
 - [`draw_posterior_hazard_samples_cpp()`](draw_posterior_hazard_samples_cpp.md)
   : Draw posterior hazard samples (C++ implementation)
 - [`draw_posterior_response_rate()`](draw_posterior_response_rate.md) :

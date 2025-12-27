@@ -114,3 +114,15 @@ create_hybrid_theta(
 ## Value
 
 Named list of hybrid design parameters
+
+## Note
+
+LIMITATION: This implementation assumes exactly 2 arms (1 reference + 1
+experimental). Key places that assume 2 arms:
+
+- Event gate uses ev_ba \* 2 (line ~422)
+
+- BA comparison takes first non-reference arm only (lines ~652, ~849)
+
+- See docs/TWO_ARM_ASSUMPTIONS.md in adaptive-trial-bo-paper for full
+  audit.
