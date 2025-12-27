@@ -6,5 +6,5 @@
 #' @importFrom magrittr "%>%"
 #' @importFrom tidyselect where
 #' @importFrom utils head tail
-#' @importFrom stats median setNames rexp rgamma rnorm rpois runif rweibull rbinom dbinom pbinom rbeta pbeta
+#' @importFrom stats median setNames rexp rgamma rnorm rpois runif rweibull rbinom dbinom pbinom rbeta pbeta pf pgamma pnorm qnorm
 NULL

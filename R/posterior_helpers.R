@@ -57,53 +57,6 @@ calculate_median_survival_piecewise <- function(hazard_rates, interval_lengths) 
 }
 
 
-# --- HELPER FUNCTION: Draw Posterior Hazard Samples ---
-#' Draw posterior hazard samples for piecewise exponential model
-#'
-#' Draws samples from the posterior distribution of hazard rates for each interval
-#' in a Bayesian piecewise exponential model with Gamma priors.
-#'
-#' @param num_intervals Number of intervals in the piecewise model.
-#' @param events_per_interval Integer vector of observed events per interval.
-#' @param person_time_per_interval Numeric vector of person-time at risk per interval.
-#' @param prior_alpha_params Numeric vector of Gamma prior shape parameters.
-#' @param prior_beta_params Numeric vector of Gamma prior rate parameters.
-#' @param num_samples Number of posterior samples to draw (default 1000).
-#'
-#' @return Matrix with `num_samples` rows and `num_intervals` columns of hazard samples.
-#' @keywords internal
-draw_posterior_hazard_samples <- function(
-    num_intervals,
-    events_per_interval,
-    person_time_per_interval,
-    prior_alpha_params,
-    prior_beta_params,
-    num_samples = 1000
-) {
-
-  
-  if (!all(sapply(list(events_per_interval, person_time_per_interval, prior_alpha_params, prior_beta_params),
-                  length) == num_intervals)) {
-    stop("All input vectors must have length equal to num_intervals.")
-  }
-  
-  posterior_hazard_samples <- matrix(NA, nrow = num_samples, ncol = num_intervals)
-  
-  for (j in 1:num_intervals) {
-    posterior_alpha_j <- prior_alpha_params[j] + events_per_interval[j]
-    posterior_beta_j <- prior_beta_params[j] + person_time_per_interval[j]
-    
-    if (posterior_beta_j <= 0) {
-      warning(paste("Posterior beta parameter for interval", j, "is non-positive. Setting to a small value (1e-6)."))
-      posterior_beta_j <- 1e-6
-    }
-    
-    posterior_hazard_samples[, j] <- rgamma(num_samples, shape = posterior_alpha_j, rate = posterior_beta_j)
-  }
-  
-  return(posterior_hazard_samples)
-}
-
 final_vsref_probs_abs <- function(med_arm, med_ref, margin_abs) {
   list(
     p_eff_ref = mean(med_arm >  med_ref + margin_abs),
@@ -149,44 +102,6 @@ sample_vs_ref_medians <- function(slCtrl, slTrt, args, num_samples,
   }
 }
 
-sample_vs_ref_medians_independent <- function(slCtrl, slTrt, args, num_samples,
-                                               ctrl_cache = NULL) {
-  # PERFORMANCE: Use cached interval_lengths if available (multi-arm optimization)
-  if (!is.null(ctrl_cache) && !is.null(ctrl_cache$interval_lengths)) {
-    interval_lengths <- ctrl_cache$interval_lengths
-  } else {
-    interval_lengths <- diff(args$interval_cutpoints_sim)
-  }
-
-  # PERFORMANCE: Use cached control posteriors if provided (multi-arm optimization)
-  if (!is.null(ctrl_cache)) {
-    lamC <- ctrl_cache$lamC
-    med_ctrl <- ctrl_cache$medCtrl
-  } else {
-    lamC <- draw_posterior_hazard_samples(
-      num_intervals = length(interval_lengths),
-      events_per_interval = slCtrl$metrics$events_per_interval,
-      person_time_per_interval = slCtrl$metrics$person_time_per_interval,
-      prior_alpha_params = args$prior_alpha_params_model,
-      prior_beta_params  = args$prior_beta_params_model,
-      num_samples = num_samples
-    )
-    med_ctrl <- calculate_median_survival_matrix_cpp(lamC, interval_lengths)
-  }
-
-  lamT <- draw_posterior_hazard_samples(
-    num_intervals = length(interval_lengths),
-    events_per_interval = slTrt$metrics$events_per_interval,
-    person_time_per_interval = slTrt$metrics$person_time_per_interval,
-    prior_alpha_params = args$prior_alpha_params_model,
-    prior_beta_params  = args$prior_beta_params_model,
-    num_samples = num_samples
-  )
-  # PERFORMANCE: Use C++ matrix version instead of apply() for 20-30x speedup
-  med_trt <- calculate_median_survival_matrix_cpp(lamT, interval_lengths)
-  list(medCtrl = med_ctrl, medTrt = med_trt, logHR = NULL)
-}
-
 sample_vs_ref_medians_ph <- function(slCtrl, slTrt, args, num_samples) {
   interval_lengths <- diff(args$interval_cutpoints_sim)
   E_C <- slCtrl$metrics$events_per_interval
@@ -217,33 +132,4 @@ sample_vs_ref_medians_ph <- function(slCtrl, slTrt, args, num_samples) {
     med_trt[i]  <- calculate_median_survival_piecewise(lambda * exp_beta, interval_lengths)
   }
   list(medCtrl = med_ctrl, medTrt = med_trt, logHR = beta_draws)
-}
-
-ph_beta_mode_var <- function(E_C, PT_C, E_T, PT_T, alpha_prior, beta_prior, mu, sigma,
-                             tol = 1e-6, max_iter = 50) {
-  total_events_ctrl <- sum(E_C)
-  total_events_trt  <- sum(E_T)
-  total_pt_ctrl <- sum(PT_C)
-  total_pt_trt  <- sum(PT_T)
-  beta <- log((total_events_trt + 0.5) / (total_pt_trt + 0.5)) -
-    log((total_events_ctrl + 0.5) / (total_pt_ctrl + 0.5))
-  sigma2 <- sigma^2
-  for (iter in seq_len(max_iter)) {
-    exp_beta <- exp(beta)
-    denom <- beta_prior + PT_C + exp_beta * PT_T
-    g <- exp_beta * PT_T / denom
-    grad <- sum(E_T) - sum((alpha_prior + E_C + E_T) * g) - (beta - mu) / sigma2
-    hess <- -sum((alpha_prior + E_C + E_T) * (g - g^2)) - 1 / sigma2
-    step <- grad / hess
-    beta_new <- beta - step
-    if (is.nan(beta_new) || is.infinite(beta_new)) break
-    beta <- beta_new
-    if (abs(step) < tol) break
-  }
-  exp_beta <- exp(beta)
-  denom <- beta_prior + PT_C + exp_beta * PT_T
-  g <- exp_beta * PT_T / denom
-  hess <- -sum((alpha_prior + E_C + E_T) * (g - g^2)) - 1 / sigma2
-  var_beta <- if (hess < 0) min(1e6, max(1e-6, -1 / hess)) else 1
-  list(mean = beta, sd = sqrt(var_beta))
 }

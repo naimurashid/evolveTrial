@@ -110,10 +110,8 @@ interim_check_vs_ref <- function(state, current_time, args, diagnostics = FALSE)
       slT <- slice_arm_data_at_time(state$registries[[trt_name]], current_time,
                                     args$max_follow_up_sim, args$interval_cutpoints_sim)
 
-      args_gate <- args
-      args_gate$arm_names <- c(reference_arm, trt_name)
-
-      if (!gates_pass_for_both_arms(slC, slT, args_gate, diagnostics = diagnostics)) {
+      if (!gates_pass_for_both_arms(slC, slT, args, trt_name = trt_name,
+                                    diagnostics = diagnostics)) {
         if (diagnostics) {
           message(sprintf("[t=%.2f] vsREF gated out for %s vs %s", current_time, trt_name, reference_arm))
         }

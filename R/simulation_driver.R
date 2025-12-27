@@ -243,6 +243,28 @@ run_simulation_pure <- function(
 
   # ---- PARAMETER DEPRECATION HANDLING ----------------------------------------
   # Map old parameter names to new harmonized names with warnings
+  if (!is.null(efficacy_threshold_current_prob_hc) &&
+      is.null(efficacy_threshold_hc_prob)) {
+    efficacy_threshold_hc_prob <- efficacy_threshold_current_prob_hc
+    warning("`efficacy_threshold_current_prob_hc` is deprecated; use `efficacy_threshold_hc_prob`.",
+            call. = FALSE)
+  }
+  if (!is.null(posterior_futility_threshold_hc) &&
+      is.null(futility_threshold_hc_prob)) {
+    futility_threshold_hc_prob <- posterior_futility_threshold_hc
+    warning("`posterior_futility_threshold_hc` is deprecated; use `futility_threshold_hc_prob`.",
+            call. = FALSE)
+  }
+  if (!is.null(min_events_for_analysis) && is.null(min_events_hc)) {
+    min_events_hc <- min_events_for_analysis
+    warning("`min_events_for_analysis` is deprecated; use `min_events_hc`.",
+            call. = FALSE)
+  }
+  if (!is.null(min_median_followup) && is.null(min_median_followup_hc)) {
+    min_median_followup_hc <- min_median_followup
+    warning("`min_median_followup` is deprecated; use `min_median_followup_hc`.",
+            call. = FALSE)
+  }
 
 
 

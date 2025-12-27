@@ -74,3 +74,12 @@ Named list of hybrid design parameters
 \description{
 Create hybrid design parameter structure
 }
+\note{
+LIMITATION: This implementation assumes exactly 2 arms (1 reference + 1 experimental).
+Key places that assume 2 arms:
+\itemize{
+\item Event gate uses ev_ba * 2 (line ~422)
+\item BA comparison takes first non-reference arm only (lines ~652, ~849)
+\item See docs/TWO_ARM_ASSUMPTIONS.md in adaptive-trial-bo-paper for full audit.
+}
+}

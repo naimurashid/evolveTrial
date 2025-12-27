@@ -301,7 +301,10 @@ calculate_predicted_prob_vs_ref_fast <- function(
     use_ph_model_vs_ref = FALSE,
     max_follow_up_sim,
     overall_accrual_rate,
-    current_time
+    current_time,
+    randomization_probs = NULL,
+    arm_name = NULL,
+    ref_name = NULL
 ) {
   K <- length(interval_cutpoints) - 1
   L <- diff(interval_cutpoints)
@@ -313,11 +316,29 @@ calculate_predicted_prob_vs_ref_fast <- function(
   beta_a0  <- prior_beta_params  + ma$person_time_per_interval
   alpha_r0 <- prior_alpha_params + mr$events_per_interval
   beta_r0  <- prior_beta_params  + mr$person_time_per_interval
+  arm_rate <- overall_accrual_rate
+  ref_rate <- overall_accrual_rate
+  if (!is.null(randomization_probs)) {
+    probs <- randomization_probs
+    if (!is.null(names(probs)) && !is.null(arm_name) && !is.null(ref_name)) {
+      if (!arm_name %in% names(probs) || !ref_name %in% names(probs)) {
+        stop("randomization_probs must include arm_name and ref_name.")
+      }
+      arm_rate <- overall_accrual_rate * probs[[arm_name]]
+      ref_rate <- overall_accrual_rate * probs[[ref_name]]
+    } else if (length(probs) == 2L) {
+      arm_rate <- overall_accrual_rate * probs[1]
+      ref_rate <- overall_accrual_rate * probs[2]
+    } else {
+      warning("`randomization_probs` requires arm_name/ref_name or length 2; using overall_accrual_rate.",
+              call. = FALSE)
+    }
+  }
   T_future_a <- approx_future_exposure(current_time, enroll_times_arm,
-                                       max_total_patients_arm, overall_accrual_rate,
+                                       max_total_patients_arm, arm_rate,
                                        interval_cutpoints, max_follow_up_sim)
   T_future_r <- approx_future_exposure(current_time, enroll_times_ref,
-                                       max_total_patients_ref, overall_accrual_rate,
+                                       max_total_patients_ref, ref_rate,
                                        interval_cutpoints, max_follow_up_sim)
   eff_hits <- 0L; fut_hits <- 0L
   log_margin_hr <- if (!is.null(compare_arms_hr_margin)) log1p(max(0, compare_arms_hr_margin)) else 0

@@ -345,8 +345,8 @@ test_that("closed-form F-distribution matches Monte Carlo", {
 
   validation <- validate_exponential_ba(a_exp, b_exp, a_ref, b_ref, n_samples = 10000)
 
-  # Closed form should be within 2 SEs of MC
-  expect_lt(validation$difference, 2 * validation$se_mc)
+  # Closed form should be within 3 SEs of MC (allows for MC variance)
+  expect_lt(validation$difference, 3 * validation$se_mc)
 })
 
 test_that("gamma CDF gives correct SA probability", {

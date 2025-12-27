@@ -547,6 +547,8 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
   double pp_go = as<double>(theta_list["pp_go"]);
   double pp_nogo = as<double>(theta_list["pp_nogo"]);
   int ev_sa = theta_list.containsElementNamed("ev_sa") ? as<int>(theta_list["ev_sa"]) : 10;
+  // FIX (2025-12-24): Add ev_ba extraction for BA phase event gate
+  int ev_ba = theta_list.containsElementNamed("ev_ba") ? as<int>(theta_list["ev_ba"]) : 15;
   double hr_threshold_sa = theta_list.containsElementNamed("hr_threshold_sa") ?
     as<double>(theta_list["hr_threshold_sa"]) : 1.0;
   int n_outer = theta_list.containsElementNamed("n_outer") ? as<int>(theta_list["n_outer"]) : 200;
@@ -639,13 +641,21 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
   }
 
   // Initialize state
+  // NOTE: This implementation assumes exactly 2 arms (1 reference + 1 experimental).
+  // Key places that would need modification for N>2 arms:
+  //   - state.n_arms initialization (here)
+  //   - BA posterior computation (lines ~965-966): compares arms [0] vs [1] only
+  //   - Event gate (line ~950): uses ev_ba * 2, should be ev_ba * n_arms
+  //   - Result extraction (lines ~1027-1067): hardcodes [0] and [1] indices
+  //   - Enrollment checks: only tracks n_enrolled[0] and n_enrolled[1]
+  // See docs/TWO_ARM_ASSUMPTIONS.md for full audit.
   TrialState state;
   state.current_time = 0.0;
   state.current_look = 0;
-  state.n_arms = 2;  // Reference + 1 experimental
+  state.n_arms = 2;  // LIMITATION: Hardcoded to 2 arms (reference + 1 experimental)
   state.n_intervals = n_intervals;
   state.arm_active = {true, true};
-  state.reference_arm_idx = 0;
+  state.reference_arm_idx = 0;  // LIMITATION: Reference arm always index 0
   state.n_enrolled = {0, 0};
   state.n_enrolled_phase1 = {0, 0};
   state.posterior_a = {prior_a, prior_a};
@@ -941,12 +951,33 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
     }
     else if (state.current_state == STATE_BETWEEN) {
       // BA phase - check efficacy/futility
+      // FIX (2025-12-24): Add event count check before BA decision (matches R code hybrid_trial.R:422)
+      arma::vec events_exp, exp_exp, events_ref, exp_ref;
+      compute_interval_metrics(state.patients, state.current_time, interval_cutpoints, 1, events_exp, exp_exp);
+      compute_interval_metrics(state.patients, state.current_time, interval_cutpoints, 0, events_ref, exp_ref);
+      int total_ba_events = (int)(arma::sum(events_exp) + arma::sum(events_ref));
+
+      // Skip BA decision if insufficient events (ev_ba * 2 = events across both arms)
+      // LIMITATION: Hardcoded * 2 for 2 arms; for N arms use ev_ba * state.n_arms
+      if (total_ba_events < ev_ba * 2) {
+        // Not enough events for reliable BA inference - continue enrollment
+        // Check max N only
+        if (state.n_enrolled[1] >= nmax_ba) {
+          state.current_state = STATE_STOP;
+          state.trial_outcome = "max_n_ba";
+          state.stop_reason = "Max enrollment reached in BA phase (insufficient events)";
+        }
+        continue;
+      }
+
+      // LIMITATION: BA comparison hardcoded for arms [1] vs [0] (exp vs ref)
+      // For N>2 arms, would need pairwise or global comparison strategy
       double p_between = compute_ba_posterior_internal(
         state.posterior_a[1], state.posterior_b[1],
         state.posterior_a[0], state.posterior_b[0],
         interval_cutpoints, 2000  // Harmonized with R sample size
       );
-      state.ba_posterior_prob[1] = p_between;
+      state.ba_posterior_prob[1] = p_between;  // Only stores result for arm [1]
 
       if (p_between >= eff_ba) {
         state.ba_efficacy_reached[1] = true;

@@ -27,13 +27,114 @@ NULL
 #'
 #' @return Named list with operating characteristics (including per-arm metrics for dual_single_arm)
 #'
+#' @param parallel_replicates Logical; if TRUE, distribute simulations across workers
+#' @param num_workers Number of parallel workers (default: detectCores() - 1)
+#'
 #' @export
 compute_hybrid_oc_rcpp <- function(hybrid_theta, base_args, scenario_params,
                                     num_simulations = 1000, seed = NULL,
                                     trial_mode = "hybrid",
                                     efficacy_method = "posterior",
                                     futility_method = "posterior",
-                                    lambda_hist_per_arm = NULL) {
+                                    lambda_hist_per_arm = NULL,
+                                    parallel_replicates = FALSE,
+                                    num_workers = NULL) {
+
+  # Handle parallel execution by splitting simulations across workers
+  if (isTRUE(parallel_replicates) && num_simulations > 100) {
+    if (is.null(num_workers)) {
+      num_workers <- max(1L, parallel::detectCores() - 1L)
+    }
+    num_workers <- min(num_workers, num_simulations)
+
+    if (num_workers > 1) {
+      # Split simulations across workers
+      sims_per_worker <- ceiling(num_simulations / num_workers)
+      worker_sims <- rep(sims_per_worker, num_workers)
+      worker_sims[num_workers] <- num_simulations - sum(worker_sims[-num_workers])
+
+      # Create seeds for each worker
+      if (!is.null(seed)) set.seed(seed)
+      worker_seeds <- sample.int(.Machine$integer.max, num_workers)
+
+      # Run in parallel using mclapply (Unix) or parLapply (Windows)
+      if (.Platform$OS.type == "unix") {
+        results_list <- parallel::mclapply(seq_len(num_workers), function(i) {
+          compute_hybrid_oc_rcpp(
+            hybrid_theta = hybrid_theta,
+            base_args = base_args,
+            scenario_params = scenario_params,
+            num_simulations = worker_sims[i],
+            seed = worker_seeds[i],
+            trial_mode = trial_mode,
+            efficacy_method = efficacy_method,
+            futility_method = futility_method,
+            lambda_hist_per_arm = lambda_hist_per_arm,
+            parallel_replicates = FALSE  # Don't nest parallelism
+          )
+        }, mc.cores = num_workers)
+      } else {
+        cl <- parallel::makeCluster(num_workers)
+        on.exit(parallel::stopCluster(cl), add = TRUE)
+        parallel::clusterExport(cl, c("hybrid_theta", "base_args", "scenario_params",
+                                       "trial_mode", "efficacy_method", "futility_method",
+                                       "lambda_hist_per_arm", "worker_sims", "worker_seeds"),
+                                 envir = environment())
+        results_list <- parallel::parLapply(cl, seq_len(num_workers), function(i) {
+          evolveTrial::compute_hybrid_oc_rcpp(
+            hybrid_theta = hybrid_theta,
+            base_args = base_args,
+            scenario_params = scenario_params,
+            num_simulations = worker_sims[i],
+            seed = worker_seeds[i],
+            trial_mode = trial_mode,
+            efficacy_method = efficacy_method,
+            futility_method = futility_method,
+            lambda_hist_per_arm = lambda_hist_per_arm,
+            parallel_replicates = FALSE
+          )
+        })
+      }
+
+      # Aggregate results (weighted by number of simulations per worker)
+      total_sims <- sum(worker_sims)
+      agg <- list()
+
+      # Weighted average for rate metrics
+      rate_metrics <- c("power", "power_exp", "power_ref", "type1", "type1_exp", "type1_ref",
+                        "type1_between", "P_conversion", "P_conversion_null", "P_conversion_alt")
+      for (m in rate_metrics) {
+        vals <- sapply(seq_along(results_list), function(i) {
+          results_list[[i]][[m]] * worker_sims[i]
+        })
+        agg[[m]] <- sum(vals, na.rm = TRUE) / total_sims
+      }
+
+      # Weighted average for EN metrics
+      en_metrics <- c("EN_null", "EN_alt", "EN_alt_exp", "EN_alt_ref", "EN_null_exp", "EN_null_ref", "EN_total")
+      for (m in en_metrics) {
+        vals <- sapply(seq_along(results_list), function(i) {
+          results_list[[i]][[m]] * worker_sims[i]
+        })
+        agg[[m]] <- sum(vals, na.rm = TRUE) / total_sims
+      }
+
+      # Recompute variances based on aggregated rates
+      agg$var_power <- agg$power * (1 - agg$power) / total_sims
+      agg$var_type1 <- agg$type1 * (1 - agg$type1) / total_sims
+      agg$var_type1_between <- agg$type1_between * (1 - agg$type1_between) / total_sims
+
+      # Copy other fields from first result
+      agg$trial_mode <- results_list[[1]]$trial_mode
+      agg$efficacy_method <- results_list[[1]]$efficacy_method
+      agg$futility_method <- results_list[[1]]$futility_method
+      agg$results_by_scenario <- results_list[[1]]$results_by_scenario  # Approximate
+
+      return(agg)
+    }
+  }
+
+  # Original single-threaded implementation continues below...
 
   # Validate trial_mode
   valid_modes <- c("hybrid", "single_arm", "between_arm", "dual_single_arm")
@@ -85,7 +186,10 @@ compute_hybrid_oc_rcpp <- function(hybrid_theta, base_args, scenario_params,
   lambda_hist <- rep(log(2) / historical_median, n_intervals)
   lambda_ref <- rep(log(2) / ref_median, n_intervals)
   lambda_exp_alt <- rep(log(2) / exp_median, n_intervals)
-  lambda_exp_null <- lambda_ref  # Under null, exp has same hazard as ref
+  # FIXED: Under null_global, exp should equal HISTORICAL (not ref)
+  # null_global: exp = HC (no treatment effect at all) -> tests overall Type I
+  # null_between: exp = ref, both > HC (no between-arm difference) -> tests BA Type I
+  lambda_exp_null <- lambda_hist  # Under null_global, exp has same hazard as historical
 
   # Build theta list for C++
   theta_cpp <- list(

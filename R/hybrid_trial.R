@@ -125,6 +125,12 @@ create_hybrid_state <- function(arm_names, reference_arm, theta, base_args) {
 
 #' Create hybrid design parameter structure
 #'
+#' @note LIMITATION: This implementation assumes exactly 2 arms (1 reference + 1 experimental).
+#'   Key places that assume 2 arms:
+#'   - Event gate uses ev_ba * 2 (line ~422)
+#'   - BA comparison takes first non-reference arm only (lines ~652, ~849)
+#'   - See docs/TWO_ARM_ASSUMPTIONS.md in adaptive-trial-bo-paper for full audit.
+#'
 #' @param eff_sa SA efficacy threshold (default 0.90)
 #' @param fut_sa SA futility threshold (default 0.10)
 #' @param hr_threshold_sa Target HR vs historical (default 0.80)
@@ -419,6 +425,7 @@ handle_state_between <- function(state, theta, base_args, scenario_params) {
   }))
 
   # Check information gate
+  # LIMITATION: Hardcoded * 2 for 2 arms; for N arms use ev_ba * length(state$active_arms)
   if (total_events >= theta$ev_ba * 2) {  # Events across both arms
 
     # Check efficacy
@@ -649,6 +656,7 @@ compute_p_single_arm <- function(post_a, post_b, hist_hazard, hr_threshold, base
 compute_p_between_arm <- function(state, theta, base_args) {
 
   # Identify experimental and reference arms
+  # LIMITATION: Only takes first non-reference arm; ignores additional experimental arms
   exp_arm <- setdiff(state$active_arms, state$reference_arm)[1]
   ref_arm <- state$reference_arm
 
@@ -846,6 +854,7 @@ compute_pp_predictive <- function(state, n_add, theta, base_args, scenario_param
   n_outer <- min(theta$n_outer, 500)  # Reduce for speed during development
   success_count <- 0
 
+  # LIMITATION: Only takes first non-reference arm; ignores additional experimental arms
   exp_arm <- setdiff(state$active_arms, state$reference_arm)[1]
   ref_arm <- state$reference_arm
 

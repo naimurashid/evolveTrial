@@ -13,7 +13,9 @@ compute_hybrid_oc_rcpp(
   trial_mode = "hybrid",
   efficacy_method = "posterior",
   futility_method = "posterior",
-  lambda_hist_per_arm = NULL
+  lambda_hist_per_arm = NULL,
+  parallel_replicates = FALSE,
+  num_workers = NULL
 )
 }
 \arguments{
@@ -34,6 +36,10 @@ compute_hybrid_oc_rcpp(
 \item{futility_method}{Decision method for futility: "posterior" or "predictive"}
 
 \item{lambda_hist_per_arm}{Optional list with per-arm historical lambdas (for dual_single_arm)}
+
+\item{parallel_replicates}{Logical; if TRUE, distribute simulations across workers}
+
+\item{num_workers}{Number of parallel workers (default: detectCores() - 1)}
 }
 \value{
 Named list with operating characteristics (including per-arm metrics for dual_single_arm)

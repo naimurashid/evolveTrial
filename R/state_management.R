@@ -148,7 +148,8 @@ slice_arm_data_at_time <- function(registry_df, calendar_time, max_follow_up, in
 
 # --- PER-ARM GATES FOR vs-ref (UPDATED) --------------------------------------
 
-gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
+gates_pass_for_both_arms <- function(slCtrl, slTrt, args, trt_name = NULL,
+                                     diagnostics = FALSE) {
   # Arm names: take control from args$reference_arm_name; treatment is "the other one"
   if (is.null(args$reference_arm_name)) {
     stop("args$reference_arm_name must be provided for vs-reference gates.")
@@ -160,12 +161,21 @@ gates_pass_for_both_arms <- function(slCtrl, slTrt, args, diagnostics = FALSE) {
   }
   arm_names <- args$arm_names
 
-  trt_candidates <- arm_names[arm_names != ctrl_name]
-  if (length(trt_candidates) == 0) {
-    stop("No experimental arms found for vs-reference gates (after excluding reference arm).")
+  if (is.null(trt_name)) {
+    trt_candidates <- arm_names[arm_names != ctrl_name]
+    if (length(trt_candidates) == 0) {
+      stop("No experimental arms found for vs-reference gates (after excluding reference arm).")
+    }
+    # Assuming only one treatment arm is being evaluated against the reference at a time
+    trt_name <- trt_candidates[1]
+  } else {
+    if (!trt_name %in% arm_names) {
+      stop("trt_name must be one of args$arm_names for vs-reference gates.")
+    }
+    if (identical(trt_name, ctrl_name)) {
+      stop("trt_name must differ from args$reference_arm_name for vs-reference gates.")
+    }
   }
-  # Assuming only one treatment arm is being evaluated against the reference at a time
-  trt_name <- trt_candidates[1]
 
   # thresholds (per-arm gates) - use shared helper from gate_diagnostics.R
   arms <- c(ctrl_name, trt_name)
