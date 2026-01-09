@@ -24,7 +24,8 @@ HYBRID_STATES <- list(
 )
 
 #' Conversion triggers
-CONVERSION_TRIGGERS <- c("any_single_success", "all_single_success", "k_of_K")
+CONVERSION_TRIGGERS <- c("any_single_success", "all_single_success", "k_of_K",
+                         "not_both_futile", "exp_not_futile")
 
 #' Futility actions
 FUTILITY_ACTIONS <- c("stop_trial", "drop_arm", "continue")
@@ -136,7 +137,7 @@ create_hybrid_state <- function(arm_names, reference_arm, theta, base_args) {
 #' @param hr_threshold_sa Target HR vs historical (default 0.80)
 #' @param ev_sa Minimum events for SA interim (default 15)
 #' @param nmax_sa Maximum N in SA phase per arm (default 40)
-#' @param conversion_trigger Trigger type: "any_single_success", "all_single_success", "k_of_K"
+#' @param conversion_trigger Trigger type: "any_single_success", "all_single_success", "k_of_K", "not_both_futile"
 #' @param k_required For k_of_K trigger, number required (default 1)
 #' @param pp_go PP threshold to proceed to BA (default 0.70)
 #' @param pp_nogo PP threshold to stop (default 0.20)
@@ -163,7 +164,7 @@ create_hybrid_theta <- function(
   nmax_sa = 40,
 
   # Conversion
-  conversion_trigger = c("any_single_success", "all_single_success", "k_of_K"),
+  conversion_trigger = c("any_single_success", "all_single_success", "k_of_K", "not_both_futile"),
   k_required = 1,
   pp_go = 0.70,
   pp_nogo = 0.20,
@@ -334,6 +335,23 @@ handle_state_single <- function(state, theta, base_args, scenario_params) {
     return(state)
   }
 
+  # For not_both_futile: if all arms decided and both futile, stop early
+  if (theta$conversion_trigger == "not_both_futile") {
+    all_arms <- seq_along(state$arm_names)
+    all_decided <- all(vapply(all_arms, function(arm) {
+      state$sa_efficacy_reached[arm] ||
+        state$sa_futility_reached[arm] ||
+        state$n_enrolled[arm] >= theta$nmax_sa
+    }, logical(1)))
+    if (all_decided && all(state$sa_futility_reached[all_arms])) {
+      state$current_state <- HYBRID_STATES$STOP
+      state$trial_outcome <- "both_sa_futile"
+      state$stop_reason <- "Both arms declared SA futile - stopping"
+      state$conversion_decision <- "NO_GO"
+      return(state)
+    }
+  }
+
   # Check max N for SA phase
   total_enrolled <- sum(state$n_enrolled[state$active_arms])
   max_sa_n <- theta$nmax_sa * length(state$arm_names)
@@ -359,6 +377,17 @@ handle_state_single <- function(state, theta, base_args, scenario_params) {
 handle_state_consider_conversion <- function(state, theta, base_args, scenario_params) {
 
   if (state$conversion_evaluated) return(state)
+
+  if (theta$conversion_trigger == "not_both_futile") {
+    # Automatic conversion: no PP curve needed
+    state$conversion_evaluated <- TRUE
+    state$conversion_time <- state$current_time
+    state$pp_at_conversion <- 1
+    state$conversion_decision <- "GO"
+    state$current_state <- HYBRID_STATES$BETWEEN
+    state$n_enrolled_phase1 <- state$n_enrolled
+    return(state)
+  }
 
   # Compute PP curve for candidate N values
   pp_results <- compute_pp_curve(state, theta, base_args, scenario_params)
@@ -517,6 +546,26 @@ check_conversion_trigger <- function(state, theta) {
     "any_single_success" = efficacy_count >= 1,
     "all_single_success" = efficacy_count == n_active && n_active > 0,
     "k_of_K" = efficacy_count >= theta$k_required,
+    "not_both_futile" = {
+      # Check if all arms have reached a decision (efficacy, futility, or max N)
+      all_arms <- seq_along(state$arm_names)
+      nmax_sa <- theta$nmax_sa %||% 40
+
+      all_decided <- all(vapply(all_arms, function(arm) {
+        state$sa_efficacy_reached[arm] ||
+        state$sa_futility_reached[arm] ||
+        state$n_enrolled[arm] >= nmax_sa
+      }, logical(1)))
+
+      if (!all_decided) {
+        FALSE  # Wait until both arms have decided
+      } else {
+        # All decided - convert unless BOTH are futile
+        futility_count <- sum(state$sa_futility_reached[all_arms])
+        both_futile <- (futility_count == length(all_arms))
+        !both_futile  # TRUE = convert, FALSE = stop (both futile)
+      }
+    },
     FALSE
   )
 }

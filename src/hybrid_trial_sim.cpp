@@ -747,7 +747,9 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
       // Determine which arms to evaluate based on trial mode
       // For dual_single_arm: evaluate both arms (0 and 1)
       // For single_arm and hybrid: evaluate only experimental arm (1)
-      int start_arm = (trial_mode == MODE_DUAL_SINGLE_ARM) ? 0 : 1;
+      // EXCEPTION: For "not_both_futile" trigger, evaluate both arms even in hybrid mode
+      int start_arm = (trial_mode == MODE_DUAL_SINGLE_ARM ||
+                       conversion_trigger == "not_both_futile") ? 0 : 1;
 
       for (int arm = start_arm; arm < state.n_arms; arm++) {
         if (!state.arm_active[arm]) continue;
@@ -851,6 +853,61 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
           trigger_met = (efficacy_count == n_active && n_active > 0);
         } else if (conversion_trigger == "k_of_K") {
           trigger_met = (efficacy_count >= k_required);
+        } else if (conversion_trigger == "not_both_futile") {
+          // NEW: "NOT(both SA futile)" conversion rule
+          // Wait until BOTH arms have reached SA decision (efficacy, futility, or max)
+          // Then convert to BA unless BOTH arms hit SA futility
+          bool all_decided = true;
+          int futility_count = 0;
+          int decided_count = 0;
+          for (int arm = 0; arm < state.n_arms; arm++) {  // Include reference arm (0)
+            bool arm_decided = state.sa_efficacy_reached[arm] ||
+                               state.sa_futility_reached[arm] ||
+                               state.n_enrolled[arm] >= nmax_sa;
+            if (!arm_decided && state.arm_active[arm]) {
+              all_decided = false;
+            }
+            if (arm_decided) {
+              decided_count++;
+              if (state.sa_futility_reached[arm]) {
+                futility_count++;
+              }
+            }
+          }
+          // Only trigger conversion when all arms decided AND NOT both futile
+          if (all_decided && decided_count >= 2) {
+            bool both_futile = (futility_count == decided_count);
+            if (!both_futile) {
+              // At least one arm not futile - proceed to BA comparison
+              trigger_met = true;
+            } else {
+              // Both arms futile - stop trial (don't convert)
+              state.current_state = STATE_STOP;
+              state.conversion_decision = "NO_GO";
+              state.trial_outcome = "both_sa_futile";
+              state.stop_reason = "Both arms declared SA futile - stopping";
+            }
+          }
+        } else if (conversion_trigger == "exp_not_futile") {
+          // NEW: Convert only if Experimental arm (index 1) is NOT futile
+          // Ignore Reference arm entirely for conversion decision
+          int exp_idx = 1;  // Experimental arm is index 1
+          bool exp_decided = state.sa_efficacy_reached[exp_idx] ||
+                             state.sa_futility_reached[exp_idx] ||
+                             state.n_enrolled[exp_idx] >= nmax_sa;
+
+          if (exp_decided) {
+            if (!state.sa_futility_reached[exp_idx]) {
+              // Experimental arm not futile - proceed to BA comparison
+              trigger_met = true;
+            } else {
+              // Experimental arm futile - stop trial immediately
+              state.current_state = STATE_STOP;
+              state.conversion_decision = "NO_GO";
+              state.trial_outcome = "exp_sa_futile";
+              state.stop_reason = "Experimental arm declared SA futile - stopping";
+            }
+          }
         }
 
         if (trigger_met) {
@@ -881,7 +938,8 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
       // Check if all arms dropped (only if still in SA phase)
       if (state.current_state == STATE_SINGLE) {
         bool any_active = false;
-        int check_start = (trial_mode == MODE_DUAL_SINGLE_ARM) ? 0 : 1;
+        int check_start = (trial_mode == MODE_DUAL_SINGLE_ARM ||
+                           conversion_trigger == "not_both_futile") ? 0 : 1;
         for (int a = check_start; a < state.n_arms; a++) {
           if (state.arm_active[a]) any_active = true;
         }
@@ -895,7 +953,8 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
       // Check max N (only if still in SA phase - don't override other transitions)
       if (state.current_state == STATE_SINGLE) {
         bool max_n_reached = true;
-        int check_start = (trial_mode == MODE_DUAL_SINGLE_ARM) ? 0 : 1;
+        int check_start = (trial_mode == MODE_DUAL_SINGLE_ARM ||
+                           conversion_trigger == "not_both_futile") ? 0 : 1;
         for (int a = check_start; a < state.n_arms; a++) {
           if (state.arm_active[a] && state.n_enrolled[a] < nmax_sa) {
             max_n_reached = false;
@@ -914,38 +973,47 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
       if (!state.conversion_evaluated) {
         state.conversion_evaluated = true;
 
-        int n_add = nmax_ba - state.n_enrolled[1];
-        if (n_add > 0) {
-          double pp = compute_pp_predictive_internal(
-            state.posterior_a[1], state.posterior_b[1],
-            state.posterior_a[0], state.posterior_b[0],
-            n_add, interval_cutpoints, accrual_rate, followup,
-            eff_ba, pp_go, pp_nogo, n_outer
-          );
-          state.pp_at_conversion = pp;
-
-          if (pp >= pp_go) {
-            // GO: Proceed to between-arm phase
-            state.conversion_decision = "GO";
-            state.current_state = STATE_BETWEEN;
-          } else if (pp < pp_nogo) {
-            // NO-GO: PP too low
-            state.conversion_decision = "NO_GO";
-            state.current_state = STATE_STOP;
-            state.trial_outcome = "conversion_nogo";
-            state.stop_reason = "PP too low for conversion";
-          } else {
-            // AMBIGUOUS: PP between pp_nogo and pp_go
-            // Match R behavior: immediately stop with AMBIGUOUS_NOGO
-            state.conversion_decision = "AMBIGUOUS";
-            state.current_state = STATE_STOP;
-            state.trial_outcome = "conversion_ambiguous";
-            state.stop_reason = "PP in ambiguous region - default to no-go";
-          }
+        // For "not_both_futile" or "exp_not_futile" triggers, conversion is automatic (no PP check)
+        // We already decided to convert when setting STATE_CONSIDER_CONVERSION
+        if (conversion_trigger == "not_both_futile" || conversion_trigger == "exp_not_futile") {
+          state.conversion_decision = "GO";
+          state.current_state = STATE_BETWEEN;
+          state.pp_at_conversion = 1.0;  // Marker for automatic conversion
         } else {
-          state.current_state = STATE_STOP;
-          state.trial_outcome = "max_n_reached";
-          state.stop_reason = "Max enrollment reached at conversion";
+          // Standard PP-based conversion decision
+          int n_add = nmax_ba - state.n_enrolled[1];
+          if (n_add > 0) {
+            double pp = compute_pp_predictive_internal(
+              state.posterior_a[1], state.posterior_b[1],
+              state.posterior_a[0], state.posterior_b[0],
+              n_add, interval_cutpoints, accrual_rate, followup,
+              eff_ba, pp_go, pp_nogo, n_outer
+            );
+            state.pp_at_conversion = pp;
+
+            if (pp >= pp_go) {
+              // GO: Proceed to between-arm phase
+              state.conversion_decision = "GO";
+              state.current_state = STATE_BETWEEN;
+            } else if (pp < pp_nogo) {
+              // NO-GO: PP too low
+              state.conversion_decision = "NO_GO";
+              state.current_state = STATE_STOP;
+              state.trial_outcome = "conversion_nogo";
+              state.stop_reason = "PP too low for conversion";
+            } else {
+              // AMBIGUOUS: PP between pp_nogo and pp_go
+              // Match R behavior: immediately stop with AMBIGUOUS_NOGO
+              state.conversion_decision = "AMBIGUOUS";
+              state.current_state = STATE_STOP;
+              state.trial_outcome = "conversion_ambiguous";
+              state.stop_reason = "PP in ambiguous region - default to no-go";
+            }
+          } else {
+            state.current_state = STATE_STOP;
+            state.trial_outcome = "max_n_reached";
+            state.stop_reason = "Max enrollment reached at conversion";
+          }
         }
       }
     }
