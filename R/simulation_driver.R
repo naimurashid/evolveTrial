@@ -546,7 +546,7 @@ run_simulation_pure <- function(
         elig_idx <- is_eligible(state)
         if (length(elig_idx) == 0) break
 
-        if (compare_arms_option) {
+        if (isTRUE(compare_arms_option)) {
           exp_idx <- which(arm_names != reference_arm_name)
           exp_active <- exp_idx[state$arm_status[arm_names[exp_idx]] == "recruiting"]
           exp_active <- exp_active[state$enrolled_counts[arm_names[exp_active]] <
@@ -621,7 +621,7 @@ run_simulation_pure <- function(
       }
 
       ref_slice_final <- NULL
-      if (compare_arms_option) {
+      if (isTRUE(compare_arms_option)) {
         ref_slice_final <- slice_arm_data_at_time(
           state$registries[[reference_arm_name]], final_time,
           max_follow_up_sim, interval_cutpoints_current
@@ -642,7 +642,7 @@ run_simulation_pure <- function(
         # Cache for reuse when computing final events
         cached_arm_slices[[arm]] <- arm_slice
 
-        if (!compare_arms_option) {
+        if (!isTRUE(compare_arms_option)) {
           post_arm <- draw_posterior_hazard_samples(
             num_intervals = num_intervals,
             events_per_interval = arm_slice$metrics$events_per_interval,
