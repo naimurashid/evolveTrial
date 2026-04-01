@@ -232,7 +232,9 @@ run_simulation_pure <- function(
     progress = interactive(),
     # percentile tracking
     return_percentiles = FALSE,
-    percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0)
+    percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0),
+    # variance tracking
+    return_variance = FALSE
 ) {
   cluster_type <- match.arg(cluster_type)
 
@@ -397,8 +399,8 @@ run_simulation_pure <- function(
 
   tick_fun <- if (show_progress) function() pb$tick() else function() invisible(NULL)
 
-  # Percentile tracking: pre-allocate storage for raw per-replicate values (when enabled)
-  collect_raw_n <- isTRUE(return_percentiles)
+  # Percentile/variance tracking: pre-allocate storage for raw per-replicate values (when enabled)
+  collect_raw_n <- isTRUE(return_percentiles) || isTRUE(return_variance)
   all_final_n_raw <- NULL
   if (collect_raw_n) {
     all_final_n_raw <- vector("list", length(arm_names))
@@ -406,6 +408,17 @@ run_simulation_pure <- function(
     for (arm in arm_names) {
       all_final_n_raw[[arm]] <- numeric(num_simulations)
     }
+  }
+
+  all_final_events_raw <- NULL
+  all_final_time_raw   <- NULL
+  if (isTRUE(return_variance)) {
+    all_final_events_raw <- vector("list", length(arm_names))
+    names(all_final_events_raw) <- arm_names
+    for (arm in arm_names) {
+      all_final_events_raw[[arm]] <- numeric(num_simulations)
+    }
+    all_final_time_raw <- numeric(num_simulations)
   }
 
   base_args_for_interim <- args
@@ -431,6 +444,16 @@ run_simulation_pure <- function(
     } else {
       NULL
     }
+
+    # Track per-replicate events and time for variance calculation (when enabled)
+    chunk_final_events_raw <- if (isTRUE(return_variance)) {
+      tmp <- lapply(arm_names, function(arm) numeric(length(sim_indices)))
+      names(tmp) <- arm_names
+      tmp
+    } else {
+      NULL
+    }
+    chunk_final_time_raw <- if (isTRUE(return_variance)) numeric(length(sim_indices)) else NULL
 
     # Lightweight helper for rebalancing: count events without interval metrics
     extract_events_fast <- function(registry_df, calendar_time, max_follow_up) {
@@ -750,6 +773,15 @@ run_simulation_pure <- function(
         }
       }
 
+      # Store raw events and time for variance calculation (when enabled)
+      if (!is.null(chunk_final_events_raw)) {
+        local_idx <- which(sim_indices == sim_idx)
+        for (arm in arm_names) {
+          chunk_final_events_raw[[arm]][local_idx] <- final_events_vec[arm]
+        }
+        chunk_final_time_raw[local_idx] <- final_time
+      }
+
       tick()
     }
 
@@ -763,7 +795,9 @@ run_simulation_pure <- function(
       sum_final_inc = chunk_sum_final_inc,
       sum_final_time = chunk_sum_final_time,  # Trial duration
       n_sims = length(sim_indices),
-      final_n_raw = chunk_final_n_raw  # NULL if not collecting
+      final_n_raw      = chunk_final_n_raw,       # NULL if not collecting
+      final_events_raw = chunk_final_events_raw,  # NULL if not collecting
+      final_time_raw   = chunk_final_time_raw      # NULL if not collecting
     )
   }
 
@@ -795,6 +829,19 @@ run_simulation_pure <- function(
           all_final_n_raw[[arm]][idx_range] <<- res$final_n_raw[[arm]]
         }
         raw_offset <- raw_offset + chunk_size
+      }
+
+      if (!is.null(res$final_events_raw) && !is.null(all_final_events_raw)) {
+        chunk_size <- res$n_sims
+        for (arm in arm_names) {
+          idx_range <- (raw_offset - chunk_size + 1L):raw_offset
+          all_final_events_raw[[arm]][idx_range] <<- res$final_events_raw[[arm]]
+        }
+      }
+      if (!is.null(res$final_time_raw) && !is.null(all_final_time_raw)) {
+        chunk_size <- res$n_sims
+        idx_range <- (raw_offset - chunk_size + 1L):raw_offset
+        all_final_time_raw[idx_range] <<- res$final_time_raw
       }
     }
   }
@@ -935,6 +982,32 @@ run_simulation_pure <- function(
   }
   # Expected trial duration (calendar months) - trial-level metric, same for all arms
   results_data$Exp_Time <- sum_final_time * inv_num_sims
+
+  # Compute and attach variance estimates if requested
+  if (isTRUE(return_variance)) {
+    # Continuous metrics: variance of the mean = var(raw_vec) / n
+    results_data$Var_Exp_N <- vapply(
+      arm_names,
+      function(a) stats::var(all_final_n_raw[[a]]) / num_simulations,
+      numeric(1)
+    )
+    results_data$Var_Exp_Events <- vapply(
+      arm_names,
+      function(a) stats::var(all_final_events_raw[[a]]) / num_simulations,
+      numeric(1)
+    )
+    results_data$Var_Exp_Time <- stats::var(all_final_time_raw) / num_simulations
+
+    # Proportion metrics: analytical Bernoulli variance of the mean = p(1-p)/n
+    prop_var <- function(p) p * (1 - p) / num_simulations
+    results_data$Var_Type_I_Error_or_Power <- prop_var(results_data$Type_I_Error_or_Power)
+    results_data$Var_PET_Efficacy          <- prop_var(results_data$PET_Efficacy)
+    results_data$Var_PET_Futility          <- prop_var(results_data$PET_Futility)
+    results_data$Var_Pr_Reach_Max_N        <- prop_var(results_data$Pr_Reach_Max_N)
+    results_data$Var_Pr_Final_Efficacy     <- prop_var(results_data$Pr_Final_Efficacy)
+    results_data$Var_Pr_Final_Futility     <- prop_var(results_data$Pr_Final_Futility)
+    results_data$Var_Pr_Final_Inconclusive <- prop_var(results_data$Pr_Final_Inconclusive)
+  }
 
   # Compute and return percentiles if requested
   if (isTRUE(return_percentiles) && !is.null(all_final_n_raw)) {
@@ -1094,7 +1167,8 @@ scenarios_from_grid <- function(choices) {
 #' @export
 run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL,
                           return_percentiles = FALSE,
-                          percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0)) {
+                          percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0),
+                          return_variance = FALSE) {
   if (!is.null(seed)) set.seed(seed)
 
   # keep only args that run_simulation_pure actually accepts
@@ -1106,9 +1180,10 @@ run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL,
   run_one <- function(i) {
     over   <- scens[[i]]
     args_i <- utils::modifyList(base_args, over, keep.null = TRUE)
-    # Add percentile parameters
+    # Add percentile and variance parameters
     args_i$return_percentiles <- return_percentiles
-    args_i$percentile_probs <- percentile_probs
+    args_i$percentile_probs   <- percentile_probs
+    args_i$return_variance    <- return_variance
     args_i <- args_i[intersect(names(args_i), rs_formals)]
     res <- do.call(run_simulation_pure, args_i)
 
