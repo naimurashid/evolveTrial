@@ -124,6 +124,20 @@ compute_hybrid_oc_rcpp <- function(hybrid_theta, base_args, scenario_params,
       agg$var_type1 <- agg$type1 * (1 - agg$type1) / total_sims
       agg$var_type1_between <- agg$type1_between * (1 - agg$type1_between) / total_sims
 
+      # Aggregate EN variance across workers.
+      # Each worker returned var(mean_i) = s_i^2 / n_i from its n_i sims.
+      # With disjoint seed draws, Var(pooled_mean) approx = sum((n_i/N)^2 * var_i)
+      en_var_metrics <- c("var_EN_alt", "var_EN_alt_exp", "var_EN_alt_ref",
+                          "var_EN_null", "var_EN_null_exp", "var_EN_null_ref")
+      for (m in en_var_metrics) {
+        vals <- sapply(seq_along(results_list), function(i) {
+          v <- results_list[[i]][[m]]
+          if (is.null(v) || !is.finite(v)) return(NA_real_)
+          (worker_sims[i] / total_sims)^2 * v
+        })
+        agg[[m]] <- sum(vals, na.rm = TRUE)
+      }
+
       # Copy other fields from first result
       agg$trial_mode <- results_list[[1]]$trial_mode
       agg$efficacy_method <- results_list[[1]]$efficacy_method
@@ -301,6 +315,14 @@ compute_hybrid_oc_rcpp <- function(hybrid_theta, base_args, scenario_params,
     var_power = oc$power * (1 - oc$power) / num_simulations,
     var_type1 = oc$type1 * (1 - oc$type1) / num_simulations,
     var_type1_between = type1_between * (1 - type1_between) / num_simulations,
+    # Per-arm variances of mean EN (for hetGP surrogate — enables heteroskedastic
+    # GP on EN objective for hybrid trials, matching multi-arm path)
+    var_EN_alt = oc$var_EN_alt %||% NA_real_,
+    var_EN_alt_exp = oc$var_EN_alt_exp %||% NA_real_,
+    var_EN_alt_ref = oc$var_EN_alt_ref %||% NA_real_,
+    var_EN_null = oc$var_EN_null %||% NA_real_,
+    var_EN_null_exp = oc$var_EN_null_exp %||% NA_real_,
+    var_EN_null_ref = oc$var_EN_null_ref %||% NA_real_,
     results_by_scenario = list(
       alternative = list(
         success_rate = oc$power,

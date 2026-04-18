@@ -1254,6 +1254,7 @@ List compute_hybrid_oc_cpp(int n_sim, List theta_list,
 
   double power = 0.0, power_exp = 0.0, power_ref = 0.0;
   double en_alt = 0.0, en_alt_exp = 0.0, en_alt_ref = 0.0;
+  double alt_n_sq = 0.0, alt_n_exp_sq = 0.0, alt_n_ref_sq = 0.0;
   double conv_rate = 0.0;
   for (int i = 0; i < n_sim; i++) {
     if (alt_success[i]) power += 1.0;
@@ -1262,6 +1263,9 @@ List compute_hybrid_oc_cpp(int n_sim, List theta_list,
     en_alt += alt_n[i];
     en_alt_exp += alt_n_exp[i];
     en_alt_ref += alt_n_ref[i];
+    alt_n_sq += (double)alt_n[i] * alt_n[i];
+    alt_n_exp_sq += (double)alt_n_exp[i] * alt_n_exp[i];
+    alt_n_ref_sq += (double)alt_n_ref[i] * alt_n_ref[i];
     if (alt_conv[i]) conv_rate += 1.0;
   }
   power /= n_sim;
@@ -1271,6 +1275,22 @@ List compute_hybrid_oc_cpp(int n_sim, List theta_list,
   en_alt_exp /= n_sim;
   en_alt_ref /= n_sim;
   conv_rate /= n_sim;
+  // Variance of the mean EN (for hetGP surrogate):
+  // s^2 / n where s^2 is sample variance = (sum_sq - n*mean^2)/(n-1).
+  //
+  // SYNC NOTE: variance attachment happens in three places downstream:
+  //  - evolveTrial/R/hybrid_sim_rcpp.R (R wrapper exposes var_EN_*)
+  //  - adaptive-trial-bo-paper/R/warmstart_wrappers.R (attaches variance attr
+  //    for hybrid path)
+  //  - adaptive-trial-bo-paper/scripts/sim_fun_evolveTrial_unified.R
+  //    (equivalent attachment for single-arm/multi-arm via run_simulation_pure)
+  // Changes to variance semantics here MUST be mirrored there.
+  double var_en_alt = (n_sim > 1)
+    ? (alt_n_sq - n_sim * en_alt * en_alt) / ((double)(n_sim - 1) * n_sim) : 0.0;
+  double var_en_alt_exp = (n_sim > 1)
+    ? (alt_n_exp_sq - n_sim * en_alt_exp * en_alt_exp) / ((double)(n_sim - 1) * n_sim) : 0.0;
+  double var_en_alt_ref = (n_sim > 1)
+    ? (alt_n_ref_sq - n_sim * en_alt_ref * en_alt_ref) / ((double)(n_sim - 1) * n_sim) : 0.0;
 
   // Run under null (type I error)
   DataFrame null_results = run_hybrid_simulations_cpp(n_sim, theta_list, base_args_list, null_scenario_list);
@@ -1284,6 +1304,7 @@ List compute_hybrid_oc_cpp(int n_sim, List theta_list,
 
   double type1 = 0.0, type1_exp = 0.0, type1_ref = 0.0;
   double en_null = 0.0, en_null_exp = 0.0, en_null_ref = 0.0;
+  double null_n_sq = 0.0, null_n_exp_sq = 0.0, null_n_ref_sq = 0.0;
   double conv_rate_null = 0.0;
   for (int i = 0; i < n_sim; i++) {
     if (null_success[i]) type1 += 1.0;
@@ -1292,6 +1313,9 @@ List compute_hybrid_oc_cpp(int n_sim, List theta_list,
     en_null += null_n[i];
     en_null_exp += null_n_exp[i];
     en_null_ref += null_n_ref[i];
+    null_n_sq += (double)null_n[i] * null_n[i];
+    null_n_exp_sq += (double)null_n_exp[i] * null_n_exp[i];
+    null_n_ref_sq += (double)null_n_ref[i] * null_n_ref[i];
     if (null_conv[i]) conv_rate_null += 1.0;
   }
   type1 /= n_sim;
@@ -1301,8 +1325,14 @@ List compute_hybrid_oc_cpp(int n_sim, List theta_list,
   en_null_exp /= n_sim;
   en_null_ref /= n_sim;
   conv_rate_null /= n_sim;
+  double var_en_null = (n_sim > 1)
+    ? (null_n_sq - n_sim * en_null * en_null) / ((double)(n_sim - 1) * n_sim) : 0.0;
+  double var_en_null_exp = (n_sim > 1)
+    ? (null_n_exp_sq - n_sim * en_null_exp * en_null_exp) / ((double)(n_sim - 1) * n_sim) : 0.0;
+  double var_en_null_ref = (n_sim > 1)
+    ? (null_n_ref_sq - n_sim * en_null_ref * en_null_ref) / ((double)(n_sim - 1) * n_sim) : 0.0;
 
-  return List::create(
+  List out = List::create(
     Named("power") = power,
     Named("power_exp") = power_exp,
     Named("power_ref") = power_ref,
@@ -1320,4 +1350,12 @@ List compute_hybrid_oc_cpp(int n_sim, List theta_list,
     Named("conversion_rate_null") = conv_rate_null,
     Named("n_sim") = n_sim
   );
+  // Per-arm variances of mean EN (for hetGP surrogate)
+  out["var_EN_alt"] = var_en_alt;
+  out["var_EN_alt_exp"] = var_en_alt_exp;
+  out["var_EN_alt_ref"] = var_en_alt_ref;
+  out["var_EN_null"] = var_en_null;
+  out["var_EN_null_exp"] = var_en_null_exp;
+  out["var_EN_null_ref"] = var_en_null_ref;
+  return out;
 }
