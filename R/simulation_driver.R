@@ -1106,6 +1106,9 @@ scenarios_from_grid <- function(choices) {
 #'   and return percentile summaries. Default `FALSE`.
 #' @param percentile_probs Numeric vector of probabilities for percentile
 #'   computation when `return_percentiles = TRUE`. Default `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`.
+#' @param return_variance Logical; if `TRUE`, per-arm operating-characteristic
+#'   variances are collected from `run_simulation_pure()` and returned as
+#'   additional `*_var` columns in the summary. Default `FALSE`.
 #'
 #' @return When `return_percentiles = FALSE` (default), a data.table/data.frame
 #'   containing the combined operating characteristic summaries with a `scenario`

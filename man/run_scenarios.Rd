@@ -30,6 +30,10 @@ and return percentile summaries. Default \code{FALSE}.}
 
 \item{percentile_probs}{Numeric vector of probabilities for percentile
 computation when \code{return_percentiles = TRUE}. Default \code{c(0, 0.25, 0.5, 0.75, 0.9, 1.0)}.}
+
+\item{return_variance}{Logical; if \code{TRUE}, per-arm operating-characteristic
+variances are collected from \code{run_simulation_pure()} and returned as
+additional \verb{*_var} columns in the summary. Default \code{FALSE}.}
 }
 \value{
 When \code{return_percentiles = FALSE} (default), a data.table/data.frame
