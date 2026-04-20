@@ -263,6 +263,11 @@ and return percentile summaries in addition to means. Default \code{FALSE}.}
 \item{percentile_probs}{Numeric vector of probabilities for percentile
 computation when \code{return_percentiles = TRUE}. Default \code{c(0, 0.25, 0.5, 0.75, 0.9, 1.0)}
 gives min, 25th, median, 75th, 90th, and max.}
+
+\item{return_variance}{Logical; if \code{TRUE}, collect per-replicate raw values
+for key operating characteristics (final events, final time, per-arm
+sample sizes) and return their variances as additional \verb{*_var} columns in
+the summary. Default \code{FALSE}.}
 }
 \value{
 When \code{return_percentiles = FALSE} (default), a data frame with one row
