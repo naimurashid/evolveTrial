@@ -384,6 +384,13 @@ run_simulation_pure(
   `return_percentiles = TRUE`. Default `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`
   gives min, 25th, median, 75th, 90th, and max.
 
+- return_variance:
+
+  Logical; if `TRUE`, collect per-replicate raw values for key operating
+  characteristics (final events, final time, per-arm sample sizes) and
+  return their variances as additional `*_var` columns in the summary.
+  Default `FALSE`.
+
 ## Value
 
 When `return_percentiles = FALSE` (default), a data frame with one row

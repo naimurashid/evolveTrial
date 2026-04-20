@@ -445,6 +445,13 @@ and return percentile summaries in addition to means. Default <code>FALSE</code>
 computation when <code>return_percentiles = TRUE</code>. Default <code>c(0, 0.25, 0.5, 0.75, 0.9, 1.0)</code>
 gives min, 25th, median, 75th, 90th, and max.</p></dd>
 
+
+<dt id="arg-return-variance">return_variance<a class="anchor" aria-label="anchor" href="#arg-return-variance"></a></dt>
+<dd><p>Logical; if <code>TRUE</code>, collect per-replicate raw values
+for key operating characteristics (final events, final time, per-arm
+sample sizes) and return their variances as additional <code>*_var</code> columns in
+the summary. Default <code>FALSE</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
