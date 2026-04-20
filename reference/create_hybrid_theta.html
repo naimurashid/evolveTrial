@@ -48,7 +48,8 @@
 <span>  hr_threshold_sa <span class="op">=</span> <span class="fl">0.8</span>,</span>
 <span>  ev_sa <span class="op">=</span> <span class="fl">15</span>,</span>
 <span>  nmax_sa <span class="op">=</span> <span class="fl">40</span>,</span>
-<span>  conversion_trigger <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"any_single_success"</span>, <span class="st">"all_single_success"</span>, <span class="st">"k_of_K"</span><span class="op">)</span>,</span>
+<span>  conversion_trigger <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"any_single_success"</span>, <span class="st">"all_single_success"</span>, <span class="st">"k_of_K"</span>,</span>
+<span>    <span class="st">"not_both_futile"</span><span class="op">)</span>,</span>
 <span>  k_required <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  pp_go <span class="op">=</span> <span class="fl">0.7</span>,</span>
 <span>  pp_nogo <span class="op">=</span> <span class="fl">0.2</span>,</span>
@@ -91,7 +92,7 @@
 
 
 <dt id="arg-conversion-trigger">conversion_trigger<a class="anchor" aria-label="anchor" href="#arg-conversion-trigger"></a></dt>
-<dd><p>Trigger type: "any_single_success", "all_single_success", "k_of_K"</p></dd>
+<dd><p>Trigger type: "any_single_success", "all_single_success", "k_of_K", "not_both_futile"</p></dd>
 
 
 <dt id="arg-k-required">k_required<a class="anchor" aria-label="anchor" href="#arg-k-required"></a></dt>
