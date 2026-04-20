@@ -93,7 +93,8 @@ sudo dnf install R-devel gcc-c++ lapack-devel blas-devel
 
 ### Install from GitHub
 
-R \>= 4.1 is recommended due to Rcpp/RcppArmadillo usage.
+R \>= 4.2 is required (see `DESCRIPTION`). This matches the BATON
+companion package so the two can be loaded together in the same session.
 
 ``` r
 # Using pak (recommended)
