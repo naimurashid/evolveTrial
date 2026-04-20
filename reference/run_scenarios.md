@@ -52,6 +52,13 @@ run_scenarios(
   `return_percentiles = TRUE`. Default
   `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`.
 
+- return_variance:
+
+  Logical; if `TRUE`, per-arm operating-characteristic variances are
+  collected from [`run_simulation_pure()`](run_simulation_pure.md) and
+  returned as additional `*_var` columns in the summary. Default
+  `FALSE`.
+
 ## Value
 
 When `return_percentiles = FALSE` (default), a data.table/data.frame

@@ -90,6 +90,12 @@ and return percentile summaries. Default <code>FALSE</code>.</p></dd>
 <dd><p>Numeric vector of probabilities for percentile
 computation when <code>return_percentiles = TRUE</code>. Default <code>c(0, 0.25, 0.5, 0.75, 0.9, 1.0)</code>.</p></dd>
 
+
+<dt id="arg-return-variance">return_variance<a class="anchor" aria-label="anchor" href="#arg-return-variance"></a></dt>
+<dd><p>Logical; if <code>TRUE</code>, per-arm operating-characteristic
+variances are collected from <code><a href="run_simulation_pure.html">run_simulation_pure()</a></code> and returned as
+additional <code>*_var</code> columns in the summary. Default <code>FALSE</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
