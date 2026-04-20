@@ -1,4 +1,4 @@
 # License
 
     YEAR: 2025
-    COPYRIGHT HOLDER: Naim Rashid
+    COPYRIGHT HOLDER: The University of North Carolina at Chapel Hill
