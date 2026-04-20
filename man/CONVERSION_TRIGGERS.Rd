@@ -5,7 +5,7 @@
 \alias{CONVERSION_TRIGGERS}
 \title{Conversion triggers}
 \format{
-An object of class \code{character} of length 3.
+An object of class \code{character} of length 5.
 }
 \usage{
 CONVERSION_TRIGGERS

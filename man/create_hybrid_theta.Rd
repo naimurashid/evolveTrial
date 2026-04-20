@@ -10,7 +10,8 @@ create_hybrid_theta(
   hr_threshold_sa = 0.8,
   ev_sa = 15,
   nmax_sa = 40,
-  conversion_trigger = c("any_single_success", "all_single_success", "k_of_K"),
+  conversion_trigger = c("any_single_success", "all_single_success", "k_of_K",
+    "not_both_futile"),
   k_required = 1,
   pp_go = 0.7,
   pp_nogo = 0.2,
@@ -38,7 +39,7 @@ create_hybrid_theta(
 
 \item{nmax_sa}{Maximum N in SA phase per arm (default 40)}
 
-\item{conversion_trigger}{Trigger type: "any_single_success", "all_single_success", "k_of_K"}
+\item{conversion_trigger}{Trigger type: "any_single_success", "all_single_success", "k_of_K", "not_both_futile"}
 
 \item{k_required}{For k_of_K trigger, number required (default 1)}
 

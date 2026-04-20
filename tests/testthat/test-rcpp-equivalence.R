@@ -523,8 +523,8 @@ test_that("compute_hybrid_oc_cpp is fast", {
 
   cat(sprintf("\nRcpp OC time for 1000 sims: %.2f s\n", cpp_time))
 
-  # Should complete in under 120 seconds (allows for system load variation)
-  # Typical time is 10-60s depending on hardware
-  expect_true(cpp_time < 120,
-              info = sprintf("C++ OC computation took %.1fs, expected < 120s", cpp_time))
+  # Should complete in under 300 seconds (allows for CI runner load variation)
+  # Typical time is 10-60s on local hardware, 60-180s on GitHub Actions
+  expect_true(cpp_time < 300,
+              info = sprintf("C++ OC computation took %.1fs, expected < 300s", cpp_time))
 })

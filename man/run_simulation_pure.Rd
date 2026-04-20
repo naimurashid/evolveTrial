@@ -68,7 +68,8 @@ run_simulation_pure(
   cluster = NULL,
   progress = interactive(),
   return_percentiles = FALSE,
-  percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1)
+  percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1),
+  return_variance = FALSE
 )
 }
 \arguments{
