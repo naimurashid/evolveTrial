@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Adaptive Clinical Trial Utilities • evolveTrial</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Adaptive Clinical Trial Utilities">
 <meta name="description" content="Helpers for Bayesian adaptive platform/umbrella clinical trials, including simulation, decision rules, and reporting.">
@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">evolveTrial</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.0.9001</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -162,28 +162,28 @@
 <col width="58%">
 <col width="41%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Error</th>
 <th>Fix</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>
 <code>compilation failed</code> or <code>make: not found</code>
 </td>
 <td>Install Rtools (Windows) or Xcode CLI tools (macOS)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>'RcppArmadillo.h' file not found</code></td>
 <td>
 <code>install.packages("RcppArmadillo")</code> then retry</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>
 <code>library not found for -lgfortran</code> (macOS)</td>
 <td><code>brew install gcc</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Installation times out</td>
 <td><code>remotes::install_github("naimurashid/evolveTrial", build_vignettes = FALSE)</code></td>
 </tr>
@@ -325,32 +325,32 @@
 <col width="52%">
 <col width="47%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Function</th>
 <th>Purpose</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/run_simulation_pure.html">run_simulation_pure()</a></code></td>
 <td>Simulate a single-arm or multi-arm trial with time-to-event endpoints</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/run_scenarios.html">run_scenarios()</a></code></td>
 <td>Run multiple scenario configurations over a shared baseline</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/scenarios_from_grid.html">scenarios_from_grid()</a></code></td>
 <td>Generate factorial scenario grid from parameter choices</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/run_simulation_binary.html">run_simulation_binary()</a></code></td>
 <td>Simulate a binary-endpoint trial (one- or two-stage)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/compute_hybrid_oc_rcpp.html">compute_hybrid_oc_rcpp()</a></code></td>
 <td>Simulate hybrid seamless SA-to-BA trial via C++ engine</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/create_hybrid_theta.html">create_hybrid_theta()</a></code></td>
 <td>Construct the hybrid design parameter vector</td>
 </tr>
@@ -365,32 +365,32 @@
 <col width="52%">
 <col width="47%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Function</th>
 <th>Purpose</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/grid_calibrate.html">grid_calibrate()</a></code></td>
 <td>Grid search over thresholds for optimal design calibration</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/calibrate_alpha.html">calibrate_alpha()</a></code></td>
 <td>Calibrate type I error across null scenarios</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/explore_early_stopping_from_cal.html">explore_early_stopping_from_cal()</a></code></td>
 <td>Explore early stopping configurations from a calibration</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/filter_early_grid.html">filter_early_grid()</a></code></td>
 <td>Filter designs meeting alpha/power constraints</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/recommend_design_from_early.html">recommend_design_from_early()</a></code></td>
 <td>Select best design from feasible set</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/adopt_calibration.html">adopt_calibration()</a></code></td>
 <td>Adopt a calibrated design into trial arguments</td>
 </tr>
@@ -405,16 +405,16 @@
 <col width="52%">
 <col width="47%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Function</th>
 <th>Purpose</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/find_simon_design.html">find_simon_design()</a></code></td>
 <td>Find optimal or minimax Simon two-stage design</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/simon_oc_exact.html">simon_oc_exact()</a></code></td>
 <td>Exact operating characteristics for a Simon design</td>
 </tr>
@@ -429,28 +429,28 @@
 <col width="52%">
 <col width="47%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Function</th>
 <th>Purpose</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/pretty_scenario_matrix.html">pretty_scenario_matrix()</a></code></td>
 <td>Pivot simulation results to wide-format summary</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/plot_calibration.html">plot_calibration()</a></code></td>
 <td>Power vs type I error with Pareto frontier</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/plot_early_tradeoff.html">plot_early_tradeoff()</a></code></td>
 <td>Early stopping trade-off visualization</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/export_scenario_table_to_excel.html">export_scenario_table_to_excel()</a></code></td>
 <td>Export results to formatted Excel workbook</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/export_scenario_table_to_png.html">export_scenario_table_to_png()</a></code></td>
 <td>Export results to PNG via gt</td>
 </tr>
@@ -465,11 +465,11 @@
 <col width="52%">
 <col width="47%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Function</th>
 <th>Purpose</th>
 </tr></thead>
-<tbody><tr class="odd">
+<tbody><tr>
 <td><code><a href="reference/estimate_vsref_gate_timing.html">estimate_vsref_gate_timing()</a></code></td>
 <td>Estimate when information gates can first be satisfied</td>
 </tr></tbody>
@@ -483,36 +483,36 @@
 <col width="52%">
 <col width="47%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Function</th>
 <th>Purpose</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/evaluate_sa_efficacy.html">evaluate_sa_efficacy()</a></code></td>
 <td>Evaluate single-arm efficacy decision</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/evaluate_sa_futility.html">evaluate_sa_futility()</a></code></td>
 <td>Evaluate single-arm futility decision</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/evaluate_ba_efficacy.html">evaluate_ba_efficacy()</a></code></td>
 <td>Evaluate between-arm efficacy decision</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/evaluate_ba_futility.html">evaluate_ba_futility()</a></code></td>
 <td>Evaluate between-arm futility decision</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/evaluate_conversion_trigger.html">evaluate_conversion_trigger()</a></code></td>
 <td>Evaluate SA-to-BA conversion readiness</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code><a href="reference/make_conversion_decision.html">make_conversion_decision()</a></code></td>
 <td>Execute conversion decision with SSR</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code><a href="reference/perform_ssr.html">perform_ssr()</a></code></td>
 <td>Sample size re-estimation for between-arm phase</td>
 </tr>

@@ -7,11 +7,11 @@
 ## Citation
 
 Rashid N (2026). *evolveTrial: Adaptive Clinical Trial Utilities*. R
-package version 0.0.0.9000.
+package version 0.0.0.9001.
 
     @Manual{,
       title = {evolveTrial: Adaptive Clinical Trial Utilities},
       author = {Naim Rashid},
       year = {2026},
-      note = {R package version 0.0.0.9000},
+      note = {R package version 0.0.0.9001},
     }

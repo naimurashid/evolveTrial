@@ -19,13 +19,13 @@ with **seamless** BA monitoring using all accumulated data
 
 ### 1.2 Key Design Decisions
 
-| Decision                  | Choice                                             | Rationale                                                 |
-|---------------------------|----------------------------------------------------|-----------------------------------------------------------|
-| SA efficacy criteria      | Configurable: “any”, “all”, or “k_of_K”            | Flexibility for different trial contexts                  |
-| Sample size method        | Both predictive AND posterior                      | Predictive for production, posterior for fast prototyping |
-| SA futility handling      | Configurable: “stop_trial”, “drop_arm”, “continue” | Per-arm flexibility                                       |
-| Data use after conversion | Seamless (use all data)                            | FDA-accepted, maximizes information                       |
-| Survival model            | Piecewise exponential (PWE)                        | Matches evolveTrial, handles non-constant hazards         |
+| Decision | Choice | Rationale |
+|----|----|----|
+| SA efficacy criteria | Configurable: “any”, “all”, or “k_of_K” | Flexibility for different trial contexts |
+| Sample size method | Both predictive AND posterior | Predictive for production, posterior for fast prototyping |
+| SA futility handling | Configurable: “stop_trial”, “drop_arm”, “continue” | Per-arm flexibility |
+| Data use after conversion | Seamless (use all data) | FDA-accepted, maximizes information |
+| Survival model | Piecewise exponential (PWE) | Matches evolveTrial, handles non-constant hazards |
 
 ### 1.3 Literature Foundation
 
@@ -68,6 +68,7 @@ Probability that arm k beats historical by threshold c_k:
 For exponential (K=1): **Closed-form Gamma CDF**
 
 ``` r
+
 p_single <- pgamma(c_k * lambda_hist, shape = a_post, rate = b_post)
 ```
 
@@ -83,6 +84,7 @@ Probability that arm A is superior to arm B:
 For exponential: **Closed-form F-distribution**
 
 ``` r
+
 p_between <- pf(
   q = (b_A / b_B) * (a_B / a_A),
   df1 = 2 * a_A,
@@ -182,11 +184,11 @@ efficacy: `p_AB^between > eff_ba` - Check BA futility:
 
 ### 4.3 Conversion Rules
 
-| Decision  | Condition                         | Action                          |
-|-----------|-----------------------------------|---------------------------------|
-| GO        | `PP(N_add) >= pp_go` for viable N | Proceed to STATE_BETWEEN        |
-| NO-GO     | `max(PP) < pp_nogo`               | Stop with SA conclusions        |
-| AMBIGUOUS | `pp_nogo <= max(PP) < pp_go`      | Default to NO-GO (configurable) |
+| Decision | Condition | Action |
+|----|----|----|
+| GO | `PP(N_add) >= pp_go` for viable N | Proceed to STATE_BETWEEN |
+| NO-GO | `max(PP) < pp_nogo` | Stop with SA conclusions |
+| AMBIGUOUS | `pp_nogo <= max(PP) < pp_go` | Default to NO-GO (configurable) |
 
 **Default thresholds**: - `pp_go = 0.70` - `pp_nogo = 0.20`
 
@@ -246,38 +248,38 @@ during development.
 
 ### 6.1 Phase 1 (Single-Arm)
 
-| Parameter    | Symbol  | Range          | Default | Description                              |
-|--------------|---------|----------------|---------|------------------------------------------|
-| SA efficacy  | eff_sa  | \[0.80, 0.99\] | 0.90    | Posterior prob threshold for SA efficacy |
-| SA futility  | fut_sa  | \[0.01, 0.25\] | 0.10    | Posterior prob threshold for SA futility |
-| HR threshold | c_k     | \[0.60, 0.90\] | 0.80    | Target HR vs historical                  |
-| Min events   | ev_sa   | \[5, 25\]      | 15      | Minimum events before SA interim         |
-| Max N        | nmax_sa | \[30, 100\]    | 40      | Maximum N in SA phase per arm            |
+| Parameter | Symbol | Range | Default | Description |
+|----|----|----|----|----|
+| SA efficacy | eff_sa | \[0.80, 0.99\] | 0.90 | Posterior prob threshold for SA efficacy |
+| SA futility | fut_sa | \[0.01, 0.25\] | 0.10 | Posterior prob threshold for SA futility |
+| HR threshold | c_k | \[0.60, 0.90\] | 0.80 | Target HR vs historical |
+| Min events | ev_sa | \[5, 25\] | 15 | Minimum events before SA interim |
+| Max N | nmax_sa | \[30, 100\] | 40 | Maximum N in SA phase per arm |
 
 ### 6.2 Conversion
 
-| Parameter        | Symbol    | Range          | Default | Description                    |
-|------------------|-----------|----------------|---------|--------------------------------|
-| PP go            | pp_go     | \[0.50, 0.90\] | 0.70    | PP threshold to proceed to BA  |
-| PP no-go         | pp_nogo   | \[0.10, 0.40\] | 0.20    | PP threshold to stop           |
-| Trigger          | trigger   | categorical    | “any”   | “any”, “all”, or “k_of_K”      |
-| Max additional N | max_add_n | \[30, 120\]    | 60      | Max additional patients for BA |
+| Parameter | Symbol | Range | Default | Description |
+|----|----|----|----|----|
+| PP go | pp_go | \[0.50, 0.90\] | 0.70 | PP threshold to proceed to BA |
+| PP no-go | pp_nogo | \[0.10, 0.40\] | 0.20 | PP threshold to stop |
+| Trigger | trigger | categorical | “any” | “any”, “all”, or “k_of_K” |
+| Max additional N | max_add_n | \[30, 120\] | 60 | Max additional patients for BA |
 
 ### 6.3 Phase 2 (Between-Arm)
 
-| Parameter   | Symbol  | Range           | Default | Description                              |
-|-------------|---------|-----------------|---------|------------------------------------------|
-| BA efficacy | eff_ba  | \[0.90, 0.999\] | 0.975   | Posterior prob threshold for BA efficacy |
-| BA futility | fut_ba  | \[0.01, 0.15\]  | 0.05    | Posterior prob threshold for BA futility |
-| Min events  | ev_ba   | \[8, 35\]       | 15      | Minimum events before BA interim         |
-| Max N       | nmax_ba | \[40, 150\]     | 80      | Maximum N in BA phase per arm            |
+| Parameter | Symbol | Range | Default | Description |
+|----|----|----|----|----|
+| BA efficacy | eff_ba | \[0.90, 0.999\] | 0.975 | Posterior prob threshold for BA efficacy |
+| BA futility | fut_ba | \[0.01, 0.15\] | 0.05 | Posterior prob threshold for BA futility |
+| Min events | ev_ba | \[8, 35\] | 15 | Minimum events before BA interim |
+| Max N | nmax_ba | \[40, 150\] | 80 | Maximum N in BA phase per arm |
 
 ### 6.4 Structural
 
-| Parameter      | Symbol         | Range          | Default | Description                   |
-|----------------|----------------|----------------|---------|-------------------------------|
-| PWE intervals  | n_intervals    | \[4, 12\]      | 8       | Number of piecewise intervals |
-| Prior strength | prior_strength | \[0.15, 0.60\] | 0.45    | Gamma prior concentration     |
+| Parameter | Symbol | Range | Default | Description |
+|----|----|----|----|----|
+| PWE intervals | n_intervals | \[4, 12\] | 8 | Number of piecewise intervals |
+| Prior strength | prior_strength | \[0.15, 0.60\] | 0.45 | Gamma prior concentration |
 
 ------------------------------------------------------------------------
 
@@ -294,14 +296,14 @@ during development.
 
 ### 7.2 Secondary Metrics
 
-| Metric       | Definition                              | Purpose                         |
-|--------------|-----------------------------------------|---------------------------------|
-| P_conversion | P(proceed to BA phase)                  | \>= 0.10 (ensure BA evaluation) |
-| P_eff_sa     | P(SA efficacy) under H1                 | Monitor SA stopping             |
-| P_fut_sa     | P(SA futility) under H0                 | Monitor early stopping          |
-| EN_sa        | Expected N in SA phase                  | Cost analysis                   |
-| EN_ba_cond   | Expected N in BA phase given conversion | Cost analysis                   |
-| ET_total     | Expected trial duration                 | Timeline planning               |
+| Metric | Definition | Purpose |
+|----|----|----|
+| P_conversion | P(proceed to BA phase) | \>= 0.10 (ensure BA evaluation) |
+| P_eff_sa | P(SA efficacy) under H1 | Monitor SA stopping |
+| P_fut_sa | P(SA futility) under H0 | Monitor early stopping |
+| EN_sa | Expected N in SA phase | Cost analysis |
+| EN_ba_cond | Expected N in BA phase given conversion | Cost analysis |
+| ET_total | Expected trial duration | Timeline planning |
 
 ------------------------------------------------------------------------
 
@@ -352,6 +354,7 @@ shouldn’t.
 ### 9.2 Constraints
 
 ``` r
+
 constraints <- list(
   power = c("ge", 0.80),
   type1 = c("le", 0.10),
@@ -392,11 +395,11 @@ constraints <- list(
 
 ### 10.3 Testing
 
-| File                                       | Purpose                                 |
-|--------------------------------------------|-----------------------------------------|
-| `tests/testthat/test-hybrid-simulator.R`   | Parameter validation, state transitions |
-| `tests/testthat/test-hybrid-ssr.R`         | PP algorithms                           |
-| `tests/testthat/test-hybrid-integration.R` | Full BO calibration                     |
+| File | Purpose |
+|----|----|
+| `tests/testthat/test-hybrid-simulator.R` | Parameter validation, state transitions |
+| `tests/testthat/test-hybrid-ssr.R` | PP algorithms |
+| `tests/testthat/test-hybrid-integration.R` | Full BO calibration |
 
 ------------------------------------------------------------------------
 
@@ -441,18 +444,18 @@ For the ARPA-H ADAPT breast cancer platform trial:
 
 ### 13.1 Completed Components
 
-| Component             | File                                      | Status   | Tests                  |
-|-----------------------|-------------------------------------------|----------|------------------------|
-| Core simulator        | `R/hybrid_trial.R`                        | COMPLETE | 60 passing             |
-| SSR methods           | `R/hybrid_ssr.R`                          | COMPLETE | Included in unit tests |
-| Decision rules        | `R/hybrid_decisions.R`                    | COMPLETE | Included in unit tests |
-| BATON wrapper         | `R/warmstart_wrappers.R`                  | COMPLETE | Integration test       |
-| Bounds/constraints    | `R/scenario_configs.R`                    | COMPLETE | \-                     |
-| Aggregation           | `R/aggregation.R`                         | COMPLETE | \-                     |
-| Calibration scenarios | `R/hybrid_calibration_scenarios.R`        | COMPLETE | \-                     |
-| Unit tests            | `tests/testthat/test-hybrid-simulator.R`  | COMPLETE | 60 tests               |
-| Integration test      | `scripts/test_hybrid_integration.R`       | COMPLETE | 9 test sections        |
-| Production CSV        | `scenarios/cohortB_hybrid_production.csv` | COMPLETE | 11 scenarios           |
+| Component | File | Status | Tests |
+|----|----|----|----|
+| Core simulator | `R/hybrid_trial.R` | COMPLETE | 60 passing |
+| SSR methods | `R/hybrid_ssr.R` | COMPLETE | Included in unit tests |
+| Decision rules | `R/hybrid_decisions.R` | COMPLETE | Included in unit tests |
+| BATON wrapper | `R/warmstart_wrappers.R` | COMPLETE | Integration test |
+| Bounds/constraints | `R/scenario_configs.R` | COMPLETE | \- |
+| Aggregation | `R/aggregation.R` | COMPLETE | \- |
+| Calibration scenarios | `R/hybrid_calibration_scenarios.R` | COMPLETE | \- |
+| Unit tests | `tests/testthat/test-hybrid-simulator.R` | COMPLETE | 60 tests |
+| Integration test | `scripts/test_hybrid_integration.R` | COMPLETE | 9 test sections |
+| Production CSV | `scenarios/cohortB_hybrid_production.csv` | COMPLETE | 11 scenarios |
 
 ### 13.2 Key Functions Implemented
 
@@ -530,19 +533,19 @@ Rscript scripts/run_warmstart_scenarios.R \
 
 ### 13.4 Production CSV Scenarios
 
-| Scenario ID                 | Description                   | Conversion Trigger |
-|-----------------------------|-------------------------------|--------------------|
-| cohortB_hybrid_optimal      | Minimize EN under alternative | any_single_success |
-| cohortB_hybrid_minimax      | Balance null/alt EN           | any_single_success |
-| cohortB_hybrid_fleming      | Balanced EN optimization      | any_single_success |
-| cohortB_hybrid_all_success  | Require all arms succeed      | all_single_success |
-| cohortB_hybrid_k_of_K       | k of K arms succeed           | k_of_K             |
-| cohortB_hybrid_posterior    | Fast posterior SSR            | any_single_success |
-| cohortB_hybrid_stop_on_fut  | Stop on any futility          | any_single_success |
-| cohortB_hybrid_continue_fut | Continue despite futility     | any_single_success |
-| cohortB_hybrid_strong       | Strong effect (HR=0.60)       | any_single_success |
-| cohortB_hybrid_moderate     | Moderate effect (HR=0.82)     | any_single_success |
-| cohortB_hybrid_weibull13    | Weibull shape=1.3             | any_single_success |
+| Scenario ID | Description | Conversion Trigger |
+|----|----|----|
+| cohortB_hybrid_optimal | Minimize EN under alternative | any_single_success |
+| cohortB_hybrid_minimax | Balance null/alt EN | any_single_success |
+| cohortB_hybrid_fleming | Balanced EN optimization | any_single_success |
+| cohortB_hybrid_all_success | Require all arms succeed | all_single_success |
+| cohortB_hybrid_k_of_K | k of K arms succeed | k_of_K |
+| cohortB_hybrid_posterior | Fast posterior SSR | any_single_success |
+| cohortB_hybrid_stop_on_fut | Stop on any futility | any_single_success |
+| cohortB_hybrid_continue_fut | Continue despite futility | any_single_success |
+| cohortB_hybrid_strong | Strong effect (HR=0.60) | any_single_success |
+| cohortB_hybrid_moderate | Moderate effect (HR=0.82) | any_single_success |
+| cohortB_hybrid_weibull13 | Weibull shape=1.3 | any_single_success |
 
 ------------------------------------------------------------------------
 

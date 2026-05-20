@@ -35,14 +35,14 @@ allows:
 
 ### 1.2 Key Design Features
 
-| Feature                    | Description                                                                         |
-|----------------------------|-------------------------------------------------------------------------------------|
-| **Randomization**          | Always randomize among experimental arms from trial start                           |
-| **Dual monitoring**        | Compute both within-arm (vs historical) and between-arm posteriors at every interim |
-| **Historical controls**    | Fixed, pre-specified benchmarks (not modeled as random)                             |
-| **Transition trigger**     | Configurable: any arm succeeds, all arms succeed, or k-of-K                         |
-| **Conversion decision**    | Based on predictive probability of between-arm success                              |
-| **Sample size adaptation** | Determine additional N needed for between-arm comparison at transition              |
+| Feature | Description |
+|----|----|
+| **Randomization** | Always randomize among experimental arms from trial start |
+| **Dual monitoring** | Compute both within-arm (vs historical) and between-arm posteriors at every interim |
+| **Historical controls** | Fixed, pre-specified benchmarks (not modeled as random) |
+| **Transition trigger** | Configurable: any arm succeeds, all arms succeed, or k-of-K |
+| **Conversion decision** | Based on predictive probability of between-arm success |
+| **Sample size adaptation** | Determine additional N needed for between-arm comparison at transition |
 
 ### 1.3 Trial Flow
 
@@ -117,123 +117,151 @@ allows:
 
 ### 2.1 Notation
 
-| Symbol                          | Description                                                                  |
-|---------------------------------|------------------------------------------------------------------------------|
-| $k = 1,\ldots,K$                | Arm index ($K \geq 2$, all experimental)                                     |
-| $\lambda_{k}$                   | Hazard rate for arm $k$ (random, to be estimated)                            |
-| $\lambda_{\text{hist},k}$       | Historical control hazard for arm $k$ (fixed, pre-specified)                 |
-| $n_{k}$                         | Number of events observed in arm $k$                                         |
-| $T_{k}$                         | Total exposure time (person-time) in arm $k$                                 |
-| $c_{k}$                         | Target hazard ratio threshold vs historical (e.g., 0.8)                      |
-| $\text{HR}_{k}^{(\text{hist})}$ | Hazard ratio of arm $k$ vs historical: $\lambda_{k}/\lambda_{\text{hist},k}$ |
-| $\text{HR}_{jl}$                | Hazard ratio between arms: $\lambda_{j}/\lambda_{l}$                         |
+| Symbol | Description |
+|----|----|
+| $`k = 1, \ldots, K`$ | Arm index ($`K \geq 2`$, all experimental) |
+| $`\lambda_k`$ | Hazard rate for arm $`k`$ (random, to be estimated) |
+| $`\lambda_{\text{hist},k}`$ | Historical control hazard for arm $`k`$ (fixed, pre-specified) |
+| $`n_k`$ | Number of events observed in arm $`k`$ |
+| $`T_k`$ | Total exposure time (person-time) in arm $`k`$ |
+| $`c_k`$ | Target hazard ratio threshold vs historical (e.g., 0.8) |
+| $`\text{HR}_k^{(\text{hist})}`$ | Hazard ratio of arm $`k`$ vs historical: $`\lambda_k / \lambda_{\text{hist},k}`$ |
+| $`\text{HR}_{jl}`$ | Hazard ratio between arms: $`\lambda_j / \lambda_l`$ |
 
 ### 2.2 Survival Model: Exponential with Gamma Prior
 
 **Assumption**: Survival times follow an exponential distribution with
 arm-specific hazard rates.
 
-$$T_{ik} \mid \lambda_{k} \sim \text{Exponential}\left( \lambda_{k} \right)$$
+``` math
+T_{ik} \mid \lambda_k \sim \text{Exponential}(\lambda_k)
+```
 
-where $T_{ik}$ is the survival time for patient $i$ in arm $k$.
+where $`T_{ik}`$ is the survival time for patient $`i`$ in arm $`k`$.
 
 **Prior**: Gamma prior on each hazard rate (conjugate):
 
-$$\lambda_{k} \sim \text{Gamma}\left( a_{0},b_{0} \right)$$
+``` math
+\lambda_k \sim \text{Gamma}(a_0, b_0)
+```
 
-where $a_{0},b_{0}$ are typically small (e.g., $a_{0} = b_{0} = 0.001$)
-for a vague prior.
+where $`a_0, b_0`$ are typically small (e.g., $`a_0 = b_0 = 0.001`$) for
+a vague prior.
 
-**Likelihood**: For $n_{k}$ events and total exposure $T_{k}$:
+**Likelihood**: For $`n_k`$ events and total exposure $`T_k`$:
 
-$$L\left( \lambda_{k} \mid \text{data} \right) \propto \lambda_{k}^{n_{k}}\exp\left( - \lambda_{k}T_{k} \right)$$
+``` math
+L(\lambda_k \mid \text{data}) \propto \lambda_k^{n_k} \exp(-\lambda_k T_k)
+```
 
 **Posterior**: By conjugacy:
 
-$$\lambda_{k} \mid \text{data} \sim \text{Gamma}\left( a_{k},b_{k} \right)$$
+``` math
+\lambda_k \mid \text{data} \sim \text{Gamma}(a_k, b_k)
+```
 
-where: - $a_{k} = a_{0} + n_{k}$ (shape parameter) -
-$b_{k} = b_{0} + T_{k}$ (rate parameter)
+where: - $`a_k = a_0 + n_k`$ (shape parameter) - $`b_k = b_0 + T_k`$
+(rate parameter)
 
 **Sufficient statistics**: The posterior is fully characterized by
-$\left( a_{k},b_{k} \right)$.
+$`(a_k, b_k)`$.
 
 ### 2.3 Historical Control Specification
 
-The historical control hazard $\lambda_{\text{hist},k}$ is a **fixed
+The historical control hazard $`\lambda_{\text{hist},k}`$ is a **fixed
 constant**, typically derived from:
 
-$$\lambda_{\text{hist},k} = \frac{\log(2)}{m_{\text{hist},k}}$$
+``` math
+\lambda_{\text{hist},k} = \frac{\log(2)}{m_{\text{hist},k}}
+```
 
-where $m_{\text{hist},k}$ is the historical median survival time for the
-population relevant to arm $k$.
+where $`m_{\text{hist},k}`$ is the historical median survival time for
+the population relevant to arm $`k`$.
 
-**Key point**: We do NOT place a prior on $\lambda_{\text{hist},k}$. It
-enters calculations only as a fixed benchmark.
+**Key point**: We do NOT place a prior on $`\lambda_{\text{hist},k}`$.
+It enters calculations only as a fixed benchmark.
 
 ### 2.4 Within-Arm Comparison (vs Fixed Historical)
 
 **Hazard ratio**:
 
-$$\text{HR}_{k}^{(\text{hist})} = \frac{\lambda_{k}}{\lambda_{\text{hist},k}}$$
+``` math
+\text{HR}_k^{(\text{hist})} = \frac{\lambda_k}{\lambda_{\text{hist},k}}
+```
 
 **Decision quantity** — probability that HR is below target threshold
-$c_{k}$:
+$`c_k`$:
 
-$$p_{k}^{\text{single}} = P\left( \text{HR}_{k}^{(\text{hist})} < c_{k} \mid \text{data} \right) = P\left( \lambda_{k} < c_{k} \cdot \lambda_{\text{hist},k} \mid \text{data} \right)$$
+``` math
+p_k^{\text{single}} = P\left(\text{HR}_k^{(\text{hist})} < c_k \mid \text{data}\right) = P\left(\lambda_k < c_k \cdot \lambda_{\text{hist},k} \mid \text{data}\right)
+```
 
 **Closed-form computation**:
 
-Since
-$\lambda_{k} \mid \text{data} \sim \text{Gamma}\left( a_{k},b_{k} \right)$:
+Since $`\lambda_k \mid \text{data} \sim \text{Gamma}(a_k, b_k)`$:
 
-$$p_{k}^{\text{single}} = F_{\text{Gamma}}\left( c_{k} \cdot \lambda_{\text{hist},k};a_{k},b_{k} \right)$$
+``` math
+p_k^{\text{single}} = F_{\text{Gamma}}\left(c_k \cdot \lambda_{\text{hist},k}; a_k, b_k\right)
+```
 
-where $F_{\text{Gamma}}(x;a,b)$ is the CDF of the Gamma distribution
-with shape $a$ and rate $b$.
+where $`F_{\text{Gamma}}(x; a, b)`$ is the CDF of the Gamma distribution
+with shape $`a`$ and rate $`b`$.
 
 **In R**:
 
 ``` r
+
 p_single <- pgamma(c_k * lambda_hist_k, shape = a_k, rate = b_k)
 ```
 
 ### 2.5 Between-Arm Comparison
 
-**Hazard ratio** between arms $j$ and $l$:
+**Hazard ratio** between arms $`j`$ and $`l`$:
 
-$$\text{HR}_{jl} = \frac{\lambda_{j}}{\lambda_{l}}$$
+``` math
+\text{HR}_{jl} = \frac{\lambda_j}{\lambda_l}
+```
 
 **Decision quantity**:
 
-$$p_{jl}^{\text{between}} = P\left( \text{HR}_{jl} < 1 \mid \text{data} \right) = P\left( \frac{\lambda_{j}}{\lambda_{l}} < 1 \mid \text{data} \right)$$
+``` math
+p_{jl}^{\text{between}} = P\left(\text{HR}_{jl} < 1 \mid \text{data}\right) = P\left(\frac{\lambda_j}{\lambda_l} < 1 \mid \text{data}\right)
+```
 
 **Distribution of the ratio**:
 
-If $\lambda_{j} \sim \text{Gamma}\left( a_{j},b_{j} \right)$ and
-$\lambda_{l} \sim \text{Gamma}\left( a_{l},b_{l} \right)$ independently,
-then:
+If $`\lambda_j \sim \text{Gamma}(a_j, b_j)`$ and
+$`\lambda_l \sim \text{Gamma}(a_l, b_l)`$ independently, then:
 
-$$\frac{\lambda_{j}/b_{j}}{\lambda_{l}/b_{l}} \sim \text{BetaPrime}\left( a_{j},a_{l} \right)$$
+``` math
+\frac{\lambda_j / b_j}{\lambda_l / b_l} \sim \text{BetaPrime}(a_j, a_l)
+```
 
 Or equivalently, using the F-distribution relationship:
 
-$$\frac{a_{l}}{a_{j}} \cdot \frac{b_{j}}{b_{l}} \cdot \frac{\lambda_{j}}{\lambda_{l}} \sim F\left( 2a_{j},2a_{l} \right)$$
+``` math
+\frac{a_l}{a_j} \cdot \frac{b_j}{b_l} \cdot \frac{\lambda_j}{\lambda_l} \sim F(2a_j, 2a_l)
+```
 
 **Closed-form computation**:
 
-$$P\left( \frac{\lambda_{j}}{\lambda_{l}} < c \right) = F_{F}\left( c \cdot \frac{b_{j}}{b_{l}} \cdot \frac{a_{l}}{a_{j}};2a_{j},2a_{l} \right)$$
+``` math
+P\left(\frac{\lambda_j}{\lambda_l} < c\right) = F_F\left(c \cdot \frac{b_j}{b_l} \cdot \frac{a_l}{a_j}; 2a_j, 2a_l\right)
+```
 
-where $F_{F}\left( x;d_{1},d_{2} \right)$ is the CDF of the
-F-distribution with degrees of freedom $d_{1}$ and $d_{2}$.
+where $`F_F(x; d_1, d_2)`$ is the CDF of the F-distribution with degrees
+of freedom $`d_1`$ and $`d_2`$.
 
-For $c = 1$ (testing whether arm $j$ is superior to arm $l$):
+For $`c = 1`$ (testing whether arm $`j`$ is superior to arm $`l`$):
 
-$$p_{jl}^{\text{between}} = F_{F}\left( \frac{b_{j}}{b_{l}} \cdot \frac{a_{l}}{a_{j}};2a_{j},2a_{l} \right)$$
+``` math
+p_{jl}^{\text{between}} = F_F\left(\frac{b_j}{b_l} \cdot \frac{a_l}{a_j}; 2a_j, 2a_l\right)
+```
 
 **In R**:
 
 ``` r
+
 p_between <- pf(
   q = (b_j / b_l) * (a_l / a_j),
   df1 = 2 * a_j,
@@ -244,6 +272,7 @@ p_between <- pf(
 **More general form** (for HR \< c):
 
 ``` r
+
 compute_p_hr_less_than_c <- function(a_j, b_j, a_l, b_l, c = 1) {
   pf(
     q = c * (b_j / b_l) * (a_l / a_j),
@@ -255,12 +284,12 @@ compute_p_hr_less_than_c <- function(a_j, b_j, a_l, b_l, c = 1) {
 
 ### 2.6 Summary of Posterior Computations
 
-| Quantity                                              | Formula                                                                   | R Implementation                          |
-|-------------------------------------------------------|---------------------------------------------------------------------------|-------------------------------------------|
-| Posterior shape                                       | $a_{k} = a_{0} + n_{k}$                                                   | `a_k <- a_0 + n_events_k`                 |
-| Posterior rate                                        | $b_{k} = b_{0} + T_{k}$                                                   | `b_k <- b_0 + exposure_k`                 |
-| $P\left( \text{HR}_{k}^{\text{hist}} < c_{k} \right)$ | $F_{\text{Gamma}}\left( c_{k}\lambda_{\text{hist},k};a_{k},b_{k} \right)$ | `pgamma(c_k * lambda_hist_k, a_k, b_k)`   |
-| $P\left( \text{HR}_{jl} < c \right)$                  | $F_{F}\left( c \cdot \frac{b_{j}a_{l}}{b_{l}a_{j}};2a_{j},2a_{l} \right)$ | `pf(c * b_j/b_l * a_l/a_j, 2*a_j, 2*a_l)` |
+| Quantity | Formula | R Implementation |
+|----|----|----|
+| Posterior shape | $`a_k = a_0 + n_k`$ | `a_k <- a_0 + n_events_k` |
+| Posterior rate | $`b_k = b_0 + T_k`$ | `b_k <- b_0 + exposure_k` |
+| $`P(\text{HR}_k^{\text{hist}} < c_k)`$ | $`F_{\text{Gamma}}(c_k \lambda_{\text{hist},k}; a_k, b_k)`$ | `pgamma(c_k * lambda_hist_k, a_k, b_k)` |
+| $`P(\text{HR}_{jl} < c)`$ | $`F_F(c \cdot \frac{b_j a_l}{b_l a_j}; 2a_j, 2a_l)`$ | `pf(c * b_j/b_l * a_l/a_j, 2*a_j, 2*a_l)` |
 
 ------------------------------------------------------------------------
 
@@ -268,70 +297,83 @@ compute_p_hr_less_than_c <- function(a_j, b_j, a_l, b_l, c = 1) {
 
 ### 3.1 Single-Arm Decision Rules
 
-At each interim analysis, for each active arm $k$:
+At each interim analysis, for each active arm $`k`$:
 
-**Efficacy**: Arm $k$ demonstrates efficacy vs historical if:
+**Efficacy**: Arm $`k`$ demonstrates efficacy vs historical if:
 
-$$p_{k}^{\text{single}} = P\left( \text{HR}_{k}^{(\text{hist})} < c_{k} \mid \text{data} \right) > \gamma_{\text{eff}}^{\text{single}}$$
+``` math
+p_k^{\text{single}} = P\left(\text{HR}_k^{(\text{hist})} < c_k \mid \text{data}\right) > \gamma_{\text{eff}}^{\text{single}}
+```
 
-**Futility**: Arm $k$ is dropped for futility if:
+**Futility**: Arm $`k`$ is dropped for futility if:
 
-$$p_{k}^{\text{single}} = P\left( \text{HR}_{k}^{(\text{hist})} < c_{k} \mid \text{data} \right) < \gamma_{\text{fut}}^{\text{single}}$$
+``` math
+p_k^{\text{single}} = P\left(\text{HR}_k^{(\text{hist})} < c_k \mid \text{data}\right) < \gamma_{\text{fut}}^{\text{single}}
+```
 
-**Typical values**: - $c_{k} = 0.8$ (target 20% improvement over
-historical) - $\gamma_{\text{eff}}^{\text{single}} = 0.90$ (90%
+**Typical values**: - $`c_k = 0.8`$ (target 20% improvement over
+historical) - $`\gamma_{\text{eff}}^{\text{single}} = 0.90`$ (90%
 posterior probability for efficacy) -
-$\gamma_{\text{fut}}^{\text{single}} = 0.10$ (10% posterior probability
-for futility)
+$`\gamma_{\text{fut}}^{\text{single}} = 0.10`$ (10% posterior
+probability for futility)
 
 ### 3.2 Between-Arm Decision Rules
 
 At each interim analysis (primarily in STATE_BETWEEN, but computed
 throughout):
 
-**Efficacy**: Arm $j$ is superior to arm $l$ if:
+**Efficacy**: Arm $`j`$ is superior to arm $`l`$ if:
 
-$$p_{jl}^{\text{between}} = P\left( \text{HR}_{jl} < 1 \mid \text{data} \right) > \gamma_{\text{eff}}^{\text{between}}$$
+``` math
+p_{jl}^{\text{between}} = P\left(\text{HR}_{jl} < 1 \mid \text{data}\right) > \gamma_{\text{eff}}^{\text{between}}
+```
 
 **Futility**: Stop between-arm comparison for futility if:
 
-$$p_{jl}^{\text{between}} < \gamma_{\text{fut}}^{\text{between}}$$
+``` math
+p_{jl}^{\text{between}} < \gamma_{\text{fut}}^{\text{between}}
+```
 
-**Typical values**: - $\gamma_{\text{eff}}^{\text{between}} = 0.975$
+**Typical values**: - $`\gamma_{\text{eff}}^{\text{between}} = 0.975`$
 (more stringent for confirmatory) -
-$\gamma_{\text{fut}}^{\text{between}} = 0.05$
+$`\gamma_{\text{fut}}^{\text{between}} = 0.05`$
 
 ### 3.3 Transition Trigger Rules
 
 The trial moves from STATE_SINGLE to STATE_CONSIDER_CONVERSION when a
 trigger condition is met. Configurable options:
 
-| Trigger Type           | Condition                                                                              |
-|------------------------|----------------------------------------------------------------------------------------|
-| `"any_single_success"` | At least one arm $k$ has $p_{k}^{\text{single}} > \gamma_{\text{eff}}^{\text{single}}$ |
-| `"all_single_success"` | All active arms have $p_{k}^{\text{single}} > \gamma_{\text{eff}}^{\text{single}}$     |
-| `"k_of_K"`             | At least $k$ of $K$ arms meet single-arm efficacy                                      |
+| Trigger Type | Condition |
+|----|----|
+| `"any_single_success"` | At least one arm $`k`$ has $`p_k^{\text{single}} > \gamma_{\text{eff}}^{\text{single}}`$ |
+| `"all_single_success"` | All active arms have $`p_k^{\text{single}} > \gamma_{\text{eff}}^{\text{single}}`$ |
+| `"k_of_K"` | At least $`k`$ of $`K`$ arms meet single-arm efficacy |
 
 ### 3.4 Conversion Decision Rules
 
 At STATE_CONSIDER_CONVERSION, compute predictive probability
-$\pi_{\text{pred}}\left( N_{\text{add}} \right)$ for candidate
-additional sample sizes.
+$`\pi_{\text{pred}}(N_{\text{add}})`$ for candidate additional sample
+sizes.
 
 **Go decision** (proceed to between-arm phase):
 
-$$\exists N_{\text{add}} \in \mathcal{N}_{\text{candidates}}:\pi_{\text{pred}}\left( N_{\text{add}} \right) \geq \pi_{\text{go}}$$
+``` math
+\exists N_{\text{add}} \in \mathcal{N}_{\text{candidates}}: \pi_{\text{pred}}(N_{\text{add}}) \geq \pi_{\text{go}}
+```
 
-If multiple $N_{\text{add}}$ satisfy this, select the smallest.
+If multiple $`N_{\text{add}}`$ satisfy this, select the smallest.
 
 **No-go decision** (stop with single-arm conclusions only):
 
-$$\max\limits_{N_{\text{add}} \in \mathcal{N}_{\text{candidates}}}\pi_{\text{pred}}\left( N_{\text{add}} \right) < \pi_{\text{nogo}}$$
+``` math
+\max_{N_{\text{add}} \in \mathcal{N}_{\text{candidates}}} \pi_{\text{pred}}(N_{\text{add}}) < \pi_{\text{nogo}}
+```
 
-**Typical values**: - $\pi_{\text{go}} = 0.70$ (70% chance of
-between-arm success to proceed) - $\pi_{\text{nogo}} = 0.20$ (below 20%
-not worth continuing) -
-$\mathcal{N}_{\text{candidates}} = \{ 30,40,50,\ldots,100\}$ per arm
+**Typical values**: - $`\pi_{\text{go}} = 0.70`$ (70% chance of
+between-arm success to proceed) - $`\pi_{\text{nogo}} = 0.20`$ (below
+20% not worth continuing) -
+$`\mathcal{N}_{\text{candidates}} = \{30, 40, 50, \ldots, 100\}`$ per
+arm
 
 ------------------------------------------------------------------------
 
@@ -400,6 +442,7 @@ $\mathcal{N}_{\text{candidates}} = \{ 30,40,50,\ldots,100\}$ per arm
 ### 4.3 Pseudo-code for State Transitions
 
 ``` r
+
 update_trial_state <- function(trial) {
   
   switch(trial$state,
@@ -508,11 +551,10 @@ update_trial_state <- function(trial) {
 
 ### 5.1 Core Algorithm
 
-The predictive probability
-$\pi_{\text{pred}}\left( N_{\text{add}} \right)$ answers: “Given current
-data, if we enroll $N_{\text{add}}$ additional patients per arm, what is
-the probability that the final between-arm comparison will meet the
-efficacy criterion?”
+The predictive probability $`\pi_{\text{pred}}(N_{\text{add}})`$
+answers: “Given current data, if we enroll $`N_{\text{add}}`$ additional
+patients per arm, what is the probability that the final between-arm
+comparison will meet the efficacy criterion?”
 
 **Algorithm**:
 
@@ -555,10 +597,12 @@ efficacy criterion?”
 
 ### 5.2 Simulating Future Events
 
-For exponential survival with hazard $\lambda$, accrual rate $r$
-patients/month, and analysis at time $\tau$ after last patient enrolled:
+For exponential survival with hazard $`\lambda`$, accrual rate $`r`$
+patients/month, and analysis at time $`\tau`$ after last patient
+enrolled:
 
 ``` r
+
 simulate_future_arm <- function(lambda, n_patients, accrual_rate, followup_months) {
   # Enrollment times (uniform accrual)
   enrollment_duration <- n_patients / accrual_rate
@@ -591,6 +635,7 @@ simulate_future_arm <- function(lambda, n_patients, accrual_rate, followup_month
 ### 5.3 Complete Predictive Probability Function
 
 ``` r
+
 compute_pp_between_success <- function(
   a_post,                    # Named vector: c(A = ..., B = ...)
   b_post,                    # Named vector: c(A = ..., B = ...)
@@ -652,6 +697,7 @@ compute_pp_between_success <- function(
 ### 5.4 Finding Required Sample Size
 
 ``` r
+
 find_n_for_target_pp <- function(
   a_post, b_post,
   target_pp,                  # Target predictive probability (e.g., 0.80)
@@ -710,6 +756,7 @@ find_n_for_target_pp <- function(
 ### 5.5 Computing the Full PP Curve
 
 ``` r
+
 compute_pp_curve <- function(trial) {
   # Extract current posterior parameters
   a_post <- trial$posterior$a
@@ -768,6 +815,7 @@ compute_pp_curve <- function(trial) {
 ### 6.2 Core S3 Classes
 
 ``` r
+
 # =============================================================================
 # DESIGN SPECIFICATION CLASS
 # =============================================================================
@@ -951,6 +999,7 @@ initialize_hybrid_trial <- function(design) {
 ### 6.3 Core Functions
 
 ``` r
+
 # =============================================================================
 # POSTERIOR COMPUTATIONS
 # =============================================================================
@@ -1108,6 +1157,7 @@ drop_arm <- function(trial, arm, reason = "futility") {
 ### 6.4 Simulation Engine
 
 ``` r
+
 # =============================================================================
 # SINGLE TRIAL SIMULATION
 # =============================================================================
@@ -1339,21 +1389,22 @@ compile_operating_characteristics <- function(results, design, scenario) {
 
 The parameters to be optimized by BATON:
 
-| Parameter                      | Symbol                                 | Range           | Description                             |
-|--------------------------------|----------------------------------------|-----------------|-----------------------------------------|
-| Single-arm efficacy threshold  | $\gamma_{\text{eff}}^{\text{single}}$  | \[0.80, 0.99\]  | Posterior prob for single-arm efficacy  |
-| Single-arm futility threshold  | $\gamma_{\text{fut}}^{\text{single}}$  | \[0.01, 0.20\]  | Posterior prob for single-arm futility  |
-| HR threshold vs historical     | $c$                                    | \[0.60, 0.90\]  | Target HR improvement                   |
-| Between-arm efficacy threshold | $\gamma_{\text{eff}}^{\text{between}}$ | \[0.95, 0.999\] | Posterior prob for between-arm efficacy |
-| Between-arm futility threshold | $\gamma_{\text{fut}}^{\text{between}}$ | \[0.01, 0.10\]  | Posterior prob for between-arm futility |
-| Conversion go threshold        | $\pi_{\text{go}}$                      | \[0.50, 0.90\]  | PP threshold to proceed                 |
-| Conversion no-go threshold     | $\pi_{\text{nogo}}$                    | \[0.10, 0.40\]  | PP threshold to stop                    |
+| Parameter | Symbol | Range | Description |
+|----|----|----|----|
+| Single-arm efficacy threshold | $`\gamma_{\text{eff}}^{\text{single}}`$ | \[0.80, 0.99\] | Posterior prob for single-arm efficacy |
+| Single-arm futility threshold | $`\gamma_{\text{fut}}^{\text{single}}`$ | \[0.01, 0.20\] | Posterior prob for single-arm futility |
+| HR threshold vs historical | $`c`$ | \[0.60, 0.90\] | Target HR improvement |
+| Between-arm efficacy threshold | $`\gamma_{\text{eff}}^{\text{between}}`$ | \[0.95, 0.999\] | Posterior prob for between-arm efficacy |
+| Between-arm futility threshold | $`\gamma_{\text{fut}}^{\text{between}}`$ | \[0.01, 0.10\] | Posterior prob for between-arm futility |
+| Conversion go threshold | $`\pi_{\text{go}}`$ | \[0.50, 0.90\] | PP threshold to proceed |
+| Conversion no-go threshold | $`\pi_{\text{nogo}}`$ | \[0.10, 0.40\] | PP threshold to stop |
 
 **Total dimensions**: 7 continuous parameters
 
 ### 7.2 Scenarios for Calibration
 
 ``` r
+
 # Standard scenario set for calibration
 calibration_scenarios <- list(
   
@@ -1400,6 +1451,7 @@ calibration_scenarios <- list(
 ### 7.3 Objective Function
 
 ``` r
+
 #' BATON Objective Function for Hybrid Design Calibration
 #'
 #' @param phi Named vector of design parameters
@@ -1481,6 +1533,7 @@ build_design_from_phi <- function(design_template, phi) {
 ### 7.4 Calibration Wrapper
 
 ``` r
+
 #' Calibrate Hybrid Design Using BATON
 #'
 #' @param design_template Base design object
@@ -1574,6 +1627,7 @@ calibrate_hybrid_design <- function(
 ### 7.5 Local Validation
 
 ``` r
+
 #' Validate Design in Local Neighborhood of Optimal
 #'
 #' @param phi Optimal parameter vector
@@ -1724,6 +1778,7 @@ Performance optimization
 ### 9.1 Unit Tests
 
 ``` r
+
 # tests/test_hybrid_posterior.R
 
 test_that("Gamma CDF formula for single-arm is correct", {
@@ -1792,6 +1847,7 @@ test_that("Posterior update accumulates sufficient statistics correctly", {
 ### 9.2 Integration Tests
 
 ``` r
+
 # tests/test_hybrid_simulate.R
 
 test_that("Design reduces to single-arm when between-arm threshold is impossible", {
@@ -1824,6 +1880,7 @@ test_that("Type I error is controlled under null scenario", {
 ### 9.3 Edge Case Tests
 
 ``` r
+
 # tests/test_hybrid_edge_cases.R
 
 test_that("Trial handles all arms dropped for futility", {
@@ -1861,71 +1918,89 @@ test_that("Trial handles conversion at first interim", {
 
 ### A.1 Derivation of P(HR \< c) Using F Distribution
 
-Let $\lambda_{A} \sim \text{Gamma}\left( a_{A},b_{A} \right)$ and
-$\lambda_{B} \sim \text{Gamma}\left( a_{B},b_{B} \right)$ be
-independent.
+Let $`\lambda_A \sim \text{Gamma}(a_A, b_A)`$ and
+$`\lambda_B \sim \text{Gamma}(a_B, b_B)`$ be independent.
 
-We want $P\left( \lambda_{A}/\lambda_{B} < c \right)$.
+We want $`P(\lambda_A / \lambda_B < c)`$.
 
 **Step 1**: Standardize by rates.
 
-Let $X = \lambda_{A}/b_{A} \sim \text{Gamma}\left( a_{A},1 \right)$ and
-$Y = \lambda_{B}/b_{B} \sim \text{Gamma}\left( a_{B},1 \right)$.
+Let $`X = \lambda_A / b_A \sim \text{Gamma}(a_A, 1)`$ and
+$`Y = \lambda_B / b_B \sim \text{Gamma}(a_B, 1)`$.
 
-Then $\lambda_{A}/\lambda_{B} = \left( b_{A}/b_{B} \right) \cdot (X/Y)$.
+Then $`\lambda_A / \lambda_B = (b_A / b_B) \cdot (X / Y)`$.
 
 **Step 2**: Use the Gamma-to-F relationship.
 
-If $X \sim \text{Gamma}(a,1)$ and $Y \sim \text{Gamma}(b,1)$ are
+If $`X \sim \text{Gamma}(a, 1)`$ and $`Y \sim \text{Gamma}(b, 1)`$ are
 independent, then:
 
-$$\frac{X/a}{Y/b} \sim F(2a,2b)$$
+``` math
+\frac{X/a}{Y/b} \sim F(2a, 2b)
+```
 
-So $X/Y = (a/b) \cdot F$ where $F \sim F(2a,2b)$.
+So $`X/Y = (a/b) \cdot F`$ where $`F \sim F(2a, 2b)`$.
 
 **Step 3**: Combine.
 
-$$\frac{\lambda_{A}}{\lambda_{B}} = \frac{b_{A}}{b_{B}} \cdot \frac{X}{Y} = \frac{b_{A}}{b_{B}} \cdot \frac{a_{A}}{a_{B}} \cdot F$$
+``` math
+\frac{\lambda_A}{\lambda_B} = \frac{b_A}{b_B} \cdot \frac{X}{Y} = \frac{b_A}{b_B} \cdot \frac{a_A}{a_B} \cdot F
+```
 
-where $F \sim F\left( 2a_{A},2a_{B} \right)$.
+where $`F \sim F(2a_A, 2a_B)`$.
 
 **Step 4**: Compute probability.
 
-$$P\left( \frac{\lambda_{A}}{\lambda_{B}} < c \right) = P\left( F < c \cdot \frac{b_{B}}{b_{A}} \cdot \frac{a_{B}}{a_{A}} \right) = F_{F}\left( c \cdot \frac{b_{B} \cdot a_{B}}{b_{A} \cdot a_{A}};2a_{A},2a_{B} \right)$$
+``` math
+P\left(\frac{\lambda_A}{\lambda_B} < c\right) = P\left(F < c \cdot \frac{b_B}{b_A} \cdot \frac{a_B}{a_A}\right) = F_F\left(c \cdot \frac{b_B \cdot a_B}{b_A \cdot a_A}; 2a_A, 2a_B\right)
+```
 
 Wait, let me recheck this. We have:
 
-$$\left. \frac{\lambda_{A}}{\lambda_{B}} < c\Leftrightarrow\frac{b_{A}}{b_{B}} \cdot \frac{a_{A}}{a_{B}} \cdot F < c\Leftrightarrow F < c \cdot \frac{b_{B}}{b_{A}} \cdot \frac{a_{B}}{a_{A}} \right.$$
+``` math
+\frac{\lambda_A}{\lambda_B} < c \iff \frac{b_A}{b_B} \cdot \frac{a_A}{a_B} \cdot F < c \iff F < c \cdot \frac{b_B}{b_A} \cdot \frac{a_B}{a_A}
+```
 
 Hmm, that’s different from what I wrote earlier. Let me recalculate.
 
 Actually, the correct relationship is:
 
-If $X \sim \text{Gamma}(a,1)$, then $2X \sim \chi^{2}(2a)$.
+If $`X \sim \text{Gamma}(a, 1)`$, then $`2X \sim \chi^2(2a)`$.
 
-So if $\lambda_{A} \sim \text{Gamma}\left( a_{A},b_{A} \right)$, then
-$2b_{A}\lambda_{A} \sim \chi^{2}\left( 2a_{A} \right)$.
+So if $`\lambda_A \sim \text{Gamma}(a_A, b_A)`$, then
+$`2 b_A \lambda_A \sim \chi^2(2a_A)`$.
 
 The ratio:
-$$\frac{\lambda_{A}/a_{A}}{\lambda_{B}/a_{B}} \cdot \frac{b_{A}}{b_{B}} = \frac{2b_{A}\lambda_{A}/\left( 2a_{A} \right)}{2b_{B}\lambda_{B}/\left( 2a_{B} \right)} \sim F\left( 2a_{A},2a_{B} \right)$$
+``` math
+\frac{\lambda_A / a_A}{\lambda_B / a_B} \cdot \frac{b_A}{b_B} = \frac{2 b_A \lambda_A / (2 a_A)}{2 b_B \lambda_B / (2 a_B)} \sim F(2a_A, 2a_B)
+```
 
 Therefore:
-$$\frac{\lambda_{A}}{\lambda_{B}} = \frac{a_{A}}{a_{B}} \cdot \frac{b_{B}}{b_{A}} \cdot F$$
+``` math
+\frac{\lambda_A}{\lambda_B} = \frac{a_A}{a_B} \cdot \frac{b_B}{b_A} \cdot F
+```
 
 And:
-$$P\left( \frac{\lambda_{A}}{\lambda_{B}} < c \right) = P\left( F < c \cdot \frac{a_{B}}{a_{A}} \cdot \frac{b_{A}}{b_{B}} \right)$$
+``` math
+P\left(\frac{\lambda_A}{\lambda_B} < c\right) = P\left(F < c \cdot \frac{a_B}{a_A} \cdot \frac{b_A}{b_B}\right)
+```
 
 So the correct formula is:
 
-$$P\left( \text{HR}_{AB} < c \right) = F_{F}\left( c \cdot \frac{a_{B} \cdot b_{A}}{a_{A} \cdot b_{B}};2a_{A},2a_{B} \right)$$
+``` math
+P(\text{HR}_{AB} < c) = F_F\left(c \cdot \frac{a_B \cdot b_A}{a_A \cdot b_B}; 2a_A, 2a_B\right)
+```
 
-For $c = 1$:
+For $`c = 1`$:
 
-$$P\left( \text{HR}_{AB} < 1 \right) = F_{F}\left( \frac{a_{B} \cdot b_{A}}{a_{A} \cdot b_{B}};2a_{A},2a_{B} \right)$$
+``` math
+P(\text{HR}_{AB} < 1) = F_F\left(\frac{a_B \cdot b_A}{a_A \cdot b_B}; 2a_A, 2a_B\right)
+```
 
 **Verification in R**:
 
 ``` r
+
 # Verify with Monte Carlo
 a_A <- 15; b_A <- 8
 a_B <- 12; b_B <- 6
@@ -1950,6 +2025,7 @@ c(closed = p_closed, mc = p_mc)
 ### A.2 Corrected Implementation
 
 ``` r
+
 #' Compute P(lambda_j / lambda_l < c) for independent Gamma posteriors
 #' 
 #' @param a_j Shape parameter for numerator (arm j)
@@ -1971,16 +2047,16 @@ compute_p_hr_less_than_c <- function(a_j, b_j, a_l, b_l, c = 1) {
 
 ## Appendix B: Glossary
 
-| Term                      | Definition                                                                    |
-|---------------------------|-------------------------------------------------------------------------------|
-| **HR**                    | Hazard ratio                                                                  |
-| **PP**                    | Predictive probability                                                        |
-| **BATON**                 | Bayesian Adaptive Trial Optimization Navigator                                |
-| **OC**                    | Operating characteristic                                                      |
-| **RAR**                   | Response-adaptive randomization                                               |
-| **Sufficient statistics** | $\left( n_{k},T_{k} \right)$ = (number of events, total exposure) for arm $k$ |
-| **Conjugate prior**       | Gamma prior for exponential likelihood                                        |
-| **Gatekeeping**           | Sequential testing where one hypothesis gates another                         |
+| Term | Definition |
+|----|----|
+| **HR** | Hazard ratio |
+| **PP** | Predictive probability |
+| **BATON** | Bayesian Adaptive Trial Optimization Navigator |
+| **OC** | Operating characteristic |
+| **RAR** | Response-adaptive randomization |
+| **Sufficient statistics** | $`(n_k, T_k)`$ = (number of events, total exposure) for arm $`k`$ |
+| **Conjugate prior** | Gamma prior for exponential likelihood |
+| **Gatekeeping** | Sequential testing where one hypothesis gates another |
 
 ------------------------------------------------------------------------
 

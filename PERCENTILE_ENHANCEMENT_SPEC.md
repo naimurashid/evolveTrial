@@ -76,6 +76,7 @@ run_simulation_pure <- function(
 After the existing initialization (around line 430):
 
 ``` r
+
 # Percentile tracking (when enabled)
 if (isTRUE(return_percentiles)) {
   # Pre-allocate vectors for all replicates
@@ -93,6 +94,7 @@ In `simulate_chunk()`, add collection of per-replicate values when
 enabled:
 
 ``` r
+
 simulate_chunk <- function(sim_indices, seed = NULL, tick = function() {}) {
   # ... existing code ...
 
@@ -130,6 +132,7 @@ simulate_chunk <- function(sim_indices, seed = NULL, tick = function() {}) {
 ### 4. Modify `aggregate_results()` to Combine Raw Vectors
 
 ``` r
+
 aggregate_results <- function(partials) {
   # ... existing aggregation ...
 
@@ -148,6 +151,7 @@ After `aggregate_results()` call (around line 775), add percentile
 computation:
 
 ``` r
+
 # Compute percentiles if requested
 percentiles_result <- NULL
 if (isTRUE(return_percentiles) && !is.null(all_final_n)) {
@@ -177,6 +181,7 @@ In [`run_scenarios()`](reference/run_scenarios.md), pass through the
 percentile parameters:
 
 ``` r
+
 run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL,
                           return_percentiles = FALSE,
                           percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0)) {
@@ -212,6 +217,7 @@ run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL,
 ## Usage Example
 
 ``` r
+
 # Run with percentile collection
 result <- run_simulation_pure(
   num_simulations = 10000,

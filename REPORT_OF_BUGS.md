@@ -44,6 +44,7 @@ best, inefficient and redundant caching).
 always recalculating it.
 
 ``` r
+
 # In R/posterior_helpers.R, inside sample_vs_ref_medians_independent:
 
 sample_vs_ref_medians_independent <- function(slCtrl, slTrt, args, num_samples,

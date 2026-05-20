@@ -95,6 +95,7 @@ accrual. See README.Rmd for examples.
 ### Package Development
 
 ``` r
+
 # Iterative development (refreshes namespace without reinstall)
 devtools::load_all()
 
@@ -125,6 +126,7 @@ Rscript path/to/script.R
 ### Testing
 
 ``` r
+
 # Run a single test file
 testthat::test_file("tests/testthat/test-estimate-vsref-gates.R")
 

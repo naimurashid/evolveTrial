@@ -27,6 +27,7 @@ Bayesian optimization loops).
 **Location:** `R/simulation_driver.R` lines 689-705
 
 ``` r
+
 cl <- parallel::makeCluster(workers, type = cluster_type)
 on.exit(parallel::stopCluster(cl), add = TRUE)
 parallel::clusterCall(cl, function(pkg) {
@@ -66,6 +67,7 @@ Cannot directly profile what happens inside `simulate_chunk()`
 Add option to reuse a persistent cluster across multiple BO evaluations:
 
 ``` r
+
 # New API option
 run_simulation_pure(..., cluster = NULL)  # If NULL, use internal pooling
 
@@ -84,6 +86,7 @@ evolveTrial::release_cluster(cl)  # Cleanup
 FORK clusters share memory and don’t require serialization:
 
 ``` r
+
 cluster_type <- if (.Platform$OS.type == "unix") "FORK" else "PSOCK"
 ```
 
@@ -97,6 +100,7 @@ serialization (copy-on-write) - Much faster startup
 For small rep counts, sequential is faster than parallel overhead:
 
 ``` r
+
 # Rule of thumb: parallel_replicates makes sense only if:
 # num_simulations * time_per_rep > cluster_overhead (typically 5-10 sec)
 if (num_simulations < 50) {
@@ -111,6 +115,7 @@ if (num_simulations < 50) {
 Add to package `.onLoad()`:
 
 ``` r
+
 .onLoad <- function(libname, pkgname) {
   # Pre-compile hot path functions
   assign("simulate_chunk", compiler::cmpfun(simulate_chunk), envir = parent.env(environment()))
@@ -124,6 +129,7 @@ Add to package `.onLoad()`:
 Allow BO packages to manage cluster lifecycle:
 
 ``` r
+
 #' Create a reusable evolveTrial cluster
 #' @export
 create_simulation_cluster <- function(workers = NULL, cluster_type = "auto") {
@@ -163,6 +169,7 @@ New parameter `cluster` added to
 external cluster:
 
 ``` r
+
 # Create cluster once for all BO evaluations
 cl <- evolveTrial::create_simulation_cluster(workers = 8)
 
@@ -189,6 +196,7 @@ cluster - `release_cluster(cluster)` - Clean up cluster resources
 Default `cluster_type` changed from `"PSOCK"` to `"auto"`:
 
 ``` r
+
 # Auto-detection logic (in simulation_driver.R)
 if (cluster_type == "auto") {
   cluster_type <- if (.Platform$OS.type == "unix") "FORK" else "PSOCK"
@@ -204,6 +212,7 @@ overhead) - ~2-5x faster cluster startup
 Increased threshold from `workers * 2` to `100` (configurable):
 
 ``` r
+
 # Threshold is configurable via option
 seq_threshold <- getOption("evolveTrial.sequential_threshold", 100L)
 
@@ -219,6 +228,7 @@ simulation: ~1-2 ms/rep - Breakeven at ~100 reps with typical config
 **Configuration:**
 
 ``` r
+
 # Lower threshold for fast machines
 options(evolveTrial.sequential_threshold = 50)
 

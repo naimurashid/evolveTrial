@@ -54,6 +54,7 @@ Install **Rtools** before installing evolveTrial:
 Verify:
 
 ``` r
+
 Sys.which("make")
 #> Should return a path like "C:/rtools44/usr/bin/make.exe"
 ```
@@ -76,6 +77,7 @@ brew install gcc
 Verify:
 
 ``` r
+
 system("clang++ --version")
 ```
 
@@ -97,6 +99,7 @@ R \>= 4.2 is required (see `DESCRIPTION`). This matches the BATON
 companion package so the two can be loaded together in the same session.
 
 ``` r
+
 # Using pak (recommended)
 install.packages("pak")
 pak::pak("naimurashid/evolveTrial")
@@ -117,6 +120,7 @@ git clone https://github.com/naimurashid/evolveTrial.git
 ```
 
 ``` r
+
 devtools::install("path/to/evolveTrial")
 # Or for development:
 devtools::load_all("path/to/evolveTrial")
@@ -124,12 +128,12 @@ devtools::load_all("path/to/evolveTrial")
 
 ### Troubleshooting
 
-| Error                                      | Fix                                                                           |
-|--------------------------------------------|-------------------------------------------------------------------------------|
-| `compilation failed` or `make: not found`  | Install Rtools (Windows) or Xcode CLI tools (macOS)                           |
-| `'RcppArmadillo.h' file not found`         | `install.packages("RcppArmadillo")` then retry                                |
-| `library not found for -lgfortran` (macOS) | `brew install gcc`                                                            |
-| Installation times out                     | `remotes::install_github("naimurashid/evolveTrial", build_vignettes = FALSE)` |
+| Error | Fix |
+|----|----|
+| `compilation failed` or `make: not found` | Install Rtools (Windows) or Xcode CLI tools (macOS) |
+| `'RcppArmadillo.h' file not found` | `install.packages("RcppArmadillo")` then retry |
+| `library not found for -lgfortran` (macOS) | `brew install gcc` |
+| Installation times out | `remotes::install_github("naimurashid/evolveTrial", build_vignettes = FALSE)` |
 
 ## Quick Start Examples
 
@@ -140,6 +144,7 @@ historical control median of 6 months, with an expected treatment median
 of 9 months.
 
 ``` r
+
 library(evolveTrial)
 
 result <- run_simulation_pure(
@@ -180,6 +185,7 @@ Find an optimal Simon design and verify its operating characteristics
 via simulation.
 
 ``` r
+
 library(evolveTrial)
 
 # Find optimal Simon design: H0: p=0.20, H1: p=0.40
@@ -211,6 +217,7 @@ Simulate a hybrid trial that begins with single-arm monitoring and can
 convert to a between-arm comparison if sufficient evidence accumulates.
 
 ``` r
+
 library(evolveTrial)
 
 # Define the hybrid design parameter vector
@@ -263,60 +270,60 @@ cat("P(conversion):", round(oc$P_conversion, 3), "\n")
 
 ### Simulation Functions
 
-| Function                                                          | Purpose                                                               |
-|-------------------------------------------------------------------|-----------------------------------------------------------------------|
-| [`run_simulation_pure()`](reference/run_simulation_pure.md)       | Simulate a single-arm or multi-arm trial with time-to-event endpoints |
-| [`run_scenarios()`](reference/run_scenarios.md)                   | Run multiple scenario configurations over a shared baseline           |
-| [`scenarios_from_grid()`](reference/scenarios_from_grid.md)       | Generate factorial scenario grid from parameter choices               |
-| [`run_simulation_binary()`](reference/run_simulation_binary.md)   | Simulate a binary-endpoint trial (one- or two-stage)                  |
-| [`compute_hybrid_oc_rcpp()`](reference/compute_hybrid_oc_rcpp.md) | Simulate hybrid seamless SA-to-BA trial via C++ engine                |
-| [`create_hybrid_theta()`](reference/create_hybrid_theta.md)       | Construct the hybrid design parameter vector                          |
+| Function | Purpose |
+|----|----|
+| [`run_simulation_pure()`](reference/run_simulation_pure.md) | Simulate a single-arm or multi-arm trial with time-to-event endpoints |
+| [`run_scenarios()`](reference/run_scenarios.md) | Run multiple scenario configurations over a shared baseline |
+| [`scenarios_from_grid()`](reference/scenarios_from_grid.md) | Generate factorial scenario grid from parameter choices |
+| [`run_simulation_binary()`](reference/run_simulation_binary.md) | Simulate a binary-endpoint trial (one- or two-stage) |
+| [`compute_hybrid_oc_rcpp()`](reference/compute_hybrid_oc_rcpp.md) | Simulate hybrid seamless SA-to-BA trial via C++ engine |
+| [`create_hybrid_theta()`](reference/create_hybrid_theta.md) | Construct the hybrid design parameter vector |
 
 ### Design Calibration
 
-| Function                                                                            | Purpose                                                    |
-|-------------------------------------------------------------------------------------|------------------------------------------------------------|
-| [`grid_calibrate()`](reference/grid_calibrate.md)                                   | Grid search over thresholds for optimal design calibration |
-| [`calibrate_alpha()`](reference/calibrate_alpha.md)                                 | Calibrate type I error across null scenarios               |
-| [`explore_early_stopping_from_cal()`](reference/explore_early_stopping_from_cal.md) | Explore early stopping configurations from a calibration   |
-| [`filter_early_grid()`](reference/filter_early_grid.md)                             | Filter designs meeting alpha/power constraints             |
-| [`recommend_design_from_early()`](reference/recommend_design_from_early.md)         | Select best design from feasible set                       |
-| [`adopt_calibration()`](reference/adopt_calibration.md)                             | Adopt a calibrated design into trial arguments             |
+| Function | Purpose |
+|----|----|
+| [`grid_calibrate()`](reference/grid_calibrate.md) | Grid search over thresholds for optimal design calibration |
+| [`calibrate_alpha()`](reference/calibrate_alpha.md) | Calibrate type I error across null scenarios |
+| [`explore_early_stopping_from_cal()`](reference/explore_early_stopping_from_cal.md) | Explore early stopping configurations from a calibration |
+| [`filter_early_grid()`](reference/filter_early_grid.md) | Filter designs meeting alpha/power constraints |
+| [`recommend_design_from_early()`](reference/recommend_design_from_early.md) | Select best design from feasible set |
+| [`adopt_calibration()`](reference/adopt_calibration.md) | Adopt a calibrated design into trial arguments |
 
 ### Binary Endpoint Helpers
 
-| Function                                                | Purpose                                            |
-|---------------------------------------------------------|----------------------------------------------------|
-| [`find_simon_design()`](reference/find_simon_design.md) | Find optimal or minimax Simon two-stage design     |
-| [`simon_oc_exact()`](reference/simon_oc_exact.md)       | Exact operating characteristics for a Simon design |
+| Function | Purpose |
+|----|----|
+| [`find_simon_design()`](reference/find_simon_design.md) | Find optimal or minimax Simon two-stage design |
+| [`simon_oc_exact()`](reference/simon_oc_exact.md) | Exact operating characteristics for a Simon design |
 
 ### Visualization and Reporting
 
-| Function                                                                          | Purpose                                         |
-|-----------------------------------------------------------------------------------|-------------------------------------------------|
-| [`pretty_scenario_matrix()`](reference/pretty_scenario_matrix.md)                 | Pivot simulation results to wide-format summary |
-| [`plot_calibration()`](reference/plot_calibration.md)                             | Power vs type I error with Pareto frontier      |
-| [`plot_early_tradeoff()`](reference/plot_early_tradeoff.md)                       | Early stopping trade-off visualization          |
-| [`export_scenario_table_to_excel()`](reference/export_scenario_table_to_excel.md) | Export results to formatted Excel workbook      |
-| [`export_scenario_table_to_png()`](reference/export_scenario_table_to_png.md)     | Export results to PNG via gt                    |
+| Function | Purpose |
+|----|----|
+| [`pretty_scenario_matrix()`](reference/pretty_scenario_matrix.md) | Pivot simulation results to wide-format summary |
+| [`plot_calibration()`](reference/plot_calibration.md) | Power vs type I error with Pareto frontier |
+| [`plot_early_tradeoff()`](reference/plot_early_tradeoff.md) | Early stopping trade-off visualization |
+| [`export_scenario_table_to_excel()`](reference/export_scenario_table_to_excel.md) | Export results to formatted Excel workbook |
+| [`export_scenario_table_to_png()`](reference/export_scenario_table_to_png.md) | Export results to PNG via gt |
 
 ### Diagnostics
 
-| Function                                                                  | Purpose                                                |
-|---------------------------------------------------------------------------|--------------------------------------------------------|
+| Function | Purpose |
+|----|----|
 | [`estimate_vsref_gate_timing()`](reference/estimate_vsref_gate_timing.md) | Estimate when information gates can first be satisfied |
 
 ### Decision Rule Functions
 
-| Function                                                                    | Purpose                                         |
-|-----------------------------------------------------------------------------|-------------------------------------------------|
-| [`evaluate_sa_efficacy()`](reference/evaluate_sa_efficacy.md)               | Evaluate single-arm efficacy decision           |
-| [`evaluate_sa_futility()`](reference/evaluate_sa_futility.md)               | Evaluate single-arm futility decision           |
-| [`evaluate_ba_efficacy()`](reference/evaluate_ba_efficacy.md)               | Evaluate between-arm efficacy decision          |
-| [`evaluate_ba_futility()`](reference/evaluate_ba_futility.md)               | Evaluate between-arm futility decision          |
-| [`evaluate_conversion_trigger()`](reference/evaluate_conversion_trigger.md) | Evaluate SA-to-BA conversion readiness          |
-| [`make_conversion_decision()`](reference/make_conversion_decision.md)       | Execute conversion decision with SSR            |
-| [`perform_ssr()`](reference/perform_ssr.md)                                 | Sample size re-estimation for between-arm phase |
+| Function | Purpose |
+|----|----|
+| [`evaluate_sa_efficacy()`](reference/evaluate_sa_efficacy.md) | Evaluate single-arm efficacy decision |
+| [`evaluate_sa_futility()`](reference/evaluate_sa_futility.md) | Evaluate single-arm futility decision |
+| [`evaluate_ba_efficacy()`](reference/evaluate_ba_efficacy.md) | Evaluate between-arm efficacy decision |
+| [`evaluate_ba_futility()`](reference/evaluate_ba_futility.md) | Evaluate between-arm futility decision |
+| [`evaluate_conversion_trigger()`](reference/evaluate_conversion_trigger.md) | Evaluate SA-to-BA conversion readiness |
+| [`make_conversion_decision()`](reference/make_conversion_decision.md) | Execute conversion decision with SSR |
+| [`perform_ssr()`](reference/perform_ssr.md) | Sample size re-estimation for between-arm phase |
 
 ## Package Structure
 
@@ -363,6 +370,7 @@ constraints (e.g., type I error control) while optimizing an objective
 they form a complete pipeline for adaptive trial design calibration.
 
 ``` r
+
 # Typical workflow:
 # 1. Define trial structure in evolveTrial
 # 2. Use BATON::bo_calibrate() to search over evolveTrial's parameter space
@@ -372,6 +380,7 @@ they form a complete pipeline for adaptive trial design calibration.
 ## Running Tests
 
 ``` r
+
 devtools::test()
 ```
 
