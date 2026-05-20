@@ -399,7 +399,10 @@ struct BaPhPosterior {
 // experimental arm is passed as the "treatment" (E_T/PT_T) and the reference
 // arm as the "control" (E_C/PT_C) so the sign convention is correct.
 //
-// Mirrors R/interim_logic.R:calculate_current_probs_vs_ref (post-F1):
+// Mirrors the decision logic and benefit-side margin orientation of
+// R/interim_logic.R:calculate_current_probs_vs_ref; computes the tail
+// probability analytically (R::pnorm on the Laplace posterior) rather than by
+// Monte Carlo (post-F1):
 //   pr_fut = P(HR >= 1 - delta_HR)  with log_fut = log1p(-min(max(0,delta),0.95))
 //   pr_eff = P(HR <  1 - delta_HR_eff)  (symmetric variant) or P(HR < 1)
 BaPhPosterior compute_ba_ph_posterior_internal(const arma::vec& events_exp,
@@ -620,6 +623,10 @@ double compute_pp_predictive_internal(const arma::vec& a_exp, const arma::vec& b
       arma::vec a_ref_final = a_ref + as<arma::vec>(fut_ref["events"]);
       arma::vec b_ref_final = b_ref + as<arma::vec>(fut_ref["exposure"]);
 
+      // NOTE (D3): the conversion-PP forecast intentionally still uses the
+      // independent median-MC BA model, whereas the Stage-2 BA *decision* now uses
+      // the PH logHR model + delta_HR margin (compute_ba_ph_posterior_internal).
+      // Tracked as Task 1.4b in docs/plans/2026-05-20-hr-margin-fix-implementation.md.
       double p_between = compute_ba_posterior_internal(a_exp_final, b_exp_final, a_ref_final, b_ref_final, interval_cutpoints, 2000);
       if (!ISNA(p_between) && p_between >= eff_ba) success_count++;
       checked++;

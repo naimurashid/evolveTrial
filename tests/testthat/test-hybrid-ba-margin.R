@@ -136,7 +136,6 @@ test_that("raising hr_margin increases BA futility rate for a near-null arm", {
   fut_rate_010 <- ba_futility_rate(make_ba_theta(hr_margin = 0.10),
                                    base_args, scenario, n_sim = 400, seed = 4242)
 
-  expect_gte(fut_rate_010, fut_rate_0)
   # The shift should be material, not just noise, for a 0.10 margin.
   expect_gt(fut_rate_010, fut_rate_0)
 })
