@@ -718,7 +718,8 @@ run_simulation_pure <- function(
             if (isTRUE(args_local$use_ph_model_vs_ref) && !is.null(med_samples$logHR)) {
               log_margin <- 0
               if (!is.null(args_local$compare_arms_hr_margin)) {
-                log_margin <- log1p(max(0, args_local$compare_arms_hr_margin))
+                # Benefit-side futility margin: HR = 1 - delta_HR (see interim_logic.R).
+                log_margin <- log1p(-min(max(0, args_local$compare_arms_hr_margin), 0.95))
               }
               p_eff_ref <- mean(med_samples$logHR < 0)
               p_fut_ref <- mean(med_samples$logHR >= log_margin)

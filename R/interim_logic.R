@@ -10,7 +10,12 @@ calculate_current_probs_vs_ref <- function(slCtrl, slTrt, args,
   if (isTRUE(args$use_ph_model_vs_ref) && !is.null(draws$logHR)) {
     log_margin <- 0
     if (!is.null(args$compare_arms_hr_margin)) {
-      log_margin <- log1p(max(0, args$compare_arms_hr_margin))
+      # Benefit-side futility margin: the buffered futility comparator is the
+      # minimal-worthwhile-benefit hazard ratio HR = 1 - delta_HR (below the
+      # null HR = 1), so the rule is Pr(HR >= 1 - delta_HR) >= p_F. This is the
+      # SA-symmetric convention (SA uses m_0 + delta, above the null median).
+      # log(1 - delta_HR) <= 0. Cap at 0.95 to keep the log finite.
+      log_margin <- log1p(-min(max(0, args$compare_arms_hr_margin), 0.95))
     }
     list(
       pr_eff = mean(draws$logHR < 0),

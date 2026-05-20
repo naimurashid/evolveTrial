@@ -113,7 +113,8 @@ calculate_predicted_prob_vs_ref <- function(
     prior_alpha_params, prior_beta_params, num_samples = num_posterior_draws
   )
   s_eff <- 0L; s_fut <- 0L; N <- num_posterior_draws; k_eff <- 0L
-  log_margin_hr <- if (!is.null(compare_arms_hr_margin)) log1p(max(0, compare_arms_hr_margin)) else 0
+  # Benefit-side futility margin: futility comparator HR = 1 - delta_HR (see interim_logic.R).
+  log_margin_hr <- if (!is.null(compare_arms_hr_margin)) log1p(-min(max(0, compare_arms_hr_margin), 0.95)) else 0
   draw_args <- list(
     interval_cutpoints_sim = interval_cutpoints,
     prior_alpha_params_model = prior_alpha_params,
@@ -341,7 +342,8 @@ calculate_predicted_prob_vs_ref_fast <- function(
                                        max_total_patients_ref, ref_rate,
                                        interval_cutpoints, max_follow_up_sim)
   eff_hits <- 0L; fut_hits <- 0L
-  log_margin_hr <- if (!is.null(compare_arms_hr_margin)) log1p(max(0, compare_arms_hr_margin)) else 0
+  # Benefit-side futility margin: futility comparator HR = 1 - delta_HR (see interim_logic.R).
+  log_margin_hr <- if (!is.null(compare_arms_hr_margin)) log1p(-min(max(0, compare_arms_hr_margin), 0.95)) else 0
   draw_args <- list(
     interval_cutpoints_sim = interval_cutpoints,
     prior_alpha_params_model = prior_alpha_params,
