@@ -79,6 +79,25 @@ double compute_pp_futility_sa_cpp(
     bool use_antithetic
 );
 
+// External declaration for the proportional-hazards posterior from
+// posterior_sampling.cpp. ph_beta_mode_var_cpp is a Newton-Raphson Laplace
+// approximation that returns the posterior mode ("mean") and curvature SD
+// ("sd") of logHR = log(h_T / h_C) under a Gamma prior on baseline hazards
+// and a N(mu, sigma) prior on logHR. Same cross-TU pattern as the PP
+// functions above; no shared header required.
+Rcpp::List ph_beta_mode_var_cpp(
+    const arma::ivec& E_C,
+    const arma::vec& PT_C,
+    const arma::ivec& E_T,
+    const arma::vec& PT_T,
+    const arma::vec& alpha_prior,
+    const arma::vec& beta_prior,
+    double mu,
+    double sigma,
+    double tol,
+    int max_iter
+);
+
 // =============================================================================
 // HELPER STRUCTURES
 // =============================================================================
@@ -356,6 +375,100 @@ double compute_ba_posterior_internal(const arma::vec& a_exp, const arma::vec& b_
   return (double)count_exp_better / n_samples;
 }
 
+// =============================================================================
+// PH-model benefit-side BA posterior (D3: delta_HR margin in seamless Stage 2)
+// =============================================================================
+
+// Result of the PH-model between-arm posterior evaluation.
+struct BaPhPosterior {
+  double pr_eff;  // P(logHR < log_eff)   == P(HR < 1 - delta_HR_eff)  (== P(HR<1) when no eff margin)
+  double pr_fut;  // P(logHR >= log_fut)  == P(HR >= 1 - delta_HR)
+};
+
+// Compute the between-arm efficacy/futility posterior probabilities under the
+// proportional-hazards logHR model with a benefit-side futility margin.
+//
+// Inputs are the per-interval event counts and person-time for the
+// experimental arm (events_exp / exp_exp) and the reference arm
+// (events_ref / exp_ref) -- exactly what the BA decision block already
+// computes via compute_interval_metrics. The Gamma priors are the per-interval
+// prior_a / prior_b vectors already in scope.
+//
+// ph_beta_mode_var_cpp returns the posterior mean/sd of
+// logHR = log(h_exp / h_ref); logHR < 0 means experimental better. The
+// experimental arm is passed as the "treatment" (E_T/PT_T) and the reference
+// arm as the "control" (E_C/PT_C) so the sign convention is correct.
+//
+// Mirrors R/interim_logic.R:calculate_current_probs_vs_ref (post-F1):
+//   pr_fut = P(HR >= 1 - delta_HR)  with log_fut = log1p(-min(max(0,delta),0.95))
+//   pr_eff = P(HR <  1 - delta_HR_eff)  (symmetric variant) or P(HR < 1)
+BaPhPosterior compute_ba_ph_posterior_internal(const arma::vec& events_exp,
+                                               const arma::vec& exp_exp,
+                                               const arma::vec& events_ref,
+                                               const arma::vec& exp_ref,
+                                               const arma::vec& prior_a,
+                                               const arma::vec& prior_b,
+                                               double hr_margin,
+                                               double hr_eff_margin,
+                                               double ph_loghr_prior_mean,
+                                               double ph_loghr_prior_sd) {
+  BaPhPosterior out;
+  out.pr_eff = NA_REAL;
+  out.pr_fut = NA_REAL;
+
+  int n_intervals = events_exp.n_elem;
+  if (n_intervals < 1 ||
+      (int)exp_exp.n_elem != n_intervals ||
+      (int)events_ref.n_elem != n_intervals ||
+      (int)exp_ref.n_elem != n_intervals ||
+      (int)prior_a.n_elem != n_intervals ||
+      (int)prior_b.n_elem != n_intervals) {
+    return out;
+  }
+
+  // Convert event counts to integer vectors for the PH solver.
+  // Control = reference arm, Treatment = experimental arm.
+  arma::ivec E_C(n_intervals);
+  arma::ivec E_T(n_intervals);
+  for (int j = 0; j < n_intervals; j++) {
+    E_C(j) = (int)std::llround(events_ref(j));
+    E_T(j) = (int)std::llround(events_exp(j));
+  }
+
+  double sigma = std::max(1e-6, ph_loghr_prior_sd);
+
+  Rcpp::List beta_params = ph_beta_mode_var_cpp(
+    E_C, exp_ref, E_T, exp_exp,
+    prior_a, prior_b,
+    ph_loghr_prior_mean, sigma,
+    1e-6, 50
+  );
+  double mean = beta_params["mean"];
+  double sd = beta_params["sd"];
+
+  if (!std::isfinite(mean) || !std::isfinite(sd) || sd <= 0.0) {
+    return out;
+  }
+
+  // Benefit-side futility comparator: HR = 1 - delta_HR (below the null HR = 1).
+  // log(1 - delta_HR) <= 0; cap delta_HR at 0.95 to keep the log finite.
+  // pr_fut = P(logHR >= log_fut) = P(HR >= 1 - delta_HR).
+  double log_fut = std::log1p(-std::min(std::max(0.0, hr_margin), 0.95));
+  out.pr_fut = R::pnorm(log_fut, mean, sd, /*lower_tail=*/0, /*log_p=*/0);
+
+  // Benefit-side efficacy comparator: when hr_eff_margin > 0 (symmetric
+  // variant) the efficacy comparator is buffered toward benefit,
+  // HR = 1 - delta_HR_eff, so the rule is P(HR < 1 - delta_HR_eff) >= p_E.
+  // When hr_eff_margin == 0 (current / no_margin variant) log_eff stays 0,
+  // so the comparator is the unbuffered HR < 1.
+  double log_eff = (hr_eff_margin > 0.0)
+    ? std::log1p(-std::min(std::max(0.0, hr_eff_margin), 0.95))
+    : 0.0;
+  out.pr_eff = R::pnorm(log_eff, mean, sd, /*lower_tail=*/1, /*log_p=*/0);
+
+  return out;
+}
+
 // Overload for backward compatibility (aggregated F-test for exponential)
 double compute_ba_posterior_internal_aggregated(const arma::vec& a_exp, const arma::vec& b_exp,
                                                  const arma::vec& a_ref, const arma::vec& b_ref) {
@@ -552,6 +665,20 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
   double hr_threshold_sa = theta_list.containsElementNamed("hr_threshold_sa") ?
     as<double>(theta_list["hr_threshold_sa"]) : 1.0;
   int n_outer = theta_list.containsElementNamed("n_outer") ? as<int>(theta_list["n_outer"]) : 200;
+
+  // D3: benefit-side hazard-ratio futility margin for the between-arm (Stage 2)
+  // decision. hr_margin (delta_HR) defaults to 0.0; hr_eff_margin (delta_HR_eff,
+  // symmetric variant) defaults to 0.0 (current / no_margin variant). The PH
+  // logHR prior (ph_loghr_prior_mean / ph_loghr_prior_sd) matches the standalone
+  // BA path defaults (0, 1) -- see R/posterior_helpers.R.
+  double hr_margin = theta_list.containsElementNamed("hr_margin") ?
+    as<double>(theta_list["hr_margin"]) : 0.0;
+  double hr_eff_margin = theta_list.containsElementNamed("hr_eff_margin") ?
+    as<double>(theta_list["hr_eff_margin"]) : 0.0;
+  double ph_loghr_prior_mean = theta_list.containsElementNamed("ph_loghr_prior_mean") ?
+    as<double>(theta_list["ph_loghr_prior_mean"]) : 0.0;
+  double ph_loghr_prior_sd = theta_list.containsElementNamed("ph_loghr_prior_sd") ?
+    as<double>(theta_list["ph_loghr_prior_sd"]) : 1.0;
 
   // Parse trial mode and decision methods
   std::string mode_str = theta_list.containsElementNamed("trial_mode") ?
@@ -1040,19 +1167,33 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
 
       // LIMITATION: BA comparison hardcoded for arms [1] vs [0] (exp vs ref)
       // For N>2 arms, would need pairwise or global comparison strategy
-      double p_between = compute_ba_posterior_internal(
-        state.posterior_a[1], state.posterior_b[1],
-        state.posterior_a[0], state.posterior_b[0],
-        interval_cutpoints, 2000  // Harmonized with R sample size
+      //
+      // D3: the BA decision uses the proportional-hazards logHR posterior with
+      // a benefit-side delta_HR margin, matching the standalone BA design
+      // (Web Appendix A.3.4 / A.4.6). events_exp/exp_exp and events_ref/exp_ref
+      // were already computed above for the event gate -- they are precisely
+      // the PH solver's inputs. Decision: efficacy if pr_eff >= eff_ba;
+      // futility if pr_fut >= fut_ba, where pr_fut = Pr(HR >= 1 - delta_HR).
+      // NOTE: fut_ba now plays the p_F role (Pr(HR >= 1 - delta_HR) >= fut_ba),
+      // reparameterized from the old Pr(HR < 1) <= fut_ba rule -- calibrated
+      // fut_ba values from the median-MC era are not transferable.
+      BaPhPosterior ba_post = compute_ba_ph_posterior_internal(
+        events_exp, exp_exp, events_ref, exp_ref,
+        prior_a, prior_b,
+        hr_margin, hr_eff_margin,
+        ph_loghr_prior_mean, ph_loghr_prior_sd
       );
-      state.ba_posterior_prob[1] = p_between;  // Only stores result for arm [1]
+      double pr_eff = ba_post.pr_eff;
+      double pr_fut = ba_post.pr_fut;
+      // Store pr_eff (the P(HR<1)-analogue) for backward-compatible reporting.
+      state.ba_posterior_prob[1] = pr_eff;
 
-      if (p_between >= eff_ba) {
+      if (!R_IsNA(pr_eff) && pr_eff >= eff_ba) {
         state.ba_efficacy_reached[1] = true;
         state.current_state = STATE_STOP;
         state.trial_outcome = "ba_efficacy";
         state.stop_reason = "BA efficacy reached";
-      } else if (p_between <= fut_ba) {
+      } else if (!R_IsNA(pr_fut) && pr_fut >= fut_ba) {
         state.ba_futility_reached[1] = true;
         state.current_state = STATE_STOP;
         state.trial_outcome = "futility_ba";
