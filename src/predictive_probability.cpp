@@ -250,6 +250,20 @@ double compute_ba_posterior_cpp(
 // =============================================================================
 // MAIN: Compute predictive probability (full MC with antithetic variates)
 // =============================================================================
+//
+// NOTE (Task 1.4b): compute_pp_predictive_cpp below is a STANDALONE Rcpp export.
+// It is used only by the pure-R hybrid path (R/hybrid_ssr.R, exercised by
+// R/hybrid_trial.R) and by Rcpp/R equivalence tests -- it is NOT on the
+// production seamless calibration path. Production seamless designs (BATON
+// Tasks 1.4 / 1.6) run through compute_hybrid_oc_cpp -> hybrid_trial_sim.cpp,
+// whose conversion-PP forecast (compute_pp_predictive_internal) was updated in
+// Task 1.4b to score replicates with the PH logHR + benefit-side delta_HR rule.
+// This export deliberately remains margin-free: it scores replicates with the
+// independent-arms median-MC model (compute_ba_posterior_impl) to stay
+// consistent with the R hybrid path's BA decision, which is itself margin-free.
+// If the R hybrid path's BA decision is ever migrated to a delta_HR margin,
+// this export must be updated in lockstep (forward-declare ph_beta_mode_var_cpp
+// here as hybrid_trial_sim.cpp does).
 
 //' Compute predictive probability for hybrid trial conversion (C++)
 //'

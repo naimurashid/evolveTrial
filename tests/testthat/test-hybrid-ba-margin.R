@@ -176,3 +176,90 @@ test_that("PH posterior tail Pr(HR >= 1 - delta) increases with delta", {
   expect_gt(pr_fut(0.10), pr_fut(0.00))
   expect_gt(pr_fut(0.20), pr_fut(0.10))
 })
+
+# ==============================================================================
+# TEST 4 (Task 1.4b): conversion-PP forecast uses the PH + delta_HR rule
+# ==============================================================================
+# The SA->BA conversion-PP forecast now scores each forecast replicate's BA
+# outcome with the same PH logHR model as the real Stage-2 BA decision: a
+# replicate "succeeds" when pr_eff >= eff_ba. pr_eff depends on the benefit-side
+# efficacy comparator HR = 1 - delta_HR_eff. Raising hr_eff_margin makes that
+# comparator strictly harder (P(HR < 1 - delta_HR_eff) <= P(HR < 1)), so every
+# forecast replicate is less likely to clear eff_ba -> the predictive
+# probability at conversion falls -> the GO conversion rate falls. This verifies
+# the forecast and the real BA decision share the same rule.
+
+# Moderate-effect experimental arm: clearly better than reference, so the PP
+# forecast sits in a sensitive range where a stricter efficacy comparator
+# visibly lowers it.
+make_moderate_effect_scenario <- function() {
+  list(
+    lambda_hist = rep(log(2) / 7.5, 4),
+    lambda_ref  = rep(log(2) / 7.5, 4),
+    lambda_exp  = rep(log(2) / 11.0, 4)  # ~30% lower hazard than reference
+  )
+}
+
+conversion_pp_summary <- function(theta, base_args, scenario, n_sim, seed) {
+  # The conversion-PP forecast is only invoked in the full SA -> conversion ->
+  # BA "hybrid" mode. make_ba_theta() uses "between_arm" (which skips the SA
+  # phase and the PP forecast entirely), so override the mode here.
+  theta$trial_mode <- "hybrid"
+  set.seed(seed)
+  res <- run_hybrid_simulations_cpp(
+    n_sim = as.integer(n_sim),
+    theta_list = theta,
+    base_args_list = base_args,
+    scenario_params_list = scenario
+  )
+  # pp_conversion is NA when conversion was never PP-evaluated; restrict the
+  # mean PP to trials that actually reached the PP-based conversion decision.
+  evaluated <- res$pp_conversion[is.finite(res$pp_conversion)]
+  list(
+    conv_rate = mean(res$converted),
+    mean_pp   = if (length(evaluated) > 0) mean(evaluated) else NA_real_,
+    n_eval    = length(evaluated)
+  )
+}
+
+test_that("conversion-PP forecast runs and returns in-range PP for both margins", {
+  skip_on_cran()
+
+  base_args <- make_ba_base_args()
+  scenario <- make_moderate_effect_scenario()
+
+  for (m in c(0.0, 0.10)) {
+    theta <- make_ba_theta(hr_eff_margin = m)
+    s <- conversion_pp_summary(theta, base_args, scenario,
+                               n_sim = 300, seed = 909 + as.integer(m * 100))
+    expect_gte(s$conv_rate, 0)
+    expect_lte(s$conv_rate, 1)
+    if (!is.na(s$mean_pp)) {
+      expect_gte(s$mean_pp, 0)
+      expect_lte(s$mean_pp, 1)
+    }
+  }
+})
+
+test_that("raising hr_eff_margin lowers the conversion-PP forecast", {
+  skip_on_cran()
+
+  base_args <- make_ba_base_args()
+  scenario <- make_moderate_effect_scenario()
+
+  # Same seed -> same SA-phase data and same forecast random draws; only the
+  # efficacy comparator changes, isolating the rule effect.
+  s0   <- conversion_pp_summary(make_ba_theta(hr_eff_margin = 0.00),
+                                base_args, scenario, n_sim = 500, seed = 7171)
+  s015 <- conversion_pp_summary(make_ba_theta(hr_eff_margin = 0.15),
+                                base_args, scenario, n_sim = 500, seed = 7171)
+
+  # Need PP-evaluated trials in both runs for the comparison to be meaningful.
+  skip_if(s0$n_eval < 20 || s015$n_eval < 20,
+          "too few PP-evaluated conversions to compare")
+
+  # A stricter benefit-side efficacy comparator can only lower (never raise)
+  # each replicate's success probability, so the mean conversion PP must not
+  # increase; with delta_HR_eff = 0.15 the drop should be material.
+  expect_lt(s015$mean_pp, s0$mean_pp)
+})

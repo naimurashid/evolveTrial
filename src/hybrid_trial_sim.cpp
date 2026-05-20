@@ -169,12 +169,29 @@ double compute_p_single_arm_internal(const arma::vec& post_a, const arma::vec& p
                                       const arma::vec& hist_hazard, double hr_threshold,
                                       const arma::vec& interval_cutpoints,
                                       int n_samples);
+// Forward declaration of the PH-model BA posterior struct/function so the
+// conversion-PP forecast can score forecast replicates with the same rule as
+// the real Stage-2 BA decision (Task 1.4b).
+struct BaPhPosterior;
+BaPhPosterior compute_ba_ph_posterior_internal(const arma::vec& events_exp,
+                                               const arma::vec& exp_exp,
+                                               const arma::vec& events_ref,
+                                               const arma::vec& exp_ref,
+                                               const arma::vec& prior_a,
+                                               const arma::vec& prior_b,
+                                               double hr_margin,
+                                               double hr_eff_margin,
+                                               double ph_loghr_prior_mean,
+                                               double ph_loghr_prior_sd);
 double compute_pp_predictive_internal(const arma::vec& a_exp, const arma::vec& b_exp,
                                        const arma::vec& a_ref, const arma::vec& b_ref,
                                        int n_add, const arma::vec& interval_cutpoints,
                                        double accrual_rate, double followup,
                                        double eff_ba, double pp_go, double pp_nogo,
-                                       int n_outer);
+                                       int n_outer,
+                                       const arma::vec& prior_a, const arma::vec& prior_b,
+                                       double hr_margin, double hr_eff_margin,
+                                       double ph_loghr_prior_mean, double ph_loghr_prior_sd);
 
 // =============================================================================
 // SIMULATION HELPERS
@@ -594,15 +611,39 @@ List simulate_future_arm_internal(int n_patients, const arma::vec& lambda,
 }
 
 // Compute predictive probability (Monte Carlo)
+//
+// Task 1.4b: the conversion-PP forecast scores each forecast replicate's BA
+// outcome with the SAME PH-model + benefit-side delta_HR rule as the real
+// Stage-2 BA decision (compute_ba_ph_posterior_internal), so that the
+// calibrated conversion rate is consistent with the BA decision the trial
+// will actually face. The posterior shape/rate inputs (a_exp/b_exp/a_ref/
+// b_ref) carry the current observed data as a_* = prior_a + events and
+// b_* = prior_b + exposure; subtracting the priors recovers the current
+// per-interval event counts and person-time, which are then augmented with
+// the simulated future data and fed to the PH solver -- mirroring the BA
+// decision block's compute_interval_metrics inputs. When hr_margin = 0 and
+// hr_eff_margin = 0 the comparator is HR = 1 (no inert default): the forecast
+// still uses the PH model, consistent with Task 1.4.
 double compute_pp_predictive_internal(const arma::vec& a_exp, const arma::vec& b_exp,
                                        const arma::vec& a_ref, const arma::vec& b_ref,
                                        int n_add, const arma::vec& interval_cutpoints,
                                        double accrual_rate, double followup,
                                        double eff_ba, double pp_go, double pp_nogo,
-                                       int n_outer) {
+                                       int n_outer,
+                                       const arma::vec& prior_a, const arma::vec& prior_b,
+                                       double hr_margin, double hr_eff_margin,
+                                       double ph_loghr_prior_mean, double ph_loghr_prior_sd) {
   int n_intervals = a_exp.n_elem;
   int success_count = 0;
   int checked = 0;
+
+  // Recover the current observed per-interval event counts / person-time from
+  // the posteriors: posterior_a = prior_a + events, posterior_b = prior_b +
+  // exposure. Clamp at 0 to guard against tiny negative round-off.
+  arma::vec cur_events_exp = arma::clamp(a_exp - prior_a, 0.0, R_PosInf);
+  arma::vec cur_exp_exp    = arma::clamp(b_exp - prior_b, 0.0, R_PosInf);
+  arma::vec cur_events_ref = arma::clamp(a_ref - prior_a, 0.0, R_PosInf);
+  arma::vec cur_exp_ref    = arma::clamp(b_ref - prior_b, 0.0, R_PosInf);
 
   // Use antithetic variates
   int n_pairs = (n_outer + 1) / 2;
@@ -626,17 +667,25 @@ double compute_pp_predictive_internal(const arma::vec& a_exp, const arma::vec& b
       List fut_exp = simulate_future_arm_internal(n_add, lambda_exp, interval_cutpoints, accrual_rate, followup);
       List fut_ref = simulate_future_arm_internal(n_add, lambda_ref, interval_cutpoints, accrual_rate, followup);
 
-      arma::vec a_exp_final = a_exp + as<arma::vec>(fut_exp["events"]);
-      arma::vec b_exp_final = b_exp + as<arma::vec>(fut_exp["exposure"]);
-      arma::vec a_ref_final = a_ref + as<arma::vec>(fut_ref["events"]);
-      arma::vec b_ref_final = b_ref + as<arma::vec>(fut_ref["exposure"]);
+      // Total observed-at-BA event counts and person-time = current data
+      // (recovered from the posteriors) + simulated future data. These are the
+      // raw inputs the PH solver expects, identical in form to the BA decision
+      // block's compute_interval_metrics output.
+      arma::vec events_exp_final = cur_events_exp + as<arma::vec>(fut_exp["events"]);
+      arma::vec exp_exp_final    = cur_exp_exp    + as<arma::vec>(fut_exp["exposure"]);
+      arma::vec events_ref_final = cur_events_ref + as<arma::vec>(fut_ref["events"]);
+      arma::vec exp_ref_final    = cur_exp_ref    + as<arma::vec>(fut_ref["exposure"]);
 
-      // NOTE (D3): the conversion-PP forecast intentionally still uses the
-      // independent median-MC BA model, whereas the Stage-2 BA *decision* now uses
-      // the PH logHR model + delta_HR margin (compute_ba_ph_posterior_internal).
-      // Tracked as Task 1.4b in docs/plans/2026-05-20-hr-margin-fix-implementation.md.
-      double p_between = compute_ba_posterior_internal(a_exp_final, b_exp_final, a_ref_final, b_ref_final, interval_cutpoints, 2000);
-      if (!ISNA(p_between) && p_between >= eff_ba) success_count++;
+      // Task 1.4b: score the forecast replicate with the SAME PH logHR model +
+      // benefit-side delta_HR rule as the real Stage-2 BA decision. Success is
+      // pr_eff >= eff_ba, exactly the BA decision block's efficacy criterion.
+      BaPhPosterior ba_post = compute_ba_ph_posterior_internal(
+        events_exp_final, exp_exp_final, events_ref_final, exp_ref_final,
+        prior_a, prior_b,
+        hr_margin, hr_eff_margin,
+        ph_loghr_prior_mean, ph_loghr_prior_sd
+      );
+      if (!R_IsNA(ba_post.pr_eff) && ba_post.pr_eff >= eff_ba) success_count++;
       checked++;
     }
 
@@ -1129,7 +1178,10 @@ List simulate_hybrid_trial_cpp(List theta_list, List base_args_list, List scenar
               state.posterior_a[1], state.posterior_b[1],
               state.posterior_a[0], state.posterior_b[0],
               n_add, interval_cutpoints, accrual_rate, followup,
-              eff_ba, pp_go, pp_nogo, n_outer
+              eff_ba, pp_go, pp_nogo, n_outer,
+              prior_a, prior_b,
+              hr_margin, hr_eff_margin,
+              ph_loghr_prior_mean, ph_loghr_prior_sd
             );
             state.pp_at_conversion = pp;
 
