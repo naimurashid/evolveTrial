@@ -1,3 +1,41 @@
+# evolveTrial 0.0.0.9001
+
+## Bug Fixes
+
+Hazard-ratio (HR) margin correction for the between-arm (BA) comparison. The
+benefit-side futility margin is now applied consistently across the R and C++
+decision and forecasting paths.
+
+* **F1 — Between-arm futility margin orientation.** The between-arm futility
+  comparator now uses the benefit-side margin `Pr(HR >= 1 - delta_HR)`. The
+  previous code used the harm-side `1 + delta_HR`, which buffered the futility
+  decision in the wrong direction.
+
+* **D2 — `rule_variant = "symmetric"` for between-arm/multi-arm.** The
+  `"symmetric"` rule variant now buffers the between-arm efficacy comparator
+  (efficacy requires `Pr(HR < 1 - delta_HR_eff)`). Previously this was a silent
+  no-op for the BA/multi-arm path, so `"symmetric"` behaved identically to the
+  unbuffered comparator there.
+
+* **D3 — C++ hybrid/seamless simulator HR margin.** The C++ hybrid/seamless
+  simulator now applies the benefit-side `delta_HR` margin in both the Stage-2
+  between-arm decision and the SA-to-BA conversion predictive-probability
+  forecast, scored through the proportional-hazards `logHR` model so the
+  forecast uses the same rule as the realized decision.
+
+* **D4 — Hybrid Stage-1 single-arm comparator.** The hybrid Stage-1 single-arm
+  comparator is fixed to the control median `M_ctrl` (`hr_threshold_sa = 1.0`).
+  It was previously `0.80`, which silently imposed an unintended HR margin on
+  the single-arm phase.
+
+## Code Quality
+
+* Removed unused C++ helpers from `src/hybrid_trial_sim.cpp`:
+  `compute_ba_posterior_internal` (and its forward declaration) and
+  `compute_ba_posterior_internal_aggregated`. Both had zero call sites after
+  the BA decision and conversion-PP paths were migrated to
+  `compute_ba_ph_posterior_internal` (the PH-model benefit-side posterior).
+
 # evolveTrial 0.0.0.9000
 
 ## Breaking Changes

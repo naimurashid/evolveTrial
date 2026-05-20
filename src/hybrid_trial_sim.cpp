@@ -161,10 +161,6 @@ arma::vec simulate_pwe_survival_batch_internal(int n, const arma::vec& lambda,
                                                 const arma::vec& interval_cutpoints);
 double compute_pwe_median_internal(const arma::vec& lambda,
                                     const arma::vec& interval_cutpoints);
-double compute_ba_posterior_internal(const arma::vec& a_exp, const arma::vec& b_exp,
-                                      const arma::vec& a_ref, const arma::vec& b_ref,
-                                      const arma::vec& interval_cutpoints,
-                                      int n_samples);
 double compute_p_single_arm_internal(const arma::vec& post_a, const arma::vec& post_b,
                                       const arma::vec& hist_hazard, double hr_threshold,
                                       const arma::vec& interval_cutpoints,
@@ -349,49 +345,6 @@ double compute_pwe_median_internal(const arma::vec& lambda,
   return interval_cutpoints(n_intervals) + remaining / lambda(last_idx);
 }
 
-// Compute P(HR < 1) using median-based Monte Carlo (matches R compute_p_between_arm)
-// For PWE models: samples per-interval hazards, computes medians, compares
-double compute_ba_posterior_internal(const arma::vec& a_exp, const arma::vec& b_exp,
-                                      const arma::vec& a_ref, const arma::vec& b_ref,
-                                      const arma::vec& interval_cutpoints,
-                                      int n_samples = 2000) {
-  int n_intervals = a_exp.n_elem;
-
-  // Guard against invalid parameters
-  for (int j = 0; j < n_intervals; j++) {
-    if (a_exp(j) <= 0 || b_exp(j) <= 0 || a_ref(j) <= 0 || b_ref(j) <= 0) {
-      return NA_REAL;
-    }
-  }
-
-  int count_exp_better = 0;
-
-  for (int i = 0; i < n_samples; i++) {
-    // Sample interval-specific hazards from posteriors
-    arma::vec lambda_exp(n_intervals);
-    arma::vec lambda_ref(n_intervals);
-
-    for (int j = 0; j < n_intervals; j++) {
-      lambda_exp(j) = R::rgamma(a_exp(j), 1.0 / b_exp(j));
-      lambda_ref(j) = R::rgamma(a_ref(j), 1.0 / b_ref(j));
-      // Clamp to avoid numerical issues
-      if (lambda_exp(j) < 1e-10) lambda_exp(j) = 1e-10;
-      if (lambda_ref(j) < 1e-10) lambda_ref(j) = 1e-10;
-    }
-
-    // Compute median survival for each arm
-    double median_exp = compute_pwe_median_internal(lambda_exp, interval_cutpoints);
-    double median_ref = compute_pwe_median_internal(lambda_ref, interval_cutpoints);
-
-    // Experimental better if longer median survival (lower hazard)
-    if (!R_IsNA(median_exp) && !R_IsNA(median_ref) && median_exp > median_ref) {
-      count_exp_better++;
-    }
-  }
-
-  return (double)count_exp_better / n_samples;
-}
-
 // =============================================================================
 // PH-model benefit-side BA posterior (D3: delta_HR margin in seamless Stage 2)
 // =============================================================================
@@ -487,22 +440,6 @@ BaPhPosterior compute_ba_ph_posterior_internal(const arma::vec& events_exp,
   out.pr_eff = R::pnorm(log_eff, mean, sd, /*lower_tail=*/1, /*log_p=*/0);
 
   return out;
-}
-
-// Overload for backward compatibility (aggregated F-test for exponential)
-double compute_ba_posterior_internal_aggregated(const arma::vec& a_exp, const arma::vec& b_exp,
-                                                 const arma::vec& a_ref, const arma::vec& b_ref) {
-  double a_exp_sum = arma::sum(a_exp);
-  double b_exp_sum = arma::sum(b_exp);
-  double a_ref_sum = arma::sum(a_ref);
-  double b_ref_sum = arma::sum(b_ref);
-
-  if (a_exp_sum <= 0 || a_ref_sum <= 0 || b_exp_sum <= 0 || b_ref_sum <= 0) {
-    return NA_REAL;
-  }
-
-  double q = (b_exp_sum / b_ref_sum) * (a_ref_sum / a_exp_sum);
-  return R::pf(q, 2.0 * a_exp_sum, 2.0 * a_ref_sum, 1, 0);
 }
 
 // Compute P(HR < threshold) for single-arm vs historical using median-based MC
