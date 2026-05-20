@@ -224,6 +224,10 @@ compute_hybrid_oc_rcpp <- function(hybrid_theta, base_args, scenario_params,
     futility_action = hybrid_theta$futility_action %||% "drop_arm",
     prior_strength = hybrid_theta$prior_strength %||% 0.5,
     n_outer = as.integer(hybrid_theta$n_outer %||% 200),
+    # Between-arm HR margin (delta_HR). Forwarded so the C++ hybrid simulator
+    # reads theta_list["hr_margin"] / theta_list["hr_eff_margin"] (Task 1.4/1.6).
+    hr_margin = hybrid_theta$hr_margin %||% 0.0,
+    hr_eff_margin = hybrid_theta$hr_eff_margin %||% 0.0,
     # New parameters for trial modes
     trial_mode = trial_mode,
     efficacy_method = efficacy_method,
@@ -441,6 +445,10 @@ run_hybrid_simulations_rcpp <- function(hybrid_theta, base_args, scenario_params
     futility_action = hybrid_theta$futility_action %||% "drop_arm",
     prior_strength = hybrid_theta$prior_strength %||% 0.5,
     n_outer = as.integer(hybrid_theta$n_outer %||% 200),
+    # Between-arm HR margin (delta_HR). Forwarded so the C++ hybrid simulator
+    # reads theta_list["hr_margin"] / theta_list["hr_eff_margin"] (Task 1.4/1.6).
+    hr_margin = hybrid_theta$hr_margin %||% 0.0,
+    hr_eff_margin = hybrid_theta$hr_eff_margin %||% 0.0,
     # Trial mode parameters
     trial_mode = trial_mode,
     efficacy_method = efficacy_method,
@@ -620,6 +628,10 @@ compute_oc_lambda <- function(theta, base_args,
     nmax_ba = as.integer(theta$nmax_ba %||% 80),
     futility_action = theta$futility_action %||% "drop_arm",
     n_outer = as.integer(theta$n_outer %||% 200),
+    # Between-arm HR margin (delta_HR). Forwarded so the C++ hybrid simulator
+    # reads theta_list["hr_margin"] / theta_list["hr_eff_margin"] (Task 1.4/1.6).
+    hr_margin = theta$hr_margin %||% 0.0,
+    hr_eff_margin = theta$hr_eff_margin %||% 0.0,
     trial_mode = trial_mode,
     efficacy_method = efficacy_method,
     futility_method = futility_method
