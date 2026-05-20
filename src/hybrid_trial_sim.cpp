@@ -490,6 +490,14 @@ double compute_ba_posterior_internal_aggregated(const arma::vec& a_exp, const ar
 
 // Compute P(HR < threshold) for single-arm vs historical using median-based MC
 // (matches R compute_p_single_arm for PWE models)
+//
+// D4: This implements the Web Appendix A.4.3 seamless conversion rule, which is
+// of the form Pr(median >= M_ctrl) gated by two thresholds (p_go/p_nogo, i.e.
+// eff_sa/fut_sa) -- there is no additive delta margin. With hr_threshold = 1.0
+// (fixed config value; see warmstart_wrappers.R), the comparator below reduces
+// to median_arm > hist_median (i.e. > M_ctrl), as A.4.3 specifies. The additive
+// `futility_median_arms` margin is therefore intentionally NOT consumed by the
+// hybrid SA path -- this is consistent with the paper, not a bug.
 double compute_p_single_arm_internal(const arma::vec& post_a, const arma::vec& post_b,
                                       const arma::vec& hist_hazard, double hr_threshold,
                                       const arma::vec& interval_cutpoints,
