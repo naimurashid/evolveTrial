@@ -17,8 +17,17 @@ calculate_current_probs_vs_ref <- function(slCtrl, slTrt, args,
       # log(1 - delta_HR) <= 0. Cap at 0.95 to keep the log finite.
       log_margin <- log1p(-min(max(0, args$compare_arms_hr_margin), 0.95))
     }
+    # Benefit-side efficacy margin: when set (rule_variant = "symmetric"), the
+    # efficacy comparator is buffered toward benefit, HR = 1 - delta_HR, so the
+    # rule is Pr(HR < 1 - delta_HR) >= p_E. log(1 - delta_HR) <= 0. When NULL
+    # (rule_variant = "current"/"no_margin") log_eff stays exactly 0, so the
+    # comparator is the unbuffered HR < 1 (byte-identical to prior behavior).
+    log_eff <- 0
+    if (!is.null(args$compare_arms_hr_eff_margin)) {
+      log_eff <- log1p(-min(max(0, args$compare_arms_hr_eff_margin), 0.95))
+    }
     list(
-      pr_eff = mean(draws$logHR < 0),
+      pr_eff = mean(draws$logHR < log_eff),
       pr_fut = mean(draws$logHR >= log_margin)
     )
   } else {

@@ -63,8 +63,14 @@
 #'   vs-reference decisions.
 #' @param compare_arms_futility_margin Absolute median difference used when
 #'   defining vs-reference futility.
-#' @param compare_arms_hr_margin Optional hazard-ratio margin used when
-#'   `use_ph_model_vs_ref = TRUE`.
+#' @param compare_arms_hr_margin Optional hazard-ratio futility margin used when
+#'   `use_ph_model_vs_ref = TRUE`. Buffers the futility comparator toward
+#'   benefit: futility uses `Pr(HR >= 1 - delta_HR)`.
+#' @param compare_arms_hr_eff_margin Optional hazard-ratio efficacy margin used
+#'   when `use_ph_model_vs_ref = TRUE`. When set (rule_variant = "symmetric")
+#'   buffers the efficacy comparator toward benefit: efficacy uses
+#'   `Pr(HR < 1 - delta_HR)`. `NULL` (rule_variant = "current"/"no_margin")
+#'   leaves the comparator at the unbuffered `HR < 1`.
 #' @param use_ph_model_vs_ref Logical; use the proportional-hazards joint model
 #'   for vs-reference comparisons.
 #' @param ph_loghr_prior_mean Mean of the normal prior on the log hazard ratio
@@ -192,6 +198,7 @@ run_simulation_pure <- function(
     futility_threshold_vs_ref_prob = NULL,
     compare_arms_futility_margin = 0,
     compare_arms_hr_margin = NULL,
+    compare_arms_hr_eff_margin = NULL,
     use_ph_model_vs_ref = FALSE,
     ph_loghr_prior_mean = 0,
     ph_loghr_prior_sd = 1,
@@ -359,6 +366,7 @@ run_simulation_pure <- function(
     futility_threshold_vs_ref_prob = futility_threshold_vs_ref_prob,
     compare_arms_futility_margin = compare_arms_futility_margin,
     compare_arms_hr_margin = compare_arms_hr_margin,
+    compare_arms_hr_eff_margin = compare_arms_hr_eff_margin,
     use_ph_model_vs_ref = use_ph_model_vs_ref,
     ph_loghr_prior_mean = ph_loghr_prior_mean,
     ph_loghr_prior_sd = ph_loghr_prior_sd,
@@ -721,7 +729,13 @@ run_simulation_pure <- function(
                 # Benefit-side futility margin: HR = 1 - delta_HR (see interim_logic.R).
                 log_margin <- log1p(-min(max(0, args_local$compare_arms_hr_margin), 0.95))
               }
-              p_eff_ref <- mean(med_samples$logHR < 0)
+              # Benefit-side efficacy margin: HR = 1 - delta_HR when set
+              # (rule_variant = "symmetric"); NULL keeps log_eff at exactly 0.
+              log_eff <- 0
+              if (!is.null(args_local$compare_arms_hr_eff_margin)) {
+                log_eff <- log1p(-min(max(0, args_local$compare_arms_hr_eff_margin), 0.95))
+              }
+              p_eff_ref <- mean(med_samples$logHR < log_eff)
               p_fut_ref <- mean(med_samples$logHR >= log_margin)
             } else {
               margin_abs <- coalesce_num(compare_arms_futility_margin, 0)

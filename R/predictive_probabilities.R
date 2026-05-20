@@ -93,6 +93,7 @@ calculate_predicted_prob_vs_ref <- function(
     censor_max_time_sim,
     compare_arms_futility_margin,
     compare_arms_hr_margin = NULL,
+    compare_arms_hr_eff_margin = NULL,
     use_ph_model_vs_ref = FALSE,
     inner_final_draws = 250,
     target_pred_efficacy_threshold = NULL,
@@ -115,12 +116,16 @@ calculate_predicted_prob_vs_ref <- function(
   s_eff <- 0L; s_fut <- 0L; N <- num_posterior_draws; k_eff <- 0L
   # Benefit-side futility margin: futility comparator HR = 1 - delta_HR (see interim_logic.R).
   log_margin_hr <- if (!is.null(compare_arms_hr_margin)) log1p(-min(max(0, compare_arms_hr_margin), 0.95)) else 0
+  # Benefit-side efficacy margin: efficacy comparator HR = 1 - delta_HR when set
+  # (rule_variant = "symmetric"); NULL keeps log_eff_hr at exactly 0 (HR < 1).
+  log_eff_hr <- if (!is.null(compare_arms_hr_eff_margin)) log1p(-min(max(0, compare_arms_hr_eff_margin), 0.95)) else 0
   draw_args <- list(
     interval_cutpoints_sim = interval_cutpoints,
     prior_alpha_params_model = prior_alpha_params,
     prior_beta_params_model  = prior_beta_params,
     compare_arms_futility_margin = compare_arms_futility_margin,
     compare_arms_hr_margin = compare_arms_hr_margin,
+    compare_arms_hr_eff_margin = compare_arms_hr_eff_margin,
     use_ph_model_vs_ref = use_ph_model_vs_ref,
     num_posterior_draws = min(inner_final_draws, num_posterior_draws)
   )
@@ -166,7 +171,7 @@ calculate_predicted_prob_vs_ref <- function(
       num_samples = draw_args$num_posterior_draws
     )
     if (isTRUE(use_ph_model_vs_ref) && !is.null(draws$logHR)) {
-      p_eff_final <- mean(draws$logHR < 0)
+      p_eff_final <- mean(draws$logHR < log_eff_hr)
       p_fut_final <- mean(draws$logHR >= log_margin_hr)
     } else {
       margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
@@ -299,6 +304,7 @@ calculate_predicted_prob_vs_ref_fast <- function(
     final_futility_posterior_prob_threshold,
     compare_arms_futility_margin,
     compare_arms_hr_margin = NULL,
+    compare_arms_hr_eff_margin = NULL,
     use_ph_model_vs_ref = FALSE,
     max_follow_up_sim,
     overall_accrual_rate,
@@ -344,12 +350,16 @@ calculate_predicted_prob_vs_ref_fast <- function(
   eff_hits <- 0L; fut_hits <- 0L
   # Benefit-side futility margin: futility comparator HR = 1 - delta_HR (see interim_logic.R).
   log_margin_hr <- if (!is.null(compare_arms_hr_margin)) log1p(-min(max(0, compare_arms_hr_margin), 0.95)) else 0
+  # Benefit-side efficacy margin: efficacy comparator HR = 1 - delta_HR when set
+  # (rule_variant = "symmetric"); NULL keeps log_eff_hr at exactly 0 (HR < 1).
+  log_eff_hr <- if (!is.null(compare_arms_hr_eff_margin)) log1p(-min(max(0, compare_arms_hr_eff_margin), 0.95)) else 0
   draw_args <- list(
     interval_cutpoints_sim = interval_cutpoints,
     prior_alpha_params_model = prior_alpha_params,
     prior_beta_params_model  = prior_beta_params,
     compare_arms_futility_margin = compare_arms_futility_margin,
     compare_arms_hr_margin = compare_arms_hr_margin,
+    compare_arms_hr_eff_margin = compare_arms_hr_eff_margin,
     use_ph_model_vs_ref = use_ph_model_vs_ref,
     num_posterior_draws = 1L
   )
@@ -371,7 +381,7 @@ calculate_predicted_prob_vs_ref_fast <- function(
       num_samples = 1L
     )
     if (isTRUE(use_ph_model_vs_ref) && !is.null(draws$logHR)) {
-      eff_hits <- eff_hits + as.integer(draws$logHR < 0)
+      eff_hits <- eff_hits + as.integer(draws$logHR < log_eff_hr)
       fut_hits <- fut_hits + as.integer(draws$logHR >= log_margin_hr)
     } else {
       margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
