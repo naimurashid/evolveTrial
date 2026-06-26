@@ -4,3 +4,203 @@
 
 library(evolveTrial)
 ```
+
+## Overview
+
+`evolveTrial` provides tools for designing and simulating Bayesian
+adaptive clinical trials with time-to-event or binary endpoints. This
+vignette walks through a short end-to-end workflow:
+
+1.  Find a binary two-stage (Simon) design and check its exact operating
+    characteristics.
+2.  Evaluate a single-arm time-to-event design by simulation.
+3.  Configure and simulate a hybrid seamless single-arm-to-between-arm
+    design.
+
+Computationally heavy simulation chunks are shown with `eval = FALSE` so
+the vignette builds quickly; copy them into an interactive session to
+run them.
+
+## 1. Binary two-stage (Simon) design
+
+[`find_simon_design()`](../reference/find_simon_design.md) searches for
+an optimal or minimax Simon two-stage design, and
+[`simon_oc_exact()`](../reference/simon_oc_exact.md) returns its exact
+operating characteristics. These are fast, closed-form computations, so
+we evaluate them here.
+
+``` r
+
+set.seed(2026)
+
+# Optimal Simon design: H0: p = 0.20 vs H1: p = 0.40
+design <- find_simon_design(p0 = 0.20, p1 = 0.40, alpha = 0.05, beta = 0.20)
+design
+#>   n1 r1  n  r n2  EN_null   EN_alt  PET_null   PET_alt type1_error     power
+#> 1 13  3 43 12 30 20.58027 37.94261 0.7473243 0.1685797  0.04958145 0.8002144
+#>   criterion
+#> 1   optimal
+
+# Exact operating characteristics under the null (p = 0.20) and the
+# alternative (p = 0.40)
+simon_oc_exact(
+  n1 = design$n1, r1 = design$r1,
+  n  = design$n,  r  = design$r,
+  p  = 0.20
+)
+#> $reject_prob
+#> [1] 0.04958145
+#> 
+#> $pet
+#> [1] 0.7473243
+#> 
+#> $en
+#> [1] 20.58027
+#> 
+#> $n1
+#> [1] 13
+#> 
+#> $r1
+#> [1] 3
+#> 
+#> $n
+#> [1] 43
+#> 
+#> $r
+#> [1] 12
+#> 
+#> $p
+#> [1] 0.2
+simon_oc_exact(
+  n1 = design$n1, r1 = design$r1,
+  n  = design$n,  r  = design$r,
+  p  = 0.40
+)
+#> $reject_prob
+#> [1] 0.8002144
+#> 
+#> $pet
+#> [1] 0.1685797
+#> 
+#> $en
+#> [1] 37.94261
+#> 
+#> $n1
+#> [1] 13
+#> 
+#> $r1
+#> [1] 3
+#> 
+#> $n
+#> [1] 43
+#> 
+#> $r
+#> [1] 12
+#> 
+#> $p
+#> [1] 0.4
+```
+
+## 2. Single-arm time-to-event design
+
+[`run_simulation_pure()`](../reference/run_simulation_pure.md) simulates
+a single-arm trial with a piecewise exponential time-to-event model and
+Bayesian posterior decision rules, returning type I error / power,
+probabilities of early termination, and expected sample size. This is a
+Monte Carlo simulation, so we mark it `eval = FALSE`.
+
+``` r
+
+set.seed(2026)
+
+result <- run_simulation_pure(
+  num_simulations            = 500,
+  arm_names                  = "Experimental",
+  reference_arm_name         = "Experimental",
+  compare_arms_option        = "none",
+  weibull_shape_true_arms    = c(Experimental = 1),
+  weibull_median_true_arms   = c(Experimental = 9),
+  interval_cutpoints_sim     = c(0, 3, 6, 9, 12, 15, 18, 21, 24),
+  max_follow_up_sim          = 24,
+  censor_max_time_sim        = 24,
+  prior_alpha_params_model   = rep(0.01, 8),
+  prior_beta_params_model    = rep(0.01, 8),
+  num_posterior_draws        = 5000,
+  cohort_size_per_arm        = c(Experimental = 1),
+  max_total_patients_per_arm = c(Experimental = 60),
+  efficacy_stopping_rule_hc  = TRUE,
+  efficacy_threshold_hc_prob = 0.95,
+  futility_stopping_rule_hc  = TRUE,
+  futility_threshold_hc_prob = 0.05,
+  median_pfs_success_threshold_arms = c(Experimental = 6),
+  overall_accrual_rate       = 2,
+  randomization_probs        = c(Experimental = 1),
+  min_events_hc              = 15,
+  interim_calendar_beat      = 3
+)
+
+print(result)
+```
+
+## 3. Hybrid seamless single-arm-to-between-arm design
+
+A hybrid design begins with single-arm monitoring and can convert to a
+between-arm comparison once sufficient evidence accrues.
+[`create_hybrid_theta()`](../reference/create_hybrid_theta.md) builds
+the design parameter vector and
+[`compute_hybrid_oc_rcpp()`](../reference/compute_hybrid_oc_rcpp.md)
+simulates the operating characteristics via the C++ engine. Again
+`eval = FALSE` because this runs many Monte Carlo replications.
+
+``` r
+
+theta <- create_hybrid_theta(
+  eff_sa             = 0.90,
+  fut_sa             = 0.10,
+  hr_threshold_sa    = 0.80,
+  ev_sa              = 15,
+  nmax_sa            = 40,
+  conversion_trigger = "any_single_success",
+  pp_go              = 0.70,
+  pp_nogo            = 0.20,
+  ss_method          = "predictive",
+  max_additional_n   = 60,
+  eff_ba             = 0.975,
+  fut_ba             = 0.05,
+  ev_ba              = 15,
+  nmax_ba            = 80
+)
+
+base_args <- list(
+  interval_cutpoints_sim   = c(0, 3, 6, 9, 12, 15, 18, 21, 24),
+  prior_alpha_params_model = rep(0.01, 8),
+  prior_beta_params_model  = rep(0.01, 8),
+  overall_accrual_rate     = 3,
+  interim_calendar_beat    = 3,
+  num_posterior_draws      = 5000
+)
+
+# Scenario: historical median 6 mo, reference 6 mo, experimental 9 mo
+scenario <- list(historical_median = 6, ref_median = 6, exp_median = 9)
+
+oc <- compute_hybrid_oc_rcpp(
+  hybrid_theta    = theta,
+  base_args       = base_args,
+  scenario_params = scenario,
+  num_simulations = 1000,
+  seed            = 42,
+  trial_mode      = "hybrid"
+)
+
+cat("Power:", round(oc$power, 3), "\n")
+cat("Type I:", round(oc$type1, 3), "\n")
+cat("E[N] under null:", round(oc$EN_null, 1), "\n")
+cat("P(conversion):", round(oc$P_conversion, 3), "\n")
+```
+
+## Where to go next
+
+See the package README for the full API reference (simulation,
+calibration, binary-endpoint helpers, visualization, and decision-rule
+functions) and the companion `BATON` package for constrained Bayesian
+optimization over the design space evaluated here.

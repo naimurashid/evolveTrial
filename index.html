@@ -200,6 +200,7 @@
 <p>Simulate a single-arm trial evaluating an experimental therapy against a historical control median of 6 months, with an expected treatment median of 9 months.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">2026</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_simulation_pure.html">run_simulation_pure</a></span><span class="op">(</span></span>
 <span>  num_simulations           <span class="op">=</span> <span class="fl">500</span>,</span>
@@ -238,6 +239,7 @@
 <p>Find an optimal Simon design and verify its operating characteristics via simulation.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">evolveTrial</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">2026</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Find optimal Simon design: H0: p=0.20, H1: p=0.40</span></span>
 <span><span class="va">design</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/find_simon_design.html">find_simon_design</a></span><span class="op">(</span>p0 <span class="op">=</span> <span class="fl">0.20</span>, p1 <span class="op">=</span> <span class="fl">0.40</span>, alpha <span class="op">=</span> <span class="fl">0.05</span>, beta <span class="op">=</span> <span class="fl">0.20</span><span class="op">)</span></span>
@@ -349,6 +351,10 @@
 <tr>
 <td><code><a href="reference/compute_hybrid_oc_rcpp.html">compute_hybrid_oc_rcpp()</a></code></td>
 <td>Simulate hybrid seamless SA-to-BA trial via C++ engine</td>
+</tr>
+<tr>
+<td><code><a href="reference/compute_oc_lambda.html">compute_oc_lambda()</a></code></td>
+<td>Lower-level OC computation taking piecewise-exponential hazard rates directly (instead of median-based input)</td>
 </tr>
 <tr>
 <td><code><a href="reference/create_hybrid_theta.html">create_hybrid_theta()</a></code></td>
@@ -552,7 +558,7 @@
 │   └── design-overview.Rmd          # Methodology vignette
 ├── DESCRIPTION
 ├── NAMESPACE
-└── LICENSE                          # MIT</code></pre>
+└── LICENSE                          # UNC OTC not-for-profit research/educational use</code></pre>
 </div>
 <div class="section level2">
 <h2 id="companion-package-baton">Companion Package: BATON<a class="anchor" aria-label="anchor" href="#companion-package-baton"></a>
@@ -585,14 +591,14 @@
 <div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
 </h2>
-<p>MIT. See <a href="LICENSE">LICENSE</a> for details.</p>
+<p>Copyright (c) 2026, The University of North Carolina at Chapel Hill. For not-for-profit research and educational use only; all other rights reserved. See LICENSE. For commercial licensing, contact <a href="mailto:otc@unc.edu" class="email">otc@unc.edu</a>.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="license">
 <h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
-<li><a href="LICENSE.html">Full license</a></li>
-<li><small>file <a href="LICENSE-text.html">LICENSE</a></small></li>
+<li>file <a href="LICENSE-text.html">LICENSE</a>
+</li>
 </ul>
 </div>
 

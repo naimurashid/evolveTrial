@@ -146,6 +146,7 @@ of 9 months.
 ``` r
 
 library(evolveTrial)
+set.seed(2026)
 
 result <- run_simulation_pure(
   num_simulations           = 500,
@@ -187,6 +188,7 @@ via simulation.
 ``` r
 
 library(evolveTrial)
+set.seed(2026)
 
 # Find optimal Simon design: H0: p=0.20, H1: p=0.40
 design <- find_simon_design(p0 = 0.20, p1 = 0.40, alpha = 0.05, beta = 0.20)
@@ -277,6 +279,7 @@ cat("P(conversion):", round(oc$P_conversion, 3), "\n")
 | [`scenarios_from_grid()`](reference/scenarios_from_grid.md) | Generate factorial scenario grid from parameter choices |
 | [`run_simulation_binary()`](reference/run_simulation_binary.md) | Simulate a binary-endpoint trial (one- or two-stage) |
 | [`compute_hybrid_oc_rcpp()`](reference/compute_hybrid_oc_rcpp.md) | Simulate hybrid seamless SA-to-BA trial via C++ engine |
+| [`compute_oc_lambda()`](reference/compute_oc_lambda.md) | Lower-level OC computation taking piecewise-exponential hazard rates directly (instead of median-based input) |
 | [`create_hybrid_theta()`](reference/create_hybrid_theta.md) | Construct the hybrid design parameter vector |
 
 ### Design Calibration
@@ -356,7 +359,7 @@ cat("P(conversion):", round(oc$P_conversion, 3), "\n")
     │   └── design-overview.Rmd          # Methodology vignette
     ├── DESCRIPTION
     ├── NAMESPACE
-    └── LICENSE                          # MIT
+    └── LICENSE                          # UNC OTC not-for-profit research/educational use
 
 ## Companion Package: BATON
 
@@ -400,4 +403,6 @@ If you use evolveTrial in your work, please cite:
 
 ## License
 
-MIT. See [LICENSE](LICENSE) for details.
+Copyright (c) 2026, The University of North Carolina at Chapel Hill. For
+not-for-profit research and educational use only; all other rights
+reserved. See LICENSE. For commercial licensing, contact <otc@unc.edu>.

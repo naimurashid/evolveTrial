@@ -7,7 +7,3 @@ Futility actions
 ``` r
 FUTILITY_ACTIONS
 ```
-
-## Format
-
-An object of class `character` of length 3.

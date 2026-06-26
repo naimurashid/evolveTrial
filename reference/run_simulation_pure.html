@@ -85,6 +85,7 @@ characteristics are returned summarised per arm.</p>
 <span>  futility_threshold_vs_ref_prob <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  compare_arms_futility_margin <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  compare_arms_hr_margin <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  compare_arms_hr_eff_margin <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  use_ph_model_vs_ref <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  ph_loghr_prior_mean <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  ph_loghr_prior_sd <span class="op">=</span> <span class="fl">1</span>,</span>
@@ -271,8 +272,17 @@ defining vs-reference futility.</p></dd>
 
 
 <dt id="arg-compare-arms-hr-margin">compare_arms_hr_margin<a class="anchor" aria-label="anchor" href="#arg-compare-arms-hr-margin"></a></dt>
-<dd><p>Optional hazard-ratio margin used when
-<code>use_ph_model_vs_ref = TRUE</code>.</p></dd>
+<dd><p>Optional hazard-ratio futility margin used when
+<code>use_ph_model_vs_ref = TRUE</code>. Buffers the futility comparator toward
+benefit: futility uses <code>Pr(HR &gt;= 1 - delta_HR)</code>.</p></dd>
+
+
+<dt id="arg-compare-arms-hr-eff-margin">compare_arms_hr_eff_margin<a class="anchor" aria-label="anchor" href="#arg-compare-arms-hr-eff-margin"></a></dt>
+<dd><p>Optional hazard-ratio efficacy margin used
+when <code>use_ph_model_vs_ref = TRUE</code>. When set (rule_variant = "symmetric")
+buffers the efficacy comparator toward benefit: efficacy uses
+<code>Pr(HR &lt; 1 - delta_HR)</code>. <code>NULL</code> (rule_variant = "current"/"no_margin")
+leaves the comparator at the unbuffered <code>HR &lt; 1</code>.</p></dd>
 
 
 <dt id="arg-use-ph-model-vs-ref">use_ph_model_vs_ref<a class="anchor" aria-label="anchor" href="#arg-use-ph-model-vs-ref"></a></dt>

@@ -16,10 +16,6 @@ This module provides the main simulation engine for hybrid trials that:
 HYBRID_STATES
 ```
 
-## Format
-
-An object of class `list` of length 4.
-
 ## Details
 
 Implements a 4-state machine: STATE_SINGLE -\> STATE_CONSIDER_CONVERSION

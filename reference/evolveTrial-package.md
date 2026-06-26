@@ -6,3 +6,7 @@ including simulation, decision rules, and reporting.
 ## Author
 
 **Maintainer**: Naim Rashid <naim@unc.edu>
+
+Authors:
+
+- Naim Rashid <naim@unc.edu>

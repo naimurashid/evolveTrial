@@ -40,6 +40,7 @@ run_simulation_pure(
   futility_threshold_vs_ref_prob = NULL,
   compare_arms_futility_margin = 0,
   compare_arms_hr_margin = NULL,
+  compare_arms_hr_eff_margin = NULL,
   use_ph_model_vs_ref = FALSE,
   ph_loghr_prior_mean = 0,
   ph_loghr_prior_sd = 1,
@@ -213,7 +214,17 @@ run_simulation_pure(
 
 - compare_arms_hr_margin:
 
-  Optional hazard-ratio margin used when `use_ph_model_vs_ref = TRUE`.
+  Optional hazard-ratio futility margin used when
+  `use_ph_model_vs_ref = TRUE`. Buffers the futility comparator toward
+  benefit: futility uses `Pr(HR >= 1 - delta_HR)`.
+
+- compare_arms_hr_eff_margin:
+
+  Optional hazard-ratio efficacy margin used when
+  `use_ph_model_vs_ref = TRUE`. When set (rule_variant = "symmetric")
+  buffers the efficacy comparator toward benefit: efficacy uses
+  `Pr(HR < 1 - delta_HR)`. `NULL` (rule_variant = "current"/"no_margin")
+  leaves the comparator at the unbuffered `HR < 1`.
 
 - use_ph_model_vs_ref:
 

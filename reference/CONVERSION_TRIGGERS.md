@@ -7,7 +7,3 @@ Conversion triggers
 ``` r
 CONVERSION_TRIGGERS
 ```
-
-## Format
-
-An object of class `character` of length 5.
