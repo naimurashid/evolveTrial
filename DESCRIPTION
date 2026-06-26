@@ -36,6 +36,7 @@ Imports:
     stats,
     tidyselect,
     utils
-LinkingTo: 
+LinkingTo:
     Rcpp,
     RcppArmadillo
+SystemRequirements: C++17, LAPACK, BLAS

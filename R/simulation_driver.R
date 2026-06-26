@@ -1222,7 +1222,22 @@ run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL,
 
   if (isTRUE(parallel)) {
     cores <- max(1L, parallel::detectCores() - 1L)
-    out <- parallel::mclapply(seq_along(scens), run_one, mc.cores = cores)
+    # Use forking on Unix (mclapply); fall back to a PSOCK cluster on
+    # Windows where forking is unavailable. See compute_hybrid_oc_rcpp()
+    # in R/hybrid_sim_rcpp.R for the same idiom.
+    if (.Platform$OS.type == "unix") {
+      out <- parallel::mclapply(seq_along(scens), run_one, mc.cores = cores)
+    } else {
+      cl <- parallel::makeCluster(cores)
+      on.exit(parallel::stopCluster(cl), add = TRUE)
+      parallel::clusterEvalQ(cl, library(evolveTrial))
+      parallel::clusterExport(cl,
+                              c("scens", "base_args", "rs_formals",
+                                "return_percentiles", "percentile_probs",
+                                "return_variance"),
+                              envir = environment())
+      out <- parallel::parLapply(cl, seq_along(scens), run_one)
+    }
   } else {
     out <- lapply(seq_along(scens), run_one)
   }

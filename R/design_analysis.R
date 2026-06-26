@@ -409,7 +409,19 @@ evaluate_ph_grid <- function(base_args, grid, scens, sims = 2000,
 
   idx <- seq_len(nrow(grid))
   out <- if (parallel) {
-    parallel::mclapply(idx, run_one, mc.cores = max(1L, parallel::detectCores() - 1L))
+    # Use forking on Unix (mclapply); fall back to a PSOCK cluster on
+    # Windows where forking is unavailable. See compute_hybrid_oc_rcpp()
+    # in R/hybrid_sim_rcpp.R for the same idiom.
+    if (.Platform$OS.type == "unix") {
+      parallel::mclapply(idx, run_one, mc.cores = max(1L, parallel::detectCores() - 1L))
+    } else {
+      cl <- parallel::makeCluster(max(1L, parallel::detectCores() - 1L))
+      on.exit(parallel::stopCluster(cl), add = TRUE)
+      parallel::clusterEvalQ(cl, library(evolveTrial))
+      parallel::clusterExport(cl, c("grid", "base_args", "sims", "scens", "seed"),
+                              envir = environment())
+      parallel::parLapply(cl, idx, run_one)
+    }
   } else {
     lapply(idx, run_one)
   }
