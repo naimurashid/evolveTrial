@@ -11,5 +11,10 @@ Helpers for Bayesian adaptive platform/umbrella clinical trials, including simul
 \author{
 \strong{Maintainer}: Naim Rashid \email{naim@unc.edu}
 
+Authors:
+\itemize{
+  \item Naim Rashid \email{naim@unc.edu}
+}
+
 }
 \keyword{internal}
