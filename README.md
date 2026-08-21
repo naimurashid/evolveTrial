@@ -9,12 +9,9 @@ clinical trials with time-to-event or binary endpoints. It supports single-arm,
 multi-arm, and hybrid seamless (single-arm-to-between-arm) trial designs with
 interim stopping rules based on posterior probabilities.
 
-The package was developed for the ARPA-H ADAPT breast cancer platform trial and
-accompanies the JASA paper:
-
-> Rashid, N. (2026). "Constrained Bayesian Optimization for Calibration of
-> Bayesian Adaptive Clinical Trials." *Journal of the American Statistical
-> Association*.
+The package was developed to support the design of multicenter Bayesian adaptive
+platform trials. Methods for constrained calibration of design operating
+characteristics are described in a manuscript currently under review.
 
 ## Features
 
@@ -373,15 +370,15 @@ devtools::test()
 
 ## Citation
 
-If you use evolveTrial in your work, please cite:
+If you use evolveTrial in your work, please cite the software:
 
 ```bibtex
-@article{rashid2026constrained,
-  title   = {Constrained {Bayesian} Optimization for Calibration of
-             {Bayesian} Adaptive Clinical Trials},
-  author  = {Rashid, Naim U.},
-  journal = {Journal of the American Statistical Association},
-  year    = {2026}
+@software{evolvetrial,
+  title  = {evolveTrial: Adaptive Clinical Trial Utilities},
+  author = {Rashid, Naim U.},
+  year   = {2026},
+  note   = {R package version 0.0.0.9001},
+  url    = {https://github.com/naimurashid/evolveTrial}
 }
 ```
 
