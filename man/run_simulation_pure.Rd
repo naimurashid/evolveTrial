@@ -194,12 +194,18 @@ threshold for final futility declarations.}
 
 \item{randomization_probs}{Named numeric vector of randomisation probabilities.}
 
-\item{min_follow_up_at_final}{Additional follow-up (months) required after
-last enrolment before the final analysis.}
+\item{min_follow_up_at_final}{Additional follow-up (months) after the last
+enrolment before the final analysis. For a trial not stopped early the
+final analysis is at \verb{min(last enrolment + min_follow_up_at_final, max_trial_time)} (\code{T_final}). Every interim look (calendar, person-time,
+backstop, the look when enrolment ends, post-enrolment looks) runs only
+strictly before \code{T_final}; with the default \code{0} the look at the moment
+enrolment ends therefore no longer runs (changed in 0.0.0.9002).}
 
-\item{max_trial_time}{Maximum calendar time (months) for the entire trial.
-After this cutoff from trial start, the trial terminates regardless of
-other stopping rules. Default is \code{Inf} (no time limit).}
+\item{max_trial_time}{Maximum calendar time (months) from trial start.
+Since 0.0.0.9002 this cutoff closes accrual (an arrival at or after it
+enrols nobody), interim analyses and the final analysis: no enrolment,
+interim, stop time or final analysis lies at or after it (the final
+analysis may lie at it). Default is \code{Inf} (no time limit).}
 
 \item{min_events_for_analysis}{\strong{DEPRECATED}. Use \code{min_events_hc}
 instead. Minimum events required for interim review (global gate).}
