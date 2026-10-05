@@ -87,11 +87,18 @@
 #'   threshold for final futility declarations.
 #' @param overall_accrual_rate Expected accrual rate (patients per month).
 #' @param randomization_probs Named numeric vector of randomisation probabilities.
-#' @param min_follow_up_at_final Additional follow-up (months) required after
-#'   last enrolment before the final analysis.
-#' @param max_trial_time Maximum calendar time (months) for the entire trial.
-#'   After this cutoff from trial start, the trial terminates regardless of
-#'   other stopping rules. Default is `Inf` (no time limit).
+#' @param min_follow_up_at_final Additional follow-up (months) after the last
+#'   enrolment before the final analysis. For a trial not stopped early the
+#'   final analysis is at `min(last enrolment + min_follow_up_at_final,
+#'   max_trial_time)` (`T_final`). Every interim look (calendar, person-time,
+#'   backstop, the look when enrolment ends, post-enrolment looks) runs only
+#'   strictly before `T_final`; with the default `0` the look at the moment
+#'   enrolment ends therefore no longer runs (changed in 0.0.0.9002).
+#' @param max_trial_time Maximum calendar time (months) from trial start.
+#'   Since 0.0.0.9002 this cutoff closes accrual (an arrival at or after it
+#'   enrols nobody), interim analyses and the final analysis: no enrolment,
+#'   interim, stop time or final analysis lies at or after it (the final
+#'   analysis may lie at it). Default is `Inf` (no time limit).
 #' @param min_events_for_analysis **DEPRECATED**. Use \code{min_events_hc}
 #'   instead. Minimum events required for interim review (global gate).
 #' @param min_median_followup **DEPRECATED**. Use \code{min_median_followup_hc}
@@ -211,8 +218,8 @@ run_simulation_pure <- function(
     overall_accrual_rate,
     randomization_probs,
     min_follow_up_at_final = 0,
-    # NEW: max calendar time for entire trial (absolute cutoff from trial start)
-    # After enrollment completes, interims continue until early stop or this cutoff
+    # Max calendar time for the entire trial (absolute cutoff from trial start).
+    # 0.0.0.9002: closes accrual, interims and the final analysis; see roxygen.
     max_trial_time = Inf,
     # legacy info gates + calendar-beat interims
     min_events_for_analysis = NULL,
@@ -513,6 +520,36 @@ run_simulation_pure <- function(
         interarrival <- rexp(1, rate = overall_accrual_rate)
         current_time <- current_time + interarrival
 
+        # Chronology (0.0.0.9002): accrual closes at max_trial_time. An arrival
+        # at or after the cutoff enrolls nobody and triggers no interim; the
+        # enrollment loop ends there. The arrival draw is consumed, no other.
+        if (is.finite(max_trial_time) && current_time >= max_trial_time) {
+          current_time <- max_trial_time
+          break
+        }
+
+        # Interims run only strictly before the final-analysis time
+        # T_final = min(last_enroll_time + min_follow_up_at_final, max_trial_time).
+        # Here current_time < max_trial_time. If a patient is enrolled at
+        # current_time and min_follow_up_at_final > 0, then T_final >
+        # current_time automatically. Two cases are known before the interim:
+        #  (a) min_follow_up_at_final <= 0 and this arrival fills the last open
+        #      slot: T_final = current_time, so no interim at this arrival;
+        #  (b) compare-arms mode with no eligible experimental arm: the loop
+        #      exits below without enrolling, so T_final is already fixed.
+        interim_ok_here <- TRUE
+        elig_pre <- is_eligible(state)
+        if (min_follow_up_at_final <= 0 &&
+            sum(rep_len(unname(max_total_patients_per_arm), length(arm_names))[elig_pre] -
+                state$enrolled_counts[elig_pre]) == 1) {
+          interim_ok_here <- FALSE
+        }
+        if (isTRUE(compare_arms_option) &&
+            !any(which(arm_names != reference_arm_name) %in% elig_pre)) {
+          t_final_fixed <- min(last_enroll_time + min_follow_up_at_final, max_trial_time)
+          if (current_time >= t_final_fixed) interim_ok_here <- FALSE
+        }
+
         if (!rebalance_done && !is.null(rebalance_threshold)) {
           total_events <- 0L
           event_times_all <- numeric(0)
@@ -546,7 +583,9 @@ run_simulation_pure <- function(
           }
         }
 
-        if (!is.null(pt_targets_abs)) {
+        if (!interim_ok_here) {
+          # no interim at this arrival (see above)
+        } else if (!is.null(pt_targets_abs)) {
           total_PT_now <- cum_person_time_all_arms(state, current_time, max_follow_up_sim,
                                                    interval_cutpoints_current, arm_names)
           if (is.null(state$.__backstop_fired__)) state$.__backstop_fired__ <- FALSE
@@ -621,34 +660,60 @@ run_simulation_pure <- function(
         last_enroll_time <- current_time
       }
 
-      state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
+      # Planned final-analysis time for a trial not stopped early (0.0.0.9002):
+      # last enrollment + min_follow_up_at_final, capped at max_trial_time.
+      t_final_planned <- if (is.finite(max_trial_time)) {
+        min(last_enroll_time + min_follow_up_at_final, max_trial_time)
+      } else {
+        last_enroll_time + min_follow_up_at_final
+      }
 
-      # POST-ENROLLMENT INTERIM CHECKS: Continue checking until early stop or max_trial_time
-      # This allows decisions to be made after enrollment completes but before final analysis
+      # Interim at the moment enrollment ends: only strictly before T_final.
+      # With min_follow_up_at_final = 0 this look coincides with the final
+      # analysis and no longer runs; when accrual closed at max_trial_time,
+      # current_time = max_trial_time >= T_final and it does not run either.
+      if (current_time < t_final_planned) {
+        state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
+      }
+
+      # POST-ENROLLMENT INTERIM CHECKS: calendar looks every interim_calendar_beat
+      # after enrollment ends, strictly before T_final (<= max_trial_time).
       # Note: Stops during this phase are NOT counted as PET (all patients already enrolled)
       if (is.finite(max_trial_time) && any(state$arm_status == "recruiting")) {
         post_enroll_time <- current_time
-        while (post_enroll_time < max_trial_time && any(state$arm_status == "recruiting")) {
+        while (any(state$arm_status == "recruiting")) {
           post_enroll_time <- post_enroll_time + interim_calendar_beat
-          if (post_enroll_time >= max_trial_time) break
+          if (post_enroll_time >= t_final_planned) break
           state <- interim_check(state, post_enroll_time, args_local, diagnostics = diagnostics)
         }
         # Update current_time to reflect post-enrollment interims
-        current_time <- min(post_enroll_time, max_trial_time)
+        current_time <- min(post_enroll_time, t_final_planned)
       }
 
       # Determine final analysis time:
       # - If all arms stopped early (efficacy/futility), use max(stop_time) - the actual interim time
-      # - If max_trial_time is finite, use min(last_enroll + min_follow_up, max_trial_time)
-      # - Otherwise, use last_enroll + min_follow_up (original behavior)
+      # - Otherwise T_final = min(last_enroll + min_follow_up, max_trial_time)
       all_stopped_early <- all(state$arm_status != "recruiting")
       final_time <- if (all_stopped_early && any(!is.na(state$stop_time))) {
         # Trial stopped early - use the time of the last stopping decision
         max(state$stop_time, na.rm = TRUE)
-      } else if (is.finite(max_trial_time)) {
-        min(last_enroll_time + min_follow_up_at_final, max_trial_time)
       } else {
-        last_enroll_time + min_follow_up_at_final
+        t_final_planned
+      }
+
+      # Chronology invariants (0.0.0.9002)
+      enroll_times_all <- unlist(lapply(state$registries, function(r) r$enroll_time[!is.na(r$id)]),
+                                 use.names = FALSE)
+      if (is.finite(max_trial_time) &&
+          (any(enroll_times_all > max_trial_time) ||
+           any(state$stop_time > max_trial_time, na.rm = TRUE) ||
+           final_time > max_trial_time)) {
+        stop(sprintf("Chronology violation: enroll/stop/final time exceeds max_trial_time = %g (final_time = %g).",
+                     max_trial_time, final_time), call. = FALSE)
+      }
+      if (length(enroll_times_all) > 0 && max(enroll_times_all) > final_time) {
+        stop(sprintf("Chronology violation: enrollment at %g after final_time = %g.",
+                     max(enroll_times_all), final_time), call. = FALSE)
       }
 
       if (!identical(interval_cutpoints_current, interval_cutpoints_sim)) {
