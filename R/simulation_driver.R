@@ -92,6 +92,17 @@
 #' @param max_trial_time Maximum calendar time (months) for the entire trial.
 #'   After this cutoff from trial start, the trial terminates regardless of
 #'   other stopping rules. Default is `Inf` (no time limit).
+#' @param looks_stop_at_final Logical. `FALSE` (default) reproduces 422eb40:
+#'   after enrolment completes, one interim check at the accrual-exit time and
+#'   then checks every `interim_calendar_beat` until `max_trial_time`, while
+#'   the final analysis is cut at
+#'   `T* = min(last enrolment + min_follow_up_at_final, max_trial_time)`.
+#'   `TRUE` keeps the same post-enrolment schedule but runs a check only at
+#'   calendar times strictly before `T*`, so the final analysis at `T*` is the
+#'   next decision after the last such look. With `min_follow_up_at_final = 0`
+#'   there is no post-enrolment look at all. The default is read from
+#'   `getOption("evolveTrial.looks_stop_at_final", FALSE)` so that callers that
+#'   do not pass the argument can set it globally.
 #' @param min_events_for_analysis **DEPRECATED**. Use \code{min_events_hc}
 #'   instead. Minimum events required for interim review (global gate).
 #' @param min_median_followup **DEPRECATED**. Use \code{min_median_followup_hc}
@@ -214,6 +225,8 @@ run_simulation_pure <- function(
     # NEW: max calendar time for entire trial (absolute cutoff from trial start)
     # After enrollment completes, interims continue until early stop or this cutoff
     max_trial_time = Inf,
+    # D1 option: FALSE = frozen 422eb40 (looks to max_trial_time); TRUE = looks only before the final time T*
+    looks_stop_at_final = getOption("evolveTrial.looks_stop_at_final", FALSE),
     # legacy info gates + calendar-beat interims
     min_events_for_analysis = NULL,
     min_median_followup = NULL,
@@ -248,6 +261,10 @@ run_simulation_pure <- function(
     return_variance = FALSE
 ) {
   cluster_type <- match.arg(cluster_type)
+  if (!is.logical(looks_stop_at_final) || length(looks_stop_at_final) != 1L ||
+      is.na(looks_stop_at_final)) {
+    stop("`looks_stop_at_final` must be TRUE or FALSE.", call. = FALSE)
+  }
 
   # Auto-detect optimal cluster type: FORK on Unix (faster), PSOCK on Windows
   if (cluster_type == "auto") {
@@ -621,6 +638,7 @@ run_simulation_pure <- function(
         last_enroll_time <- current_time
       }
 
+      if (!looks_stop_at_final) {
       state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
 
       # POST-ENROLLMENT INTERIM CHECKS: Continue checking until early stop or max_trial_time
@@ -636,6 +654,24 @@ run_simulation_pure <- function(
         # Update current_time to reflect post-enrollment interims
         current_time <- min(post_enroll_time, max_trial_time)
       }
+      } else {
+        # looks_stop_at_final = TRUE: same post-enrollment schedule (accrual-exit time, then every beat),
+        # but only at calendar times strictly before the final analysis time T* used below.
+        t_star <- if (is.finite(max_trial_time)) {
+          min(last_enroll_time + min_follow_up_at_final, max_trial_time)
+        } else {
+          last_enroll_time + min_follow_up_at_final
+        }
+        post_enroll_time <- current_time
+        if (post_enroll_time < t_star && any(state$arm_status == "recruiting")) {
+          state <- interim_check(state, post_enroll_time, args_local, diagnostics = diagnostics)
+        }
+        while (is.finite(t_star) && any(state$arm_status == "recruiting")) {
+          post_enroll_time <- post_enroll_time + interim_calendar_beat
+          if (post_enroll_time >= t_star) break
+          state <- interim_check(state, post_enroll_time, args_local, diagnostics = diagnostics)
+        }
+      }  # end D1 option
 
       # Determine final analysis time:
       # - If all arms stopped early (efficacy/futility), use max(stop_time) - the actual interim time
