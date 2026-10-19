@@ -199,9 +199,14 @@ after enrolment completes, one interim check at the accrual-exit time and
 then checks every \code{interim_calendar_beat} until \code{max_trial_time}, while
 the final analysis is cut at
 \code{T* = min(last enrolment + min_follow_up_at_final, max_trial_time)}.
-\code{TRUE} keeps the same post-enrolment schedule but runs a check only at
-calendar times strictly before \code{T*}, so the final analysis at \code{T*} is the
-next decision after the last such look. With \code{min_follow_up_at_final = 0}
+\code{TRUE} runs post-enrolment checks only at last enrolment plus each
+positive multiple of \code{interim_calendar_beat} strictly before \code{T*} (no
+check at the accrual-exit time), so the final analysis at \code{T*} is the
+next decision after the last such look. In vs-reference runs, \code{TRUE} also
+skips the accrual-phase check at an arrival that would end enrolment
+because no experimental arm can enrol (that arrival enrols nobody), and
+skips grid points at or before a later accrual-phase look that stopped
+the experimental arms, so look times are strictly increasing. With \code{min_follow_up_at_final = 0}
 there is no post-enrolment look at all. The default is read from
 \code{getOption("evolveTrial.looks_stop_at_final", FALSE)} so that callers that
 do not pass the argument can set it globally.}

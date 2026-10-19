@@ -97,9 +97,14 @@
 #'   then checks every `interim_calendar_beat` until `max_trial_time`, while
 #'   the final analysis is cut at
 #'   `T* = min(last enrolment + min_follow_up_at_final, max_trial_time)`.
-#'   `TRUE` keeps the same post-enrolment schedule but runs a check only at
-#'   calendar times strictly before `T*`, so the final analysis at `T*` is the
-#'   next decision after the last such look. With `min_follow_up_at_final = 0`
+#'   `TRUE` runs post-enrolment checks only at last enrolment plus each
+#'   positive multiple of `interim_calendar_beat` strictly before `T*` (no
+#'   check at the accrual-exit time), so the final analysis at `T*` is the
+#'   next decision after the last such look. In vs-reference runs, `TRUE` also
+#'   skips the accrual-phase check at an arrival that would end enrolment
+#'   because no experimental arm can enrol (that arrival enrols nobody), and
+#'   skips grid points at or before a later accrual-phase look that stopped
+#'   the experimental arms, so look times are strictly increasing. With `min_follow_up_at_final = 0`
 #'   there is no post-enrolment look at all. The default is read from
 #'   `getOption("evolveTrial.looks_stop_at_final", FALSE)` so that callers that
 #'   do not pass the argument can set it globally.
@@ -530,6 +535,21 @@ run_simulation_pure <- function(
         interarrival <- rexp(1, rate = overall_accrual_rate)
         current_time <- current_time + interarrival
 
+        # looks_stop_at_final = TRUE (P6): an arrival that would end the loop through the vs-reference break below
+        # (no experimental arm can enroll) enrolls nobody, so it gets no rebalancing and no accrual-phase look.
+        # Without this, that phantom arrival could fire a look after the last enrollment, out of calendar order with
+        # the post-enrollment grid, or at or after T*. FALSE keeps the 422eb40 behavior (look first, then break).
+        if (looks_stop_at_final && isTRUE(compare_arms_option)) {
+          exp_idx0 <- which(arm_names != reference_arm_name)
+          exp_active0 <- exp_idx0[state$arm_status[arm_names[exp_idx0]] == "recruiting"]
+          exp_active0 <- exp_active0[state$enrolled_counts[arm_names[exp_active0]] <
+                                       max_total_patients_per_arm[arm_names[exp_active0]]]
+          if (length(exp_active0) == 0) {
+            current_time <- last_enroll_time  # the phantom arrival never happened (previous event = last enrollment)
+            break
+          }
+        }
+
         if (!rebalance_done && !is.null(rebalance_threshold)) {
           total_events <- 0L
           event_times_all <- numeric(0)
@@ -655,20 +675,22 @@ run_simulation_pure <- function(
         current_time <- min(post_enroll_time, max_trial_time)
       }
       } else {
-        # looks_stop_at_final = TRUE: same post-enrollment schedule (accrual-exit time, then every beat),
-        # but only at calendar times strictly before the final analysis time T* used below.
+        # looks_stop_at_final = TRUE (P6): post-enrollment looks at last_enroll_time + j * beat, j >= 1, only at
+        # calendar times strictly before the final analysis time T* used below (ADAPT Amendment 2: intervals
+        # relative to the date of last enrollment). No look at j = 0.
         t_star <- if (is.finite(max_trial_time)) {
           min(last_enroll_time + min_follow_up_at_final, max_trial_time)
         } else {
           last_enroll_time + min_follow_up_at_final
         }
-        post_enroll_time <- current_time
-        if (post_enroll_time < t_star && any(state$arm_status == "recruiting")) {
-          state <- interim_check(state, post_enroll_time, args_local, diagnostics = diagnostics)
-        }
+        # current_time is now the time of the last accrual-phase event: last_enroll_time, or a later real arrival
+        # whose accrual-phase look stopped the experimental arm(s) while the reference arm is still recruiting.
+        # Grid points at or before it are skipped so that look times stay strictly increasing.
+        post_enroll_time <- last_enroll_time
         while (is.finite(t_star) && any(state$arm_status == "recruiting")) {
           post_enroll_time <- post_enroll_time + interim_calendar_beat
           if (post_enroll_time >= t_star) break
+          if (post_enroll_time <= current_time) next
           state <- interim_check(state, post_enroll_time, args_local, diagnostics = diagnostics)
         }
       }  # end D1 option
