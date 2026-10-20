@@ -104,7 +104,9 @@
 #'   skips the accrual-phase check at an arrival that would end enrolment
 #'   because no experimental arm can enrol (that arrival enrols nobody), and
 #'   skips grid points at or before a later accrual-phase look that stopped
-#'   the experimental arms, so look times are strictly increasing. With `min_follow_up_at_final = 0`
+#'   the experimental arms, so look times are strictly increasing; and no
+#'   patient enrolls at or after `max_trial_time` (accrual stops, remaining
+#'   arms go to the same post-enrolment schedule and `T*`). With `min_follow_up_at_final = 0`
 #'   there is no post-enrolment look at all. The default is read from
 #'   `getOption("evolveTrial.looks_stop_at_final", FALSE)` so that callers that
 #'   do not pass the argument can set it globally.
@@ -534,6 +536,17 @@ run_simulation_pure <- function(
       while (length(is_eligible(state)) > 0) {
         interarrival <- rexp(1, rate = overall_accrual_rate)
         current_time <- current_time + interarrival
+
+        # looks_stop_at_final = TRUE (P6): enrollment cap at the end of the active period. An arrival at or after
+        # max_trial_time (boundary: an arrival at exactly max_trial_time does NOT enroll) enrolls nobody and fires no
+        # accrual-phase look, so no patient joins the enrollment count after the analysis dataset closes (T* <=
+        # max_trial_time). Accrual stops; arms still recruiting keep their enrolled counts and go to the
+        # post-enrollment schedule and final analysis below with T* = min(last_enroll_time + min_follow_up_at_final,
+        # max_trial_time), the same formula as after complete enrollment. FALSE keeps 422eb40 (no time cap on accrual).
+        if (looks_stop_at_final && current_time >= max_trial_time) {
+          current_time <- last_enroll_time  # the arrival never happened (previous event = last enrollment)
+          break
+        }
 
         # looks_stop_at_final = TRUE (P6): an arrival that would end the loop through the vs-reference break below
         # (no experimental arm can enroll) enrolls nobody, so it gets no rebalancing and no accrual-phase look.

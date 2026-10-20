@@ -206,7 +206,9 @@ next decision after the last such look. In vs-reference runs, \code{TRUE} also
 skips the accrual-phase check at an arrival that would end enrolment
 because no experimental arm can enrol (that arrival enrols nobody), and
 skips grid points at or before a later accrual-phase look that stopped
-the experimental arms, so look times are strictly increasing. With \code{min_follow_up_at_final = 0}
+the experimental arms, so look times are strictly increasing; and no
+patient enrolls at or after \code{max_trial_time} (accrual stops, remaining
+arms go to the same post-enrolment schedule and \code{T*}). With \code{min_follow_up_at_final = 0}
 there is no post-enrolment look at all. The default is read from
 \code{getOption("evolveTrial.looks_stop_at_final", FALSE)} so that callers that
 do not pass the argument can set it globally.}
