@@ -265,9 +265,15 @@ run_simulation_pure <- function(
     return_percentiles = FALSE,
     percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0),
     # variance tracking
-    return_variance = FALSE
+    return_variance = FALSE,
+    # verify/p6-nodropout: TRUE (default) = 7565a17 per-patient uniform dropout; FALSE = the same uniform is drawn
+    # and discarded (random-number stream unchanged) and the stored censoring time is Inf (administrative only)
+    random_dropout = TRUE
 ) {
   cluster_type <- match.arg(cluster_type)
+  if (!is.logical(random_dropout) || length(random_dropout) != 1L || is.na(random_dropout)) {
+    stop("`random_dropout` must be TRUE or FALSE.", call. = FALSE)
+  }
   if (!is.logical(looks_stop_at_final) || length(looks_stop_at_final) != 1L ||
       is.na(looks_stop_at_final)) {
     stop("`looks_stop_at_final` must be TRUE or FALSE.", call. = FALSE)
@@ -649,6 +655,7 @@ run_simulation_pure <- function(
         t_event_true <- rweibull(1, shape = weibull_shape_true_arms[chosen_arm],
                                  scale = weibull_scale_true_arms[chosen_arm])
         t_random_censor <- runif(1, min = 0, max = censor_max_time_sim)
+        if (!random_dropout) t_random_censor <- Inf
 
         # PERFORMANCE: Use indexed assignment instead of rbind (O(1) vs O(n) per patient)
         idx <- state$registry_row_idx[[chosen_arm]]
