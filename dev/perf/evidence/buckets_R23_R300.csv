@@ -1,0 +1,27 @@
+"bucket","samples","pct","total_samples"
+"posterior: R median_survival_piecewise loop",1686,32.2,5243
+"look: data slice (slice_arm_data_at_time / interval metrics)",1070,20.4,5243
+"posterior: R-level RNG (rgamma/rnorm)",945,18,5243
+"posterior: R-level sampler loop/other",897,17.1,5243
+"trial loop: registry/state data.frame bookkeeping",220,4.2,5243
+"trial loop: other per-trial R code",154,2.9,5243
+"look: extract_events_fast (rebalance)",145,2.8,5243
+"look: gates/decision logic",98,1.9,5243
+"trial loop: patient RNG (rexp/rweibull/runif/sample)",28,0.5,5243
+"[self] [<-.data.frame",101,1.9,5243
+"[self] data.frame",50,1,5243
+"[self] [.data.frame",75,1.4,5243
+"[self] [[.data.frame",32,0.6,5243
+"[self] as.data.frame",9,0.2,5243
+"[self] deparse",20,0.4,5243
+"[self] .deparseOpts",31,0.6,5243
+"[self] make.names",17,0.3,5243
+"[self] match.arg",15,0.3,5243
+"[self] vapply",96,1.8,5243
+"[self] %in%",65,1.2,5243
+"[self] pmin",117,2.2,5243
+"[self] pmax",16,0.3,5243
+"[self] sys.call",35,0.7,5243
+"[self] length",116,2.2,5243
+"[self] structure",18,0.3,5243
+"[stack] rbind inside simulate_chunk",0,0,5243

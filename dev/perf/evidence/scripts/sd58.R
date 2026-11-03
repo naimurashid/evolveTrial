@@ -1,0 +1,1458 @@
+
+#' Run a full set of evolveTrial simulations for a design specification
+#'
+#' `run_simulation_pure()` is the workhorse simulator for evolveTrial.  It
+#' enrols patients according to the supplied accrual plan, applies interim
+#' gating/decision rules, optionally rebalances interval cut points, and
+#' carries each replicate forward to the final analysis.  Operating
+#' characteristics are returned summarised per arm.
+#'
+#' @param num_simulations Number of Monte Carlo replicates to run.
+#' @param arm_names Character vector naming the trial arms.
+#' @param reference_arm_name Character scalar naming the control/reference arm.
+#' @param compare_arms_option Logical; `TRUE` evaluates vs-reference logic,
+#'   `FALSE` evaluates arms independently against historical control targets.
+#' @param weibull_shape_true_arms Named numeric vector of Weibull shape
+#'   parameters under the truth.
+#' @param weibull_median_true_arms Named numeric vector of true median PFS
+#'   (months) for each arm.
+#' @param null_median_arms Named numeric vector of null (historical control)
+#'   medians used for single-arm evaluations.
+#' @param futility_median_arms Named numeric vector of futility medians for
+#'   single-arm logic.
+#' @param interval_cutpoints_sim Numeric vector of interval boundaries (months)
+#'   for piecewise exponential modelling.
+#' @param max_follow_up_sim Maximum administrative follow-up time (months).
+#' @param censor_max_time_sim Upper bound for random censoring draws (months).
+#' @param prior_alpha_params_model Numeric vector of Gamma prior shape
+#'   parameters for the piecewise exponential hazards.
+#' @param prior_beta_params_model Numeric vector of Gamma prior rate parameters
+#'   for the piecewise exponential hazards.
+#' @param num_posterior_draws Number of posterior draws used for final analyses.
+#' @param num_posterior_draws_interim Optional integer overriding the number of
+#'   posterior draws used at interim looks.
+#' @param cohort_size_per_arm Size of each enrolment batch per arm (typically 1).
+#' @param max_total_patients_per_arm Named integer vector of per-arm sample size
+#'   caps.
+#' @param min_patients_for_analysis Minimum number of patients required to
+#'   evaluate an arm in the single-arm path. If not specified, defaults to 0,
+#'   allowing interim analyses to occur even with very few patients. Set this
+#'   to a higher value to prevent interim analyses until a certain number of
+#'   patients have been enrolled.
+#' @param efficacy_stopping_rule_hc Logical; enable interim efficacy checks for
+#'   the historical-control path.
+#' @param efficacy_threshold_current_prob_hc **DEPRECATED**. Use
+#'   \code{efficacy_threshold_hc_prob} instead. Interim success probability
+#'   threshold for single-arm logic.
+#' @param posterior_futility_threshold_hc **DEPRECATED**. Use
+#'   \code{futility_threshold_hc_prob} instead. Interim futility probability
+#'   threshold for single-arm logic.
+#' @param efficacy_threshold_hc_prob Interim success probability threshold for
+#'   single-arm logic (preferred harmonized name).
+#' @param futility_threshold_hc_prob Interim futility probability threshold for
+#'   single-arm logic (preferred harmonized name).
+#' @param futility_stopping_rule_hc Logical; enable interim futility checks for
+#'   the single-arm path.
+#' @param efficacy_stopping_rule_vs_ref Logical; enable interim efficacy checks
+#'   for the vs-reference path.
+#' @param futility_stopping_rule_vs_ref Logical; enable interim futility checks
+#'   for the vs-reference path.
+#' @param efficacy_threshold_vs_ref_prob Posterior superiority threshold for
+#'   vs-reference decisions.
+#' @param futility_threshold_vs_ref_prob Posterior inferiority threshold for
+#'   vs-reference decisions.
+#' @param compare_arms_futility_margin Absolute median difference used when
+#'   defining vs-reference futility.
+#' @param compare_arms_hr_margin Optional hazard-ratio futility margin used when
+#'   `use_ph_model_vs_ref = TRUE`. Buffers the futility comparator toward
+#'   benefit: futility uses `Pr(HR >= 1 - delta_HR)`.
+#' @param compare_arms_hr_eff_margin Optional hazard-ratio efficacy margin used
+#'   when `use_ph_model_vs_ref = TRUE`. When set (rule_variant = "symmetric")
+#'   buffers the efficacy comparator toward benefit: efficacy uses
+#'   `Pr(HR < 1 - delta_HR)`. `NULL` (rule_variant = "current"/"no_margin")
+#'   leaves the comparator at the unbuffered `HR < 1`.
+#' @param use_ph_model_vs_ref Logical; use the proportional-hazards joint model
+#'   for vs-reference comparisons.
+#' @param ph_loghr_prior_mean Mean of the normal prior on the log hazard ratio
+#'   (PH model).
+#' @param ph_loghr_prior_sd Standard deviation of the normal prior on the log
+#'   hazard ratio.
+#' @param median_pfs_success_threshold_arms Named numeric vector of median PFS
+#'   thresholds for declaring final success per arm.
+#' @param final_success_posterior_prob_threshold Posterior probability threshold
+#'   for final success declarations.
+#' @param median_pfs_futility_threshold_arms Named numeric vector of median PFS
+#'   futility thresholds for final analyses.
+#' @param final_futility_posterior_prob_threshold Posterior probability
+#'   threshold for final futility declarations.
+#' @param overall_accrual_rate Expected accrual rate (patients per month).
+#' @param randomization_probs Named numeric vector of randomisation probabilities.
+#' @param min_follow_up_at_final Additional follow-up (months) required after
+#'   last enrolment before the final analysis.
+#' @param max_trial_time Maximum calendar time (months) for the entire trial.
+#'   After this cutoff from trial start, the trial terminates regardless of
+#'   other stopping rules. Default is `Inf` (no time limit).
+#' @param looks_stop_at_final Logical. `FALSE` (default) reproduces 422eb40:
+#'   after enrolment completes, one interim check at the accrual-exit time and
+#'   then checks every `interim_calendar_beat` until `max_trial_time`, while
+#'   the final analysis is cut at
+#'   `T* = min(last enrolment + min_follow_up_at_final, max_trial_time)`.
+#'   `TRUE` runs post-enrolment checks only at last enrolment plus each
+#'   positive multiple of `interim_calendar_beat` strictly before `T*` (no
+#'   check at the accrual-exit time), so the final analysis at `T*` is the
+#'   next decision after the last such look. In vs-reference runs, `TRUE` also
+#'   skips the accrual-phase check at an arrival that would end enrolment
+#'   because no experimental arm can enrol (that arrival enrols nobody), and
+#'   skips grid points at or before a later accrual-phase look that stopped
+#'   the experimental arms, so look times are strictly increasing; and no
+#'   patient enrolls at or after `max_trial_time` (accrual stops, remaining
+#'   arms go to the same post-enrolment schedule and `T*`). With `min_follow_up_at_final = 0`
+#'   there is no post-enrolment look at all. The default is read from
+#'   `getOption("evolveTrial.looks_stop_at_final", FALSE)` so that callers that
+#'   do not pass the argument can set it globally.
+#' @param min_events_for_analysis **DEPRECATED**. Use \code{min_events_hc}
+#'   instead. Minimum events required for interim review (global gate).
+#' @param min_median_followup **DEPRECATED**. Use \code{min_median_followup_hc}
+#'   instead. Minimum median follow-up required for interim review (global gate).
+#' @param min_events_hc Minimum events required for single-arm interim review
+#'   (preferred harmonized name).
+#' @param min_median_followup_hc Minimum median follow-up required for single-arm
+#'   interim review (preferred harmonized name).
+#' @param interim_calendar_beat Calendar spacing (months) between scheduled
+#'   interim looks when person-time milestones are not used.
+#' @param diagnostics Logical; if `TRUE` prints interim diagnostic messages.
+#' @param pred_success_pp_threshold_hc Predictive probability threshold for
+#'   interim success in the single-arm predictive look (if enabled).
+#' @param pred_futility_pp_threshold_hc Predictive probability threshold for
+#'   interim futility in the single-arm predictive look (if enabled).
+#' @param num_posterior_draws_pred Number of posterior draws used inside
+#'   predictive probability calculations.
+#' @param predictive_fast Logical; switch to the analytic predictive
+#'   approximations.
+#' @param min_events_per_arm Optional per-arm minimum event gate for vs-reference.
+#' @param min_median_followup_per_arm Optional per-arm minimum median follow-up
+#'   gate for vs-reference.
+#' @param min_person_time_frac_per_arm Optional per-arm proportion of planned
+#'   person-time required before evaluating vs-reference decisions.
+#' @param person_time_milestones Optional numeric vector (fractions of total
+#'   planned person-time) triggering interim looks.
+#' @param latest_calendar_look Backstop calendar time for person-time schedules.
+#' @param rebalance_after_events Optional integer; when non-`NULL` the piecewise
+#'   cut points are re-estimated once that number of events has accrued.
+#' @param parallel_replicates Logical; if `TRUE`, distribute Monte Carlo
+#'   replicates across a parallel cluster.
+#' @param num_workers Optional integer specifying the number of workers when
+#'   `parallel_replicates = TRUE`. Defaults to `parallel::detectCores() - 1`.
+#' @param cluster_type Type of parallel cluster to spawn when distributing
+#'   replicates. One of `"auto"` (default, uses FORK on Unix, PSOCK on Windows),
+#'   `"PSOCK"`, or `"FORK"`. FORK clusters are faster on Linux/macOS as they
+#'   share memory and don't require package loading in workers.
+#' @param cluster Optional pre-existing parallel cluster to reuse. When provided,
+#'   the cluster is used for parallel execution and NOT stopped on exit. This
+#'   enables cluster pooling for repeated calls (e.g., in Bayesian optimization).
+#'   Create with `evolveTrial::create_simulation_cluster()` or `parallel::makeCluster()`.
+#' @param progress Logical; show the simulation progress bar when running
+#'   sequentially. Automatically disabled for parallel replicate execution.
+#' @param return_percentiles Logical; if `TRUE`, store per-replicate sample sizes
+#'   and return percentile summaries in addition to means. Default `FALSE`.
+#' @param percentile_probs Numeric vector of probabilities for percentile
+#'   computation when `return_percentiles = TRUE`. Default `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`
+#'   gives min, 25th, median, 75th, 90th, and max.
+#' @param return_variance Logical; if `TRUE`, collect per-replicate raw values
+#'   for key operating characteristics (final events, final time, per-arm
+#'   sample sizes) and return their variances as additional `*_var` columns in
+#'   the summary. Default `FALSE`.
+#'
+#' @return When `return_percentiles = FALSE` (default), a data frame with one row
+#'   per arm and columns summarising operating characteristics such as type I
+#'   error / power, PETs, final decision probabilities, expected sample size,
+#'   expected events, and expected trial duration (calendar months).
+#'   When `return_percentiles = TRUE`, a list with two elements:
+#'   \describe{
+#'     \item{summary}{The same data frame as when `return_percentiles = FALSE`}
+#'     \item{percentiles}{A list with elements `N` (named list of percentile vectors
+#'       per arm) and `probs` (the probability values used)}
+#'   }
+#'
+#' @details When \code{parallel_replicates = TRUE}, results will vary based on
+#'   \code{num_workers} due to different random number stream partitioning.
+#'   For exact reproducibility across runs, use \code{parallel_replicates = FALSE}.
+#'
+#'   During package development with \code{devtools::load_all()}, parallel workers
+#'   will load the installed package version, not the development code. For
+#'   testing development changes, either use \code{parallel_replicates = FALSE} or
+#'   reinstall the package with \code{devtools::install()}.
+#' @export
+run_simulation_pure <- function(
+    num_simulations,
+    arm_names,
+    reference_arm_name,
+    compare_arms_option,
+    weibull_shape_true_arms,
+    weibull_median_true_arms,
+    null_median_arms = NULL,
+    futility_median_arms = NULL,
+    interval_cutpoints_sim,
+    max_follow_up_sim,
+    censor_max_time_sim,
+    prior_alpha_params_model,
+    prior_beta_params_model,
+    num_posterior_draws,
+    num_posterior_draws_interim = NULL,
+    cohort_size_per_arm,
+    max_total_patients_per_arm,
+    min_patients_for_analysis = NULL,
+    # stopping rule params
+    efficacy_stopping_rule_hc = FALSE,
+    efficacy_threshold_current_prob_hc = NULL,
+    posterior_futility_threshold_hc = NULL,
+    # NEW harmonized parameter names (preferred)
+    efficacy_threshold_hc_prob = NULL,
+    futility_threshold_hc_prob = NULL,
+    futility_stopping_rule_hc = FALSE,
+    efficacy_stopping_rule_vs_ref = FALSE,
+    futility_stopping_rule_vs_ref = FALSE,
+    efficacy_threshold_vs_ref_prob = NULL,
+    futility_threshold_vs_ref_prob = NULL,
+    compare_arms_futility_margin = 0,
+    compare_arms_hr_margin = NULL,
+    compare_arms_hr_eff_margin = NULL,
+    use_ph_model_vs_ref = FALSE,
+    ph_loghr_prior_mean = 0,
+    ph_loghr_prior_sd = 1,
+    # final analysis params
+    median_pfs_success_threshold_arms = NULL,
+    final_success_posterior_prob_threshold = 0.85,
+    median_pfs_futility_threshold_arms = NULL,
+    final_futility_posterior_prob_threshold = 0.85,
+    # accrual & randomization
+    overall_accrual_rate,
+    randomization_probs,
+    min_follow_up_at_final = 0,
+    # NEW: max calendar time for entire trial (absolute cutoff from trial start)
+    # After enrollment completes, interims continue until early stop or this cutoff
+    max_trial_time = Inf,
+    # D1 option: FALSE = frozen 422eb40 (looks to max_trial_time); TRUE = looks only before the final time T*
+    looks_stop_at_final = getOption("evolveTrial.looks_stop_at_final", FALSE),
+    # legacy info gates + calendar-beat interims
+    min_events_for_analysis = NULL,
+    min_median_followup = NULL,
+    # NEW harmonized parameter names (preferred)
+    min_events_hc = NULL,
+    min_median_followup_hc = NULL,
+    interim_calendar_beat = 2,
+    diagnostics = FALSE,
+    pred_success_pp_threshold_hc = 1,
+    pred_futility_pp_threshold_hc = 0,
+    num_posterior_draws_pred = 100,
+    predictive_fast = FALSE,
+    # NEW: per-arm info gates
+    min_events_per_arm = NULL,
+    min_median_followup_per_arm = NULL,
+    min_person_time_frac_per_arm = 0,
+    # NEW: person-time milestones
+    person_time_milestones = NULL,
+    latest_calendar_look = Inf,
+    # optional interval rebalancing
+    rebalance_after_events = NULL,
+    # replicate-level parallelisation
+    parallel_replicates = FALSE,
+    num_workers = NULL,
+    cluster_type = c("auto", "PSOCK", "FORK"),
+    cluster = NULL,
+    progress = interactive(),
+    # percentile tracking
+    return_percentiles = FALSE,
+    percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0),
+    # variance tracking
+    return_variance = FALSE,
+    # verify/p6-nodropout: TRUE (default) = 7565a17 per-patient uniform dropout; FALSE = the same uniform is drawn
+    # and discarded (random-number stream unchanged) and the stored censoring time is Inf (administrative only)
+    random_dropout = TRUE
+) {
+  cluster_type <- match.arg(cluster_type)
+  if (!is.logical(random_dropout) || length(random_dropout) != 1L || is.na(random_dropout)) {
+    stop("`random_dropout` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(looks_stop_at_final) || length(looks_stop_at_final) != 1L ||
+      is.na(looks_stop_at_final)) {
+    stop("`looks_stop_at_final` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  # Auto-detect optimal cluster type: FORK on Unix (faster), PSOCK on Windows
+  if (cluster_type == "auto") {
+    cluster_type <- if (.Platform$OS.type == "unix") "FORK" else "PSOCK"
+  }
+
+  # ---- PARAMETER DEPRECATION HANDLING ----------------------------------------
+  # Map old parameter names to new harmonized names with warnings
+  if (!is.null(efficacy_threshold_current_prob_hc) &&
+      is.null(efficacy_threshold_hc_prob)) {
+    efficacy_threshold_hc_prob <- efficacy_threshold_current_prob_hc
+    warning("`efficacy_threshold_current_prob_hc` is deprecated; use `efficacy_threshold_hc_prob`.",
+            call. = FALSE)
+  }
+  if (!is.null(posterior_futility_threshold_hc) &&
+      is.null(futility_threshold_hc_prob)) {
+    futility_threshold_hc_prob <- posterior_futility_threshold_hc
+    warning("`posterior_futility_threshold_hc` is deprecated; use `futility_threshold_hc_prob`.",
+            call. = FALSE)
+  }
+  if (!is.null(min_events_for_analysis) && is.null(min_events_hc)) {
+    min_events_hc <- min_events_for_analysis
+    warning("`min_events_for_analysis` is deprecated; use `min_events_hc`.",
+            call. = FALSE)
+  }
+  if (!is.null(min_median_followup) && is.null(min_median_followup_hc)) {
+    min_median_followup_hc <- min_median_followup
+    warning("`min_median_followup` is deprecated; use `min_median_followup_hc`.",
+            call. = FALSE)
+  }
+
+
+
+
+
+
+  # Default to 0 if NULL
+  if (is.null(min_events_hc)) min_events_hc <- 0
+
+
+  # Default to 0 if NULL
+  if (is.null(min_median_followup_hc)) min_median_followup_hc <- 0
+
+  # min_patients_for_analysis default
+  if (is.null(min_patients_for_analysis)) min_patients_for_analysis <- 0
+
+  # ---------------------------------------------------------------------------
+
+  weibull_scale_true_arms <- sapply(arm_names, function(arm) {
+    calculate_weibull_scale(weibull_median_true_arms[arm], weibull_shape_true_arms[arm])
+  })
+  names(weibull_scale_true_arms) <- arm_names
+  
+  results_data <- data.frame(
+    Arm_Name = arm_names,
+    True_Median = round(weibull_median_true_arms, 2),
+    Type_I_Error_or_Power = 0,
+    PET_Efficacy = 0,
+    PET_Futility = 0,
+    Pr_Reach_Max_N = 0,
+    Pr_Final_Efficacy = 0,
+    Pr_Final_Futility = 0,
+    Pr_Final_Inconclusive = 0,
+    Exp_N = 0,
+    Exp_Events = 0,
+    Exp_Time = 0,  # Expected trial duration (calendar months)
+    stringsAsFactors = FALSE
+  )
+  
+  show_progress <- isTRUE(progress) && !isTRUE(parallel_replicates)
+  if (show_progress) {
+    pb <- progress::progress_bar$new(
+      format = "  Sims [:bar] :percent in :elapsed",
+      total = num_simulations, clear = FALSE, width = 60
+    )
+  }
+  
+  # total max person-time across arms (for milestone schedule)
+  max_PT_per_arm <- setNames(as.numeric(max_total_patients_per_arm) * max_follow_up_sim,
+                             names(max_total_patients_per_arm))
+  total_max_PT <- sum(max_PT_per_arm)
+
+  # Build absolute PT milestones (if any)
+  pt_targets_abs <- NULL
+  if (!is.null(person_time_milestones)) {
+    stopifnot(all(person_time_milestones > 0 & person_time_milestones <= 1))
+    pt_targets_abs <- sort(unique(person_time_milestones)) * total_max_PT
+  }
+
+  num_draws_interim <- if (is.null(num_posterior_draws_interim)) {
+    num_posterior_draws
+  } else {
+    num_posterior_draws_interim
+  }
+
+  # pack args for interim_check
+  args <- list(
+    arm_names = arm_names,
+    reference_arm_name = reference_arm_name,
+    compare_arms_option = compare_arms_option,
+    interval_cutpoints_sim = interval_cutpoints_sim,
+    max_follow_up_sim = max_follow_up_sim,
+    randomization_probs = randomization_probs,
+    prior_alpha_params_model = prior_alpha_params_model,
+    prior_beta_params_model  = prior_beta_params_model,
+    num_posterior_draws = num_posterior_draws,
+    num_posterior_draws_interim = num_draws_interim,
+    min_patients_for_analysis = min_patients_for_analysis,
+    min_events_hc = min_events_hc,  # Use new harmonized name
+    min_median_followup_hc = min_median_followup_hc,  # Use new harmonized name
+    null_median_arms = null_median_arms,
+    futility_median_arms = futility_median_arms,
+    efficacy_threshold_hc_prob = efficacy_threshold_hc_prob,  # Use new harmonized name
+    futility_threshold_hc_prob = futility_threshold_hc_prob,  # Use new harmonized name
+    efficacy_threshold_vs_ref_prob = efficacy_threshold_vs_ref_prob,
+    futility_threshold_vs_ref_prob = futility_threshold_vs_ref_prob,
+    compare_arms_futility_margin = compare_arms_futility_margin,
+    compare_arms_hr_margin = compare_arms_hr_margin,
+    compare_arms_hr_eff_margin = compare_arms_hr_eff_margin,
+    use_ph_model_vs_ref = use_ph_model_vs_ref,
+    ph_loghr_prior_mean = ph_loghr_prior_mean,
+    ph_loghr_prior_sd = ph_loghr_prior_sd,
+    max_total_patients_per_arm = max_total_patients_per_arm,
+    median_pfs_success_threshold_arms = median_pfs_success_threshold_arms,
+    final_success_posterior_prob_threshold = final_success_posterior_prob_threshold,
+    final_futility_posterior_prob_threshold = final_futility_posterior_prob_threshold,
+    censor_max_time_sim = censor_max_time_sim,
+    predictive_fast = predictive_fast,
+    num_posterior_draws_pred = num_posterior_draws_pred,
+    predictive_boundary_band  = 0.12,
+    run_pred_every_k_beats    = 2,
+    pred_success_pp_threshold_hc  = pred_success_pp_threshold_hc,
+    pred_futility_pp_threshold_hc = pred_futility_pp_threshold_hc,
+    # per-arm gates + PT metadata
+    min_events_per_arm = min_events_per_arm,
+    min_median_followup_per_arm = min_median_followup_per_arm,
+    min_person_time_frac_per_arm = min_person_time_frac_per_arm,
+    max_PT_per_arm = max_PT_per_arm,
+    rebalance_after_events = rebalance_after_events,
+    # max_trial_time for person-time gate denominator (when fu_time is very large)
+    max_trial_time = max_trial_time,
+    # Efficacy/futility stopping rule flags (single-arm HC analysis)
+    efficacy_stopping_rule_hc = efficacy_stopping_rule_hc,
+    futility_stopping_rule_hc = futility_stopping_rule_hc,
+    # Efficacy/futility stopping rule flags (vs-reference comparison)
+    efficacy_stopping_rule_vs_ref = efficacy_stopping_rule_vs_ref,
+    futility_stopping_rule_vs_ref = futility_stopping_rule_vs_ref
+  )
+  
+  num_intervals <- length(interval_cutpoints_sim) - 1
+  interval_lengths_base <- diff(interval_cutpoints_sim)
+
+  sum_final_n       <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_events  <- setNames(numeric(length(arm_names)), arm_names)
+  sum_stop_efficacy <- setNames(numeric(length(arm_names)), arm_names)
+  sum_stop_futility <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_efficacy <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_futility <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_inconclusive <- setNames(numeric(length(arm_names)), arm_names)
+  sum_final_time <- 0  # Trial duration accumulator (calendar months)
+
+  tick_fun <- if (show_progress) function() pb$tick() else function() invisible(NULL)
+
+  # Percentile/variance tracking: pre-allocate storage for raw per-replicate values (when enabled)
+  collect_raw_n <- isTRUE(return_percentiles) || isTRUE(return_variance)
+  all_final_n_raw <- NULL
+  if (collect_raw_n) {
+    all_final_n_raw <- vector("list", length(arm_names))
+    names(all_final_n_raw) <- arm_names
+    for (arm in arm_names) {
+      all_final_n_raw[[arm]] <- numeric(num_simulations)
+    }
+  }
+
+  all_final_events_raw <- NULL
+  all_final_time_raw   <- NULL
+  if (isTRUE(return_variance)) {
+    all_final_events_raw <- vector("list", length(arm_names))
+    names(all_final_events_raw) <- arm_names
+    for (arm in arm_names) {
+      all_final_events_raw[[arm]] <- numeric(num_simulations)
+    }
+    all_final_time_raw <- numeric(num_simulations)
+  }
+
+  base_args_for_interim <- args
+
+  simulate_chunk <- function(sim_indices, seed = NULL, tick = function() {}) {
+    if (!is.null(seed)) {
+      set.seed(seed)
+    }
+    chunk_sum_final_n <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_events <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_stop_eff <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_stop_fut <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_eff <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_fut <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_inc <- setNames(numeric(length(arm_names)), arm_names)
+    chunk_sum_final_time <- 0  # Trial duration accumulator for this chunk
+
+    # Track per-replicate sample sizes for percentile calculation (when enabled)
+    chunk_final_n_raw <- if (collect_raw_n) {
+      tmp <- lapply(arm_names, function(arm) numeric(length(sim_indices)))
+      names(tmp) <- arm_names
+      tmp
+    } else {
+      NULL
+    }
+
+    # Track per-replicate events and time for variance calculation (when enabled)
+    chunk_final_events_raw <- if (isTRUE(return_variance)) {
+      tmp <- lapply(arm_names, function(arm) numeric(length(sim_indices)))
+      names(tmp) <- arm_names
+      tmp
+    } else {
+      NULL
+    }
+    chunk_final_time_raw <- if (isTRUE(return_variance)) numeric(length(sim_indices)) else NULL
+
+    # Lightweight helper for rebalancing: count events without interval metrics
+    extract_events_fast <- function(registry_df, calendar_time, max_follow_up) {
+      reg <- get_active_registry(registry_df)
+      if (nrow(reg) == 0) return(list(count = 0L, times = numeric(0)))
+
+      time_since_enroll <- pmax(0, calendar_time - reg$enroll_time)
+      time_available    <- pmin(time_since_enroll, max_follow_up)
+      active <- time_available > 0
+      if (!any(active)) return(list(count = 0L, times = numeric(0)))
+
+      time_available <- time_available[active]
+      te <- reg$true_event_time[active]
+      rc <- reg$random_censor_time[active]
+      observed_time <- pmin(te, rc, time_available)
+      events_mask <- te <= pmin(rc, time_available)
+
+      list(
+        count = sum(events_mask),
+        times = if (any(events_mask)) observed_time[events_mask] else numeric(0)
+      )
+    }
+
+    for (sim_idx in sim_indices) {
+      args_local <- base_args_for_interim
+      # Reset cutpoints to baseline for each simulation (handles rebalancing correctly)
+      interval_cutpoints_current <- interval_cutpoints_sim
+      args_local$interval_cutpoints_sim <- interval_cutpoints_current
+      interval_lengths <- interval_lengths_base
+      rebalance_threshold <- rebalance_after_events
+      rebalance_done <- is.null(rebalance_threshold)
+      last_enroll_time <- 0
+
+      state <- make_state(arm_names, max_total_patients_per_arm)
+      current_time <- 0.0
+      next_calendar_look <- interim_calendar_beat
+      next_pt_idx <- 1L
+      patient_id <- 0L
+
+      is_eligible <- function(st) {
+        which((st$arm_status == "recruiting") & (st$enrolled_counts < max_total_patients_per_arm))
+      }
+
+      while (length(is_eligible(state)) > 0) {
+        interarrival <- rexp(1, rate = overall_accrual_rate)
+        current_time <- current_time + interarrival
+
+        # looks_stop_at_final = TRUE (P6): enrollment cap at the end of the active period. An arrival at or after
+        # max_trial_time (boundary: an arrival at exactly max_trial_time does NOT enroll) enrolls nobody and fires no
+        # accrual-phase look, so no patient joins the enrollment count after the analysis dataset closes (T* <=
+        # max_trial_time). Accrual stops; arms still recruiting keep their enrolled counts and go to the
+        # post-enrollment schedule and final analysis below with T* = min(last_enroll_time + min_follow_up_at_final,
+        # max_trial_time), the same formula as after complete enrollment. FALSE keeps 422eb40 (no time cap on accrual).
+        if (looks_stop_at_final && current_time >= max_trial_time) {
+          current_time <- last_enroll_time  # the arrival never happened (previous event = last enrollment)
+          break
+        }
+
+        # looks_stop_at_final = TRUE (P6): an arrival that would end the loop through the vs-reference break below
+        # (no experimental arm can enroll) enrolls nobody, so it gets no rebalancing and no accrual-phase look.
+        # Without this, that phantom arrival could fire a look after the last enrollment, out of calendar order with
+        # the post-enrollment grid, or at or after T*. FALSE keeps the 422eb40 behavior (look first, then break).
+        if (looks_stop_at_final && isTRUE(compare_arms_option)) {
+          exp_idx0 <- which(arm_names != reference_arm_name)
+          exp_active0 <- exp_idx0[state$arm_status[arm_names[exp_idx0]] == "recruiting"]
+          exp_active0 <- exp_active0[state$enrolled_counts[arm_names[exp_active0]] <
+                                       max_total_patients_per_arm[arm_names[exp_active0]]]
+          if (length(exp_active0) == 0) {
+            current_time <- last_enroll_time  # the phantom arrival never happened (previous event = last enrollment)
+            break
+          }
+        }
+
+        if (!rebalance_done && !is.null(rebalance_threshold)) {
+          total_events <- 0L
+          event_times_all <- numeric(0)
+          for (arm in arm_names) {
+            ev_res <- extract_events_fast(
+              state$registries[[arm]], current_time, max_follow_up_sim
+            )
+            total_events <- total_events + ev_res$count
+            if (ev_res$count > 0) {
+              event_times_all <- c(event_times_all, ev_res$times)
+            }
+          }
+          if (total_events >= rebalance_threshold) {
+            new_cuts <- rebalance_cutpoints_from_events(
+              event_times_all, max_follow_up_sim, num_intervals
+            )
+            if (!is.null(new_cuts)) {
+              interval_cutpoints_current <- new_cuts
+              args_local$interval_cutpoints_sim <- new_cuts
+              interval_lengths <- diff(new_cuts)
+              rebalance_done <- TRUE
+              if (diagnostics) {
+                message(sprintf(
+                  "Rebalanced interval cutpoints at t=%.2f using %d observed events",
+                  current_time, total_events
+                ))
+              }
+            } else {
+              rebalance_done <- TRUE
+            }
+          }
+        }
+
+        if (!is.null(pt_targets_abs)) {
+          total_PT_now <- cum_person_time_all_arms(state, current_time, max_follow_up_sim,
+                                                   interval_cutpoints_current, arm_names)
+          if (is.null(state$.__backstop_fired__)) state$.__backstop_fired__ <- FALSE
+
+          while (!is.null(pt_targets_abs) &&
+                 next_pt_idx <= length(pt_targets_abs) &&
+                 (total_PT_now >= pt_targets_abs[next_pt_idx] ||
+                  (!state$.__backstop_fired__ && is.finite(latest_calendar_look) && current_time >= latest_calendar_look))) {
+
+            state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
+
+            if (total_PT_now >= pt_targets_abs[next_pt_idx]) {
+              next_pt_idx <- next_pt_idx + 1L
+            }
+            if (!state$.__backstop_fired__ && is.finite(latest_calendar_look) && current_time >= latest_calendar_look) {
+              state$.__backstop_fired__ <- TRUE
+            }
+
+            if (all(state$arm_status != "recruiting")) break
+            total_PT_now <- cum_person_time_all_arms(state, current_time, max_follow_up_sim,
+                                                     interval_cutpoints_current, arm_names)
+          }
+        } else {
+          if (current_time >= next_calendar_look) {
+            state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
+            next_calendar_look <- next_calendar_look + interim_calendar_beat
+          }
+        }
+
+        if (all(state$arm_status != "recruiting")) break
+
+        elig_idx <- is_eligible(state)
+        if (length(elig_idx) == 0) break
+
+        if (isTRUE(compare_arms_option)) {
+          exp_idx <- which(arm_names != reference_arm_name)
+          exp_active <- exp_idx[state$arm_status[arm_names[exp_idx]] == "recruiting"]
+          exp_active <- exp_active[state$enrolled_counts[arm_names[exp_active]] <
+                                     max_total_patients_per_arm[arm_names[exp_active]]]
+          if (length(exp_active) == 0) break
+        }
+
+        elig_arms <- arm_names[elig_idx]
+
+        probs <- randomization_probs[elig_arms]
+        probs <- probs / sum(probs)
+        chosen_arm <- sample(elig_arms, size = 1, prob = probs)
+
+        patient_id <- patient_id + 1L
+        t_event_true <- rweibull(1, shape = weibull_shape_true_arms[chosen_arm],
+                                 scale = weibull_scale_true_arms[chosen_arm])
+        t_random_censor <- runif(1, min = 0, max = censor_max_time_sim)
+        if (!random_dropout) t_random_censor <- Inf
+
+        # PERFORMANCE: Use indexed assignment instead of rbind (O(1) vs O(n) per patient)
+        idx <- state$registry_row_idx[[chosen_arm]]
+
+        # BOUNDS CHECK: Ensure we don't overflow pre-allocated registry
+        registry_capacity <- nrow(state$registries[[chosen_arm]])
+        if (idx > registry_capacity) {
+          stop(sprintf(
+            "Registry overflow for arm '%s': idx=%d exceeds capacity=%d. This may indicate max_total_patients_per_arm is too low or a logic error.",
+            chosen_arm, idx, registry_capacity
+          ), call. = FALSE)
+        }
+
+        state$registries[[chosen_arm]][idx, "id"] <- patient_id
+        state$registries[[chosen_arm]][idx, "enroll_time"] <- current_time
+        state$registries[[chosen_arm]][idx, "true_event_time"] <- t_event_true
+        state$registries[[chosen_arm]][idx, "random_censor_time"] <- t_random_censor
+        state$registry_row_idx[[chosen_arm]] <- idx + 1L
+        state$enrolled_counts[chosen_arm] <- state$enrolled_counts[chosen_arm] + 1L
+        last_enroll_time <- current_time
+      }
+
+      if (!looks_stop_at_final) {
+      state <- interim_check(state, current_time, args_local, diagnostics = diagnostics)
+
+      # POST-ENROLLMENT INTERIM CHECKS: Continue checking until early stop or max_trial_time
+      # This allows decisions to be made after enrollment completes but before final analysis
+      # Note: Stops during this phase are NOT counted as PET (all patients already enrolled)
+      if (is.finite(max_trial_time) && any(state$arm_status == "recruiting")) {
+        post_enroll_time <- current_time
+        while (post_enroll_time < max_trial_time && any(state$arm_status == "recruiting")) {
+          post_enroll_time <- post_enroll_time + interim_calendar_beat
+          if (post_enroll_time >= max_trial_time) break
+          state <- interim_check(state, post_enroll_time, args_local, diagnostics = diagnostics)
+        }
+        # Update current_time to reflect post-enrollment interims
+        current_time <- min(post_enroll_time, max_trial_time)
+      }
+      } else {
+        # looks_stop_at_final = TRUE (P6): post-enrollment looks at last_enroll_time + j * beat, j >= 1, only at
+        # calendar times strictly before the final analysis time T* used below (ADAPT Amendment 2: intervals
+        # relative to the date of last enrollment). No look at j = 0.
+        t_star <- if (is.finite(max_trial_time)) {
+          min(last_enroll_time + min_follow_up_at_final, max_trial_time)
+        } else {
+          last_enroll_time + min_follow_up_at_final
+        }
+        # current_time is now the time of the last accrual-phase event: last_enroll_time, or a later real arrival
+        # whose accrual-phase look stopped the experimental arm(s) while the reference arm is still recruiting.
+        # Grid points at or before it are skipped so that look times stay strictly increasing.
+        post_enroll_time <- last_enroll_time
+        while (is.finite(t_star) && any(state$arm_status == "recruiting")) {
+          post_enroll_time <- post_enroll_time + interim_calendar_beat
+          if (post_enroll_time >= t_star) break
+          if (post_enroll_time <= current_time) next
+          state <- interim_check(state, post_enroll_time, args_local, diagnostics = diagnostics)
+        }
+      }  # end D1 option
+
+      # Determine final analysis time:
+      # - If all arms stopped early (efficacy/futility), use max(stop_time) - the actual interim time
+      # - If max_trial_time is finite, use min(last_enroll + min_follow_up, max_trial_time)
+      # - Otherwise, use last_enroll + min_follow_up (original behavior)
+      all_stopped_early <- all(state$arm_status != "recruiting")
+      final_time <- if (all_stopped_early && any(!is.na(state$stop_time))) {
+        # Trial stopped early - use the time of the last stopping decision
+        max(state$stop_time, na.rm = TRUE)
+      } else if (is.finite(max_trial_time)) {
+        min(last_enroll_time + min_follow_up_at_final, max_trial_time)
+      } else {
+        last_enroll_time + min_follow_up_at_final
+      }
+
+      if (!identical(interval_cutpoints_current, interval_cutpoints_sim)) {
+        interval_lengths <- diff(interval_cutpoints_current)
+      }
+
+      ref_slice_final <- NULL
+      if (isTRUE(compare_arms_option)) {
+        ref_slice_final <- slice_arm_data_at_time(
+          state$registries[[reference_arm_name]], final_time,
+          max_follow_up_sim, interval_cutpoints_current
+        )
+      }
+
+      final_eff_vec <- setNames(integer(length(arm_names)), arm_names)
+      final_fut_vec <- setNames(integer(length(arm_names)), arm_names)
+      final_inc_vec <- setNames(integer(length(arm_names)), arm_names)
+      # PERFORMANCE: Cache arm slices to avoid redundant slice_arm_data_at_time calls
+      cached_arm_slices <- list()
+
+      for (arm in arm_names) {
+        if (state$arm_status[arm] != "recruiting") next
+
+        arm_slice <- slice_arm_data_at_time(state$registries[[arm]], final_time,
+                                            max_follow_up_sim, interval_cutpoints_current)
+        # Cache for reuse when computing final events
+        cached_arm_slices[[arm]] <- arm_slice
+
+        if (!isTRUE(compare_arms_option)) {
+          post_arm <- draw_posterior_hazard_samples(
+            num_intervals = num_intervals,
+            events_per_interval = arm_slice$metrics$events_per_interval,
+            person_time_per_interval = arm_slice$metrics$person_time_per_interval,
+            prior_alpha_params = prior_alpha_params_model,
+            prior_beta_params  = prior_beta_params_model,
+            num_samples = num_posterior_draws
+          )
+          # PERFORMANCE: Use C++ matrix version instead of apply() for 20-30x speedup
+          med_arm <- calculate_median_survival_matrix_cpp(post_arm, interval_lengths)
+          # Final success check
+          success_thr <- if (!is.null(median_pfs_success_threshold_arms) && arm %in% names(median_pfs_success_threshold_arms)) {
+            median_pfs_success_threshold_arms[arm]
+          } else {
+            Inf  # Impossible to cross if not specified
+          }
+          p_eff <- if (is.finite(success_thr)) mean(med_arm > success_thr) else 0
+
+          if (!is.na(p_eff) && p_eff >= final_success_posterior_prob_threshold) {
+            final_eff_vec[arm] <- 1L
+          } else {
+            # Final futility check
+            futility_thr <- if (!is.null(median_pfs_futility_threshold_arms) && arm %in% names(median_pfs_futility_threshold_arms)) {
+              median_pfs_futility_threshold_arms[arm]
+            } else {
+              -Inf  # Impossible to cross if not specified
+            }
+            p_fut <- if (is.finite(futility_thr)) mean(med_arm < futility_thr) else 0
+
+            if (!is.na(p_fut) && p_fut >= final_futility_posterior_prob_threshold) {
+              final_fut_vec[arm] <- 1L
+            } else {
+              final_inc_vec[arm] <- 1L
+            }
+          }
+        } else {
+          if (arm == reference_arm_name) {
+            final_inc_vec[arm] <- 1L
+          } else {
+            med_samples <- sample_vs_ref_medians(
+              slCtrl = ref_slice_final,
+              slTrt = arm_slice,
+              args = args_local,
+              num_samples = num_posterior_draws
+            )
+            if (isTRUE(args_local$use_ph_model_vs_ref) && !is.null(med_samples$logHR)) {
+              log_margin <- 0
+              if (!is.null(args_local$compare_arms_hr_margin)) {
+                # Benefit-side futility margin: HR = 1 - delta_HR (see interim_logic.R).
+                log_margin <- log1p(-min(max(0, args_local$compare_arms_hr_margin), 0.95))
+              }
+              # Benefit-side efficacy margin: HR = 1 - delta_HR when set
+              # (rule_variant = "symmetric"); NULL keeps log_eff at exactly 0.
+              log_eff <- 0
+              if (!is.null(args_local$compare_arms_hr_eff_margin)) {
+                log_eff <- log1p(-min(max(0, args_local$compare_arms_hr_eff_margin), 0.95))
+              }
+              p_eff_ref <- mean(med_samples$logHR < log_eff)
+              p_fut_ref <- mean(med_samples$logHR >= log_margin)
+            } else {
+              margin_abs <- coalesce_num(compare_arms_futility_margin, 0)
+              pr <- final_vsref_probs_abs(med_samples$medTrt, med_samples$medCtrl, margin_abs)
+              p_eff_ref <- pr$p_eff_ref
+              p_fut_ref <- pr$p_fut_ref
+            }
+
+            if (p_eff_ref >= efficacy_threshold_vs_ref_prob) {
+              final_eff_vec[arm] <- 1L
+            } else if (p_fut_ref >= futility_threshold_vs_ref_prob) {
+              final_fut_vec[arm] <- 1L
+            } else {
+              final_inc_vec[arm] <- 1L
+            }
+          }
+        }
+      }
+
+      final_n_vec <- setNames(numeric(length(arm_names)), arm_names)
+      final_events_vec <- setNames(numeric(length(arm_names)), arm_names)
+      for (arm in arm_names) {
+        final_n_vec[arm] <- if (is.na(state$sim_final_n_current_run[arm])) {
+          state$enrolled_counts[arm]
+        } else {
+          state$sim_final_n_current_run[arm]
+        }
+        # PERFORMANCE: Use cached slice if available, otherwise compute
+        if (arm %in% names(cached_arm_slices)) {
+          arm_slice_for_events <- cached_arm_slices[[arm]]
+        } else {
+          arm_slice_for_events <- slice_arm_data_at_time(
+            state$registries[[arm]], final_time,
+            max_follow_up_sim, interval_cutpoints_current
+          )
+        }
+        final_events_vec[arm] <- arm_slice_for_events$metrics$events_total
+      }
+
+      chunk_sum_final_n <- chunk_sum_final_n + final_n_vec
+      chunk_sum_final_events <- chunk_sum_final_events + final_events_vec
+      chunk_sum_stop_eff <- chunk_sum_stop_eff + state$stop_efficacy_per_sim_row
+      chunk_sum_stop_fut <- chunk_sum_stop_fut + state$stop_futility_per_sim_row
+      chunk_sum_final_eff <- chunk_sum_final_eff + final_eff_vec
+      chunk_sum_final_fut <- chunk_sum_final_fut + final_fut_vec
+      chunk_sum_final_inc <- chunk_sum_final_inc + final_inc_vec
+      chunk_sum_final_time <- chunk_sum_final_time + final_time  # Trial duration
+
+      # Store raw sample sizes for percentile calculation (when enabled)
+      if (!is.null(chunk_final_n_raw)) {
+        local_idx <- which(sim_indices == sim_idx)
+        for (arm in arm_names) {
+          chunk_final_n_raw[[arm]][local_idx] <- final_n_vec[arm]
+        }
+      }
+
+      # Store raw events and time for variance calculation (when enabled)
+      if (!is.null(chunk_final_events_raw)) {
+        local_idx <- which(sim_indices == sim_idx)
+        for (arm in arm_names) {
+          chunk_final_events_raw[[arm]][local_idx] <- final_events_vec[arm]
+        }
+        chunk_final_time_raw[local_idx] <- final_time
+      }
+
+      tick()
+    }
+
+    list(
+      sum_final_n = chunk_sum_final_n,
+      sum_final_events = chunk_sum_final_events,
+      sum_stop_eff = chunk_sum_stop_eff,
+      sum_stop_fut = chunk_sum_stop_fut,
+      sum_final_eff = chunk_sum_final_eff,
+      sum_final_fut = chunk_sum_final_fut,
+      sum_final_inc = chunk_sum_final_inc,
+      sum_final_time = chunk_sum_final_time,  # Trial duration
+      n_sims = length(sim_indices),
+      final_n_raw      = chunk_final_n_raw,       # NULL if not collecting
+      final_events_raw = chunk_final_events_raw,  # NULL if not collecting
+      final_time_raw   = chunk_final_time_raw      # NULL if not collecting
+    )
+  }
+
+  aggregate_results <- function(partials) {
+    # Track position for raw value concatenation
+    raw_offset <- 0L
+
+    for (res in partials) {
+      sum_final_n       <<- sum_final_n + res$sum_final_n
+      # Defensive: handle workers running old code without sum_final_events
+      if (!is.null(res$sum_final_events)) {
+        sum_final_events  <<- sum_final_events + res$sum_final_events
+      }
+      sum_stop_efficacy <<- sum_stop_efficacy + res$sum_stop_eff
+      sum_stop_futility <<- sum_stop_futility + res$sum_stop_fut
+      sum_final_efficacy <<- sum_final_efficacy + res$sum_final_eff
+      sum_final_futility <<- sum_final_futility + res$sum_final_fut
+      sum_final_inconclusive <<- sum_final_inconclusive + res$sum_final_inc
+      # Defensive: handle workers running old code without sum_final_time
+      if (!is.null(res$sum_final_time)) {
+        sum_final_time <<- sum_final_time + res$sum_final_time
+      }
+
+      # Combine raw vectors across chunks (when enabled)
+      if (!is.null(res$final_n_raw) && !is.null(all_final_n_raw)) {
+        chunk_size <- res$n_sims
+        for (arm in arm_names) {
+          idx_range <- (raw_offset + 1L):(raw_offset + chunk_size)
+          all_final_n_raw[[arm]][idx_range] <<- res$final_n_raw[[arm]]
+        }
+        raw_offset <- raw_offset + chunk_size
+      }
+
+      if (!is.null(res$final_events_raw) && !is.null(all_final_events_raw)) {
+        chunk_size <- res$n_sims
+        for (arm in arm_names) {
+          idx_range <- (raw_offset - chunk_size + 1L):raw_offset
+          all_final_events_raw[[arm]][idx_range] <<- res$final_events_raw[[arm]]
+        }
+      }
+      if (!is.null(res$final_time_raw) && !is.null(all_final_time_raw)) {
+        chunk_size <- res$n_sims
+        idx_range <- (raw_offset - chunk_size + 1L):raw_offset
+        all_final_time_raw[idx_range] <<- res$final_time_raw
+      }
+    }
+  }
+
+  chunk_results <- list()
+
+  if (isTRUE(parallel_replicates) && num_simulations > 1) {
+    # Determine number of workers
+    # If external cluster is provided, use its size; otherwise use num_workers/detectCores
+    workers <- if (!is.null(cluster)) {
+      # Use the size of the supplied cluster
+      length(cluster)
+    } else if (is.null(num_workers)) {
+      max(1L, parallel::detectCores() - 1L)
+    } else {
+      as.integer(num_workers)
+    }
+    workers <- max(1L, min(workers, num_simulations))
+
+    # Sequential threshold: parallel overhead exceeds benefit for small rep counts
+
+    # Based on profiling: cluster spawn/teardown ~5-10 sec, simulation ~1-2 ms/rep
+    # Threshold of 100 ensures parallel overhead is worthwhile
+    seq_threshold <- getOption("evolveTrial.sequential_threshold", 100L)
+
+    # Check if parallelization is worthwhile
+    if (num_simulations < seq_threshold) {
+      if (interactive()) {
+        message("Few simulations (", num_simulations,
+                ") below threshold (", seq_threshold,
+                "); running sequentially for efficiency")
+      }
+      chunk_results <- list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
+    } else {
+      chunks <- parallel::splitIndices(num_simulations, workers)
+      chunks <- chunks[lengths(chunks) > 0]
+
+      pkg_name <- utils::packageName()
+      if (is.null(pkg_name) || identical(pkg_name, "")) {
+        pkg_name <- "evolveTrial"
+      }
+
+      # Cluster pooling: reuse external cluster if provided
+      using_external_cluster <- !is.null(cluster)
+
+      if (using_external_cluster) {
+        cl <- cluster
+        # Do not stop external cluster on exit - caller is responsible
+
+        # Ensure package is loaded on external PSOCK clusters
+        # (FORK clusters inherit parent environment, so no loading needed)
+        # Check cluster type by examining the first node's class
+        cluster_class <- class(cl[[1]])[1]
+        is_psock <- grepl("SOCK", cluster_class, ignore.case = TRUE)
+
+        if (is_psock) {
+          # Check if package is already loaded on workers
+          pkg_loaded <- tryCatch({
+            test_result <- parallel::clusterCall(cl, function(pkg) {
+              isNamespaceLoaded(pkg)
+            }, pkg_name)
+            all(unlist(test_result))
+          }, error = function(e) FALSE)
+
+          if (!pkg_loaded) {
+            parallel::clusterCall(cl, function(pkg) {
+              suppressPackageStartupMessages(require(pkg, character.only = TRUE))
+              NULL
+            }, pkg_name)
+          }
+        }
+      } else {
+        # Diagnostic for development workflow
+        if (interactive()) {
+          pkg_version <- tryCatch(
+            as.character(utils::packageVersion(pkg_name)),
+            error = function(e) "not installed"
+          )
+          message("Parallel execution: ", workers, " workers (", cluster_type,
+                  ") will load ", pkg_name, " version ", pkg_version)
+        }
+
+        cl <- parallel::makeCluster(workers, type = cluster_type)
+        on.exit(parallel::stopCluster(cl), add = TRUE)
+
+        # Only load package for PSOCK clusters (FORK inherits parent environment)
+        if (cluster_type == "PSOCK") {
+          parallel::clusterCall(cl, function(pkg) {
+            suppressPackageStartupMessages(require(pkg, character.only = TRUE))
+            NULL
+          }, pkg_name)
+        }
+      }
+
+      seed_list <- replicate(length(chunks), sample.int(.Machine$integer.max, 1L), simplify = TRUE)
+
+      chunk_results <- tryCatch(
+        parallel::parLapply(
+          cl,
+          seq_along(chunks),
+          function(idx, chunk_indices, seed_vals) {
+            simulate_chunk(chunk_indices[[idx]], seed = seed_vals[[idx]], tick = function() {})
+          },
+          chunk_indices = chunks,
+          seed_vals = as.list(seed_list)
+        ),
+        error = function(e) {
+          stop("Parallel simulation failed: ", e$message, call. = FALSE)
+        }
+      )
+    }
+  } else {
+    chunk_results <- list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
+  }
+
+  aggregate_results(chunk_results)
+
+  stopifnot(num_simulations > 0)
+  inv_num_sims <- 1 / num_simulations
+  
+  for (j in seq_along(arm_names)) {
+    arm <- arm_names[j]
+    early_eff <- sum_stop_efficacy[arm] * inv_num_sims
+    early_fut <- sum_stop_futility[arm] * inv_num_sims
+    final_eff <- sum_final_efficacy[arm] * inv_num_sims
+    final_fut <- sum_final_futility[arm] * inv_num_sims
+    final_inc <- sum_final_inconclusive[arm] * inv_num_sims
+    results_data$Type_I_Error_or_Power[j]   <- early_eff + final_eff
+    results_data$PET_Efficacy[j]            <- early_eff
+    results_data$PET_Futility[j]            <- early_fut
+    results_data$Pr_Reach_Max_N[j]          <- 1 - early_eff - early_fut
+    results_data$Pr_Final_Efficacy[j]       <- final_eff
+    results_data$Pr_Final_Futility[j]       <- final_fut
+    results_data$Pr_Final_Inconclusive[j]   <- final_inc
+    results_data$Exp_N[j]                   <- sum_final_n[arm] * inv_num_sims
+    results_data$Exp_Events[j]              <- sum_final_events[arm] * inv_num_sims
+    # Exp_Time is trial-level (same for all arms), set after loop
+  }
+  # Expected trial duration (calendar months) - trial-level metric, same for all arms
+  results_data$Exp_Time <- sum_final_time * inv_num_sims
+
+  # Compute and attach variance estimates if requested
+  if (isTRUE(return_variance)) {
+    # Continuous metrics: variance of the mean = var(raw_vec) / n
+    results_data$Var_Exp_N <- vapply(
+      arm_names,
+      function(a) stats::var(all_final_n_raw[[a]]) / num_simulations,
+      numeric(1)
+    )
+    results_data$Var_Exp_Events <- vapply(
+      arm_names,
+      function(a) stats::var(all_final_events_raw[[a]]) / num_simulations,
+      numeric(1)
+    )
+    results_data$Var_Exp_Time <- stats::var(all_final_time_raw) / num_simulations
+
+    # Proportion metrics: analytical Bernoulli variance of the mean = p(1-p)/n
+    prop_var <- function(p) p * (1 - p) / num_simulations
+    results_data$Var_Type_I_Error_or_Power <- prop_var(results_data$Type_I_Error_or_Power)
+    results_data$Var_PET_Efficacy          <- prop_var(results_data$PET_Efficacy)
+    results_data$Var_PET_Futility          <- prop_var(results_data$PET_Futility)
+    results_data$Var_Pr_Reach_Max_N        <- prop_var(results_data$Pr_Reach_Max_N)
+    results_data$Var_Pr_Final_Efficacy     <- prop_var(results_data$Pr_Final_Efficacy)
+    results_data$Var_Pr_Final_Futility     <- prop_var(results_data$Pr_Final_Futility)
+    results_data$Var_Pr_Final_Inconclusive <- prop_var(results_data$Pr_Final_Inconclusive)
+  }
+
+  # Compute and return percentiles if requested
+  if (isTRUE(return_percentiles) && !is.null(all_final_n_raw)) {
+    percentiles_result <- lapply(arm_names, function(arm) {
+      stats::quantile(all_final_n_raw[[arm]], probs = percentile_probs, na.rm = TRUE)
+    })
+    names(percentiles_result) <- arm_names
+
+    # For multi-arm trials, also compute total N percentiles (sum per replicate, then quantile)
+    # This is the correct way to get total N percentiles - NOT by summing per-arm percentiles
+    total_n_percentiles <- NULL
+    if (length(arm_names) > 1) {
+      # Sum per-replicate across arms to get total N per replicate
+      total_n_per_rep <- Reduce(`+`, all_final_n_raw)
+      total_n_percentiles <- stats::quantile(total_n_per_rep, probs = percentile_probs, na.rm = TRUE)
+    }
+
+    return(list(
+      summary = results_data,
+      percentiles = list(
+        N = percentiles_result,
+        N_total = total_n_percentiles,  # NULL for single-arm, vector for multi-arm
+        probs = percentile_probs
+      )
+    ))
+  }
+
+  results_data
+}
+
+
+#' Build scenario overrides from a grid of design choices
+#'
+#' Expands a named list of options into a list of scenario override lists that
+#' can be merged with `base_args` prior to simulation.
+#'
+#' @param choices Named list where each element is either a vector of scalar
+#'   values or a list whose elements are per-arm vectors.
+#'
+#' @return A list of scenario override lists.  The underlying Cartesian grid is
+#'   attached as an attribute named `"grid"`.
+#'
+#' @examples
+#' scenarios_from_grid(list(
+#'   max_total_patients_per_arm = list(
+#'     c(Doublet = 60, Triplet = 60),
+#'     c(Doublet = 60, Triplet = 70)
+#'   ),
+#'   compare_arms_futility_margin = c(0.3, 0.4)
+#' ))
+#'
+#' @export
+# ---------- 1) Build scenarios from a grid of options ----------
+# Pass a named list where each element is either:
+#   - a vector of scalar options (e.g., c(60, 70)), OR
+#   - a list of per-arm options (e.g., list(c(Arm1=6,Arm2=6,Arm3=9), c(...)))
+# Returns: a list of "override" lists, one per scenario.
+scenarios_from_grid <- function(choices) {
+  stopifnot(is.list(choices), length(choices) > 0)
+  keys <- names(choices)
+  # For list-valued choices (e.g., per-arm vectors), expand over their indices
+  grid_input <- lapply(choices, function(v) if (is.list(v)) seq_along(v) else v)
+  raw_grid <- do.call(expand.grid, c(grid_input, stringsAsFactors = FALSE))
+  # Turn each grid row into an override list, replacing list indices by actual list elements
+  scen_list <- lapply(seq_len(nrow(raw_grid)), function(i) {
+    row <- raw_grid[i, , drop = FALSE]
+    over <- setNames(vector("list", length(keys)), keys)
+    for (k in keys) {
+      v <- choices[[k]]
+      if (is.list(v)) {
+        over[[k]] <- v[[ as.integer(row[[k]]) ]]
+      } else {
+        over[[k]] <- row[[k]]
+      }
+    }
+    over
+  })
+  # Attach a compact label for readability (optional)
+  attr(scen_list, "grid") <- raw_grid
+  scen_list
+}
+
+#' Evaluate a design across multiple scenarios
+#'
+#' Merges each scenario override list with `base_args`, runs
+#' `run_simulation_pure()` for every scenario, and binds the results into a
+#' single table.
+#'
+#' @param base_args Named list of arguments accepted by `run_simulation_pure()`.
+#' @param scens List of scenario override lists, typically from
+#'   `scenarios_from_grid()`.
+#' @param parallel Logical; if `TRUE` uses `parallel::mclapply()` to distribute
+#'   scenarios across cores.
+#' @param seed Optional integer seed passed to `set.seed()` before simulations.
+#' @param return_percentiles Logical; if `TRUE`, collect per-replicate sample sizes
+#'   and return percentile summaries. Default `FALSE`.
+#' @param percentile_probs Numeric vector of probabilities for percentile
+#'   computation when `return_percentiles = TRUE`. Default `c(0, 0.25, 0.5, 0.75, 0.9, 1.0)`.
+#' @param return_variance Logical; if `TRUE`, per-arm operating-characteristic
+#'   variances are collected from `run_simulation_pure()` and returned as
+#'   additional `*_var` columns in the summary. Default `FALSE`.
+#'
+#' @return When `return_percentiles = FALSE` (default), a data.table/data.frame
+#'   containing the combined operating characteristic summaries with a `scenario`
+#'   column identifying the originating scenario index.
+#'   When `return_percentiles = TRUE`, a list with:
+#'   \describe{
+#'     \item{summary}{The combined summary data.table as when `return_percentiles = FALSE`}
+#'     \item{percentiles}{A list of percentile results, one per scenario}
+#'   }
+#'
+#' @examples
+#' \dontrun{
+#' base_args <- list(
+#'   num_simulations = 200,
+#'   arm_names = c("Doublet", "Triplet"),
+#'   reference_arm_name = "Doublet",
+#'   compare_arms_option = TRUE,
+#'   weibull_shape_true_arms = c(Doublet = 1.2, Triplet = 1.2),
+#'   weibull_median_true_arms = c(Doublet = 6, Triplet = 6),
+#'   null_median_arms = c(Doublet = 6, Triplet = 6),
+#'   futility_median_arms = c(Doublet = 6, Triplet = 6),
+#'   interval_cutpoints_sim = seq(0, 24, by = 3),
+#'   max_follow_up_sim = 24,
+#'   censor_max_time_sim = 24,
+#'   prior_alpha_params_model = rep(0.5, 8),
+#'   prior_beta_params_model = rep(0.5, 8),
+#'   num_posterior_draws = 400,
+#'   cohort_size_per_arm = 1,
+#'   max_total_patients_per_arm = c(Doublet = 60, Triplet = 60),
+#'   min_patients_for_analysis = 10,
+#'   efficacy_stopping_rule_hc = TRUE,
+#'   efficacy_threshold_current_prob_hc = 0.95,
+#'   posterior_futility_threshold_hc = 0.8,
+#'   futility_stopping_rule_hc = TRUE,
+#'   efficacy_threshold_vs_ref_prob = 0.98,
+#'   futility_threshold_vs_ref_prob = 0.6,
+#'   compare_arms_futility_margin = 0.4,
+#'   overall_accrual_rate = 3,
+#'   randomization_probs = c(Doublet = 1/3, Triplet = 2/3),
+#'   min_follow_up_at_final = 0,
+#'   min_events_for_analysis = 0,
+#'   min_median_followup = 0,
+#'   interim_calendar_beat = 3,
+#'   pred_success_pp_threshold_hc = 1,
+#'   pred_futility_pp_threshold_hc = 0,
+#'   num_posterior_draws_pred = 200
+#' )
+#'
+#' scens <- scenarios_from_grid(list(
+#'   weibull_median_true_arms = list(
+#'     c(Doublet = 6, Triplet = 6),
+#'     c(Doublet = 6, Triplet = 9)
+#'   )
+#' ))
+#'
+#' run_scenarios(base_args, scens, parallel = FALSE, seed = 123)
+#' }
+#'
+#' @export
+run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL,
+                          return_percentiles = FALSE,
+                          percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1.0),
+                          return_variance = FALSE) {
+  if (!is.null(seed)) set.seed(seed)
+
+  # keep only args that run_simulation_pure actually accepts
+  rs_formals <- names(formals(run_simulation_pure))
+
+  # Storage for percentiles if requested
+  all_percentiles <- if (return_percentiles) vector("list", length(scens)) else NULL
+
+  run_one <- function(i) {
+    over   <- scens[[i]]
+    args_i <- utils::modifyList(base_args, over, keep.null = TRUE)
+    # Add percentile and variance parameters
+    args_i$return_percentiles <- return_percentiles
+    args_i$percentile_probs   <- percentile_probs
+    args_i$return_variance    <- return_variance
+    args_i <- args_i[intersect(names(args_i), rs_formals)]
+    res <- do.call(run_simulation_pure, args_i)
+
+    if (return_percentiles) {
+      # Extract summary and percentiles separately
+      summary_df <- res$summary
+      summary_df$scenario <- i
+      list(summary = summary_df, percentiles = res$percentiles)
+    } else {
+      res$scenario <- i
+      res
+    }
+  }
+
+  if (isTRUE(parallel)) {
+    cores <- max(1L, parallel::detectCores() - 1L)
+    out <- parallel::mclapply(seq_along(scens), run_one, mc.cores = cores)
+  } else {
+    out <- lapply(seq_along(scens), run_one)
+  }
+
+  if (return_percentiles) {
+    # Separate summaries and percentiles
+    all_summaries <- lapply(out, function(x) x$summary)
+    all_percentiles <- lapply(out, function(x) x$percentiles)
+
+    # Validate summaries
+    ok_types <- vapply(all_summaries, function(x) is.data.frame(x) || data.table::is.data.table(x), logical(1))
+    if (!all(ok_types)) stop("run_scenarios: one or more scenarios did not return a tabular result.")
+
+    return(list(
+      summary = data.table::rbindlist(all_summaries, use.names = TRUE, fill = TRUE),
+      percentiles = all_percentiles
+    ))
+  }
+
+  # validate all returned items are tabular
+  ok_types <- vapply(out, function(x) is.data.frame(x) || is.list(x) || data.table::is.data.table(x), logical(1))
+  if (!all(ok_types)) stop("run_scenarios: one or more scenarios did not return a tabular result.")
+
+  data.table::rbindlist(out, use.names = TRUE, fill = TRUE)
+}
+
+# helper to build new interval cutpoints once enough events accrued
+rebalance_cutpoints_from_events <- function(event_times, max_follow_up, num_intervals) {
+  if (length(event_times) < max(2, num_intervals)) {
+    return(NULL)
+  }
+  event_times <- pmin(pmax(event_times, 0), max_follow_up)
+  probs <- seq(0, 1, length.out = num_intervals + 1)
+  q_vals <- as.numeric(stats::quantile(event_times, probs = probs, na.rm = TRUE, type = 7))
+  q_vals[1] <- 0
+  q_vals[length(q_vals)] <- max_follow_up
+  for (i in 2:length(q_vals)) {
+    if (!is.finite(q_vals[i]) || q_vals[i] <= q_vals[i - 1]) {
+      q_vals[i] <- min(max_follow_up, q_vals[i - 1] + 1e-6)
+    }
+  }
+  if (any(diff(q_vals) <= 0)) {
+    return(NULL)
+  }
+  q_vals
+}
+
+
+#' Create a reusable evolveTrial simulation cluster
+#'
+#' Creates a parallel cluster optimized for evolveTrial simulations. The cluster
+#' can be reused across multiple calls to `run_simulation_pure()` by passing it
+#' via the `cluster` parameter, avoiding the overhead of repeated cluster
+#' creation/destruction.
+#'
+#' @param workers Integer; number of worker processes. Defaults to
+#'   `parallel::detectCores() - 1`.
+#' @param cluster_type One of `"auto"` (default), `"FORK"`, or `"PSOCK"`. Auto
+#'   selects FORK on Unix systems (faster) and PSOCK on Windows.
+#'
+#' @return A parallel cluster object that can be passed to `run_simulation_pure()`
+#'   via the `cluster` parameter.
+#'
+#' @details This function is particularly useful for Bayesian optimization
+#'   workflows where `run_simulation_pure()` is called hundreds of times. By
+#'   creating the cluster once and reusing it, you can eliminate the 5-10 second
+#'   cluster spawn/teardown overhead per call.
+#'
+#'   FORK clusters (default on Unix) are significantly faster because:
+#'   - Worker processes inherit the parent environment (no package loading)
+#'   - Data is shared via copy-on-write (no serialization overhead)
+#'
+#'   Remember to call `release_cluster()` when done to free resources.
+#'
+#' @examples
+#' \dontrun{
+#' # Create cluster once
+#' cl <- create_simulation_cluster(workers = 8)
+#'
+#' # Use in repeated BO evaluations
+#' for (i in 1:100) {
+#'   result <- run_simulation_pure(
+#'     num_simulations = 500,
+#'     ...,
+#'     parallel_replicates = TRUE,
+#'     cluster = cl
+#'   )
+#' }
+#'
+#' # Clean up
+#' release_cluster(cl)
+#' }
+#'
+#' @seealso [release_cluster()], [run_simulation_pure()]
+#' @export
+create_simulation_cluster <- function(workers = NULL, cluster_type = c("auto", "FORK", "PSOCK")) {
+  cluster_type <- match.arg(cluster_type)
+
+  # Auto-detect optimal cluster type
+  if (cluster_type == "auto") {
+    cluster_type <- if (.Platform$OS.type == "unix") "FORK" else "PSOCK"
+  }
+
+  # Default workers
+  if (is.null(workers)) {
+    workers <- max(1L, parallel::detectCores() - 1L)
+  }
+  workers <- as.integer(workers)
+
+  # Create cluster
+  cl <- parallel::makeCluster(workers, type = cluster_type)
+
+  # For PSOCK clusters, pre-load evolveTrial package in workers
+  if (cluster_type == "PSOCK") {
+    pkg_name <- utils::packageName()
+    if (is.null(pkg_name) || identical(pkg_name, "")) {
+      pkg_name <- "evolveTrial"
+    }
+    parallel::clusterCall(cl, function(pkg) {
+      suppressPackageStartupMessages(require(pkg, character.only = TRUE))
+      NULL
+    }, pkg_name)
+  }
+
+  # Add class for identification
+  class(cl) <- c("evolveTrial_cluster", class(cl))
+
+  message("Created ", cluster_type, " cluster with ", workers, " workers")
+  cl
+}
+
+
+#' Release an evolveTrial simulation cluster
+#'
+#' Stops and releases resources for a cluster created by
+#' `create_simulation_cluster()`.
+#'
+#' @param cluster A cluster object created by `create_simulation_cluster()` or
+#'   `parallel::makeCluster()`.
+#'
+#' @return NULL invisibly.
+#'
+#' @seealso [create_simulation_cluster()]
+#' @export
+release_cluster <- function(cluster) {
+  if (!is.null(cluster)) {
+    tryCatch(
+      parallel::stopCluster(cluster),
+      error = function(e) {
+        warning("Failed to stop cluster: ", e$message)
+      }
+    )
+  }
+  invisible(NULL)
+}

@@ -1,0 +1,57 @@
+design R23 doublet_triplet_H0_fut multi_arm task T11 protocol bws 
+theta:
+list(total_n = 103L, eff = 0.950199307715971, fut = 0.372152871977103, 
+    ev = 11L, beat = 1.00580743406046, margin = 0.272355028691883, 
+    hr_margin = 0.0337897681037559, prior_strength = 0.305118978551356, 
+    n_intervals = 15L)
+
+base_args (after P6 F=6, random_dropout=FALSE):
+list(num_simulations = 300L, diagnostics = FALSE, parallel_replicates = TRUE, 
+    num_workers = 1L, cluster_type = "auto", arm_names = c("Doublet", 
+    "Triplet"), reference_arm_name = "Doublet", compare_arms_option = TRUE, 
+    weibull_shape_true_arms = c(Doublet = 1.3, Triplet = 1.3), 
+    weibull_median_true_arms = c(Doublet = 6, Triplet = 9), null_median_arms = c(Doublet = 6, 
+    Triplet = 6), futility_median_arms = c(Doublet = 6, Triplet = 6
+    ), interval_cutpoints_sim = c(0, 2, 4, 6, 8, 10, 12, 14, 
+    16, 18, 20, 22, 24), max_follow_up_sim = 120, censor_max_time_sim = 120, 
+    prior_alpha_params_model = c(0.305118978551356, 0.305118978551356, 
+    0.305118978551356, 0.305118978551356, 0.305118978551356, 
+    0.305118978551356, 0.305118978551356, 0.305118978551356, 
+    0.305118978551356, 0.305118978551356, 0.305118978551356, 
+    0.305118978551356), prior_beta_params_model = c(0.305118978551356, 
+    0.305118978551356, 0.305118978551356, 0.305118978551356, 
+    0.305118978551356, 0.305118978551356, 0.305118978551356, 
+    0.305118978551356, 0.305118978551356, 0.305118978551356, 
+    0.305118978551356, 0.305118978551356), num_posterior_draws = 800, 
+    cohort_size_per_arm = 1L, max_total_patients_per_arm = c(Doublet = 52, 
+    Triplet = 51), min_patients_per_arm = 10, min_patients_for_analysis = 10, 
+    overall_accrual_rate = 2, randomization_probs = c(Doublet = 0.5, 
+    Triplet = 0.5), efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = 0.95, 
+    futility_threshold_hc_prob = 0.8, futility_stopping_rule_hc = TRUE, 
+    enable_efficacy_stopping = FALSE, enable_futility_stopping = TRUE, 
+    efficacy_stopping_rule_vs_ref = FALSE, futility_stopping_rule_vs_ref = TRUE, 
+    efficacy_threshold = 0.950199307715971, futility_threshold = 0.372152871977103, 
+    efficacy_threshold_vs_ref_prob = 0.950199307715971, futility_threshold_vs_ref_prob = 0.372152871977103, 
+    compare_arms_hr_margin = 0.0337897681037559, compare_arms_hr_eff_margin = NULL, 
+    use_ph_model_vs_ref = TRUE, ph_loghr_prior_mean = 0, ph_loghr_prior_sd = 1, 
+    min_events_hc = 11L, min_median_followup_hc = 0, interim_calendar_beat = 1.00580743406046, 
+    min_events_per_arm = 11L, min_median_followup_per_arm = 3, 
+    min_person_time_frac_per_arm = 0, min_follow_up_at_final = 6, 
+    max_trial_time = 72, pred_success_pp_threshold_hc = 0.9, 
+    pred_futility_pp_threshold_hc = 0.2, num_posterior_draws_pred = 400, 
+    predictive_fast = FALSE, median_pfs_success_threshold_arms = c(Doublet = 6, 
+    Triplet = 6), median_pfs_futility_threshold_arms = c(Doublet = 6, 
+    Triplet = 6), final_success_posterior_prob_threshold = 0.950199307715971, 
+    final_futility_posterior_prob_threshold = 0.372152871977103, 
+    rebalance_after_events = 50, modeling_horizon = 24, random_dropout = FALSE)
+
+scens:
+structure(list(list(weibull_median_true_arms = c(Doublet = 6, 
+Triplet = 6)), list(weibull_median_true_arms = c(Doublet = 6, 
+Triplet = 9))), grid = structure(list(weibull_median_true_arms = 1:2), out.attrs = list(
+    dim = c(weibull_median_true_arms = 2L), dimnames = list(weibull_median_true_arms = c("weibull_median_true_arms=1", 
+    "weibull_median_true_arms=2"))), class = "data.frame", row.names = c(NA, 
+-2L)))
+
+run_scenarios ... args:
+list(parallel = FALSE, seed = 900001, return_variance = TRUE)

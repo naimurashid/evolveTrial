@@ -1,0 +1,26 @@
+"bucket","samples","pct","total_samples"
+"posterior: C++ call",513,63.6,807
+"look: data slice (slice_arm_data_at_time / interval metrics)",139,17.2,807
+"trial loop: registry/state data.frame bookkeeping",59,7.3,807
+"trial loop: other per-trial R code",33,4.1,807
+"look: extract_events_fast (rebalance)",30,3.7,807
+"look: gates/decision logic",20,2.5,807
+"posterior: R-level sampler loop/other",10,1.2,807
+"trial loop: patient RNG (rexp/rweibull/runif/sample)",3,0.4,807
+"[self] [<-.data.frame",28,3.5,807
+"[self] data.frame",11,1.4,807
+"[self] [.data.frame",8,1,807
+"[self] [[.data.frame",5,0.6,807
+"[self] as.data.frame",2,0.2,807
+"[self] deparse",7,0.9,807
+"[self] .deparseOpts",6,0.7,807
+"[self] make.names",2,0.2,807
+"[self] match.arg",2,0.2,807
+"[self] vapply",11,1.4,807
+"[self] %in%",6,0.7,807
+"[self] pmin",18,2.2,807
+"[self] pmax",2,0.2,807
+"[self] sys.call",6,0.7,807
+"[self] length",4,0.5,807
+"[self] structure",6,0.7,807
+"[stack] rbind inside simulate_chunk",0,0,807
