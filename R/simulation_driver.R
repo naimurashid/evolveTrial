@@ -465,7 +465,7 @@ run_simulation_pure <- function(
 
   base_args_for_interim <- args
 
-  simulate_chunk <- function(sim_indices, seed = NULL, tick = function() {}) {
+  simulate_chunk_r <- function(sim_indices, seed = NULL, tick = function() {}) {
     if (!is.null(seed)) {
       set.seed(seed)
     }
@@ -942,6 +942,12 @@ run_simulation_pure <- function(
       }
     }
   }
+
+  simulate_chunk <- simulate_chunk_r
+
+  # Test seam for the C++ engine gate (dev/perf/harness): hand the frame to a probe before any chunk runs.
+  chunk_probe <- getOption("evolveTrial.chunk_probe")
+  if (is.function(chunk_probe)) return(chunk_probe(environment()))
 
   chunk_results <- list()
 

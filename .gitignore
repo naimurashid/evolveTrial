@@ -6,3 +6,9 @@
 .quarto
 inst/doc
 docs
+
+# engine C++ port, phase 1 (step 2): private libraries, build trees, harness cache and scratch outputs
+dev/perf/lib/
+dev/perf/build/
+dev/perf/harness/cache/
+dev/perf/harness/out/

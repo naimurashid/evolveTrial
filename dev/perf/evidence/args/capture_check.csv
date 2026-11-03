@@ -1,0 +1,11 @@
+"design","task","scenario_id","protocol","cert_seed","K_theta","K_cutpoints","random_dropout","min_follow_up_at_final","num_workers","engine_ok","ref_power_count","cap_power_count","ref_type1_count","cap_type1_count","ref_EN_null","cap_EN_null","ref_EN_alt","cap_EN_alt","power_count_ok","type1_count_ok","EN_null_ok","EN_alt_ok","wall_s","capture","all_ok"
+"R01","T04","cohortA_H0_fut","xphil",900001,8,8,"FALSE",6,19,TRUE,8245,8245,150,150,11.247,11.247,28.291,28.291,TRUE,TRUE,TRUE,TRUE,23.2,"ok",TRUE
+"R02","T07","cohortA_admissible_fut","xphil",900001,8,8,"FALSE",6,19,TRUE,8608,8608,145,145,13.2455,13.2455,27.6548,27.6548,TRUE,TRUE,TRUE,TRUE,15.8,"ok",TRUE
+"R03","T03","cohortA_minimax_fut","rws",900001,9,9,"FALSE",6,19,TRUE,9585,9585,111,111,21.4618,21.4618,29.8526,29.8526,TRUE,TRUE,TRUE,TRUE,16,"ok",TRUE
+"R04","U01","cohortA_admissible_EN_fut","rws",910001,4,4,"FALSE",6,19,TRUE,8308,8308,57,57,13.6633,13.6633,28.1529,28.1529,TRUE,TRUE,TRUE,TRUE,9.9,"ok",TRUE
+"R23","T11","doublet_triplet_H0_fut","bws",900001,15,15,"FALSE",6,19,TRUE,8002,8002,826,826,58.6885,58.6885,90.9617,90.9617,TRUE,TRUE,TRUE,TRUE,165.6,"ok",TRUE
+"R24","T17","doublet_triplet_admissible_fut","bws",900001,9,9,"FALSE",6,19,TRUE,8085,8085,892,892,63.9323,63.9323,83.9193,83.9193,TRUE,TRUE,TRUE,TRUE,56.3,"ok",TRUE
+"R25","T22","doublet_triplet_minimax_fut","bws",900001,12,12,"FALSE",6,19,TRUE,8139,8139,939,939,70.5507,70.5507,81.3908,81.3908,TRUE,TRUE,TRUE,TRUE,45.9,"ok",TRUE
+"R26","U13","doublet_triplet_admissible_EN_fut","rws",910001,13,13,"FALSE",6,19,TRUE,8139,8139,853,853,60.9857,60.9857,86.0771,86.0771,TRUE,TRUE,TRUE,TRUE,100.5,"ok",TRUE
+"R27","T23","doublet_triplet_admissible_N_fut","rws",900001,14,14,"FALSE",6,19,TRUE,8174,8174,958,958,74.283,74.283,82.1041,82.1041,TRUE,TRUE,TRUE,TRUE,37.9,"ok",TRUE
+"R28","T24","doublet_triplet_balanced_fut","rws",900001,15,15,"FALSE",6,19,TRUE,8172,8172,976,976,66.7974,66.7974,79.7318,79.7318,TRUE,TRUE,TRUE,TRUE,52.2,"ok",TRUE

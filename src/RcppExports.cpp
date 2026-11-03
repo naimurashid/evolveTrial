@@ -259,6 +259,103 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// rsem_ld_digits
+int rsem_ld_digits();
+RcppExport SEXP _evolveTrial_rsem_ld_digits() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    rcpp_result_gen = Rcpp::wrap(rsem_ld_digits());
+    return rcpp_result_gen;
+END_RCPP
+}
+// rsem_sum
+double rsem_sum(Rcpp::NumericVector x);
+RcppExport SEXP _evolveTrial_rsem_sum(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(rsem_sum(x));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rsem_mean
+double rsem_mean(Rcpp::NumericVector x);
+RcppExport SEXP _evolveTrial_rsem_mean(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(rsem_mean(x));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rsem_median
+double rsem_median(Rcpp::NumericVector x);
+RcppExport SEXP _evolveTrial_rsem_median(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(rsem_median(x));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rsem_quantile7
+double rsem_quantile7(Rcpp::NumericVector x, double p);
+RcppExport SEXP _evolveTrial_rsem_quantile7(SEXP xSEXP, SEXP pSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< double >::type p(pSEXP);
+    rcpp_result_gen = Rcpp::wrap(rsem_quantile7(x, p));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rsem_find_interval
+Rcpp::IntegerVector rsem_find_interval(Rcpp::NumericVector x, Rcpp::NumericVector breaks, bool rightmost_closed, bool all_inside, bool left_open);
+RcppExport SEXP _evolveTrial_rsem_find_interval(SEXP xSEXP, SEXP breaksSEXP, SEXP rightmost_closedSEXP, SEXP all_insideSEXP, SEXP left_openSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type breaks(breaksSEXP);
+    Rcpp::traits::input_parameter< bool >::type rightmost_closed(rightmost_closedSEXP);
+    Rcpp::traits::input_parameter< bool >::type all_inside(all_insideSEXP);
+    Rcpp::traits::input_parameter< bool >::type left_open(left_openSEXP);
+    rcpp_result_gen = Rcpp::wrap(rsem_find_interval(x, breaks, rightmost_closed, all_inside, left_open));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rsem_mean_logical
+Rcpp::NumericVector rsem_mean_logical(Rcpp::IntegerVector count, Rcpp::IntegerVector n);
+RcppExport SEXP _evolveTrial_rsem_mean_logical(SEXP countSEXP, SEXP nSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type count(countSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n(nSEXP);
+    rcpp_result_gen = Rcpp::wrap(rsem_mean_logical(count, n));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rsem_seq_probs
+Rcpp::NumericVector rsem_seq_probs(int K);
+RcppExport SEXP _evolveTrial_rsem_seq_probs(SEXP KSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    rcpp_result_gen = Rcpp::wrap(rsem_seq_probs(K));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rsem_rebalance_cutpoints
+SEXP rsem_rebalance_cutpoints(Rcpp::NumericVector event_times, double max_follow_up, int num_intervals);
+RcppExport SEXP _evolveTrial_rsem_rebalance_cutpoints(SEXP event_timesSEXP, SEXP max_follow_upSEXP, SEXP num_intervalsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type event_times(event_timesSEXP);
+    Rcpp::traits::input_parameter< double >::type max_follow_up(max_follow_upSEXP);
+    Rcpp::traits::input_parameter< int >::type num_intervals(num_intervalsSEXP);
+    rcpp_result_gen = Rcpp::wrap(rsem_rebalance_cutpoints(event_times, max_follow_up, num_intervals));
+    return rcpp_result_gen;
+END_RCPP
+}
 // test_rcpp_sum
 double test_rcpp_sum(const arma::vec& x);
 RcppExport SEXP _evolveTrial_test_rcpp_sum(SEXP xSEXP) {
@@ -298,6 +395,15 @@ static const R_CallMethodDef CallEntries[] = {
     {"_evolveTrial_compute_pp_predictive_cpp", (DL_FUNC) &_evolveTrial_compute_pp_predictive_cpp, 14},
     {"_evolveTrial_compute_pp_efficacy_sa_cpp", (DL_FUNC) &_evolveTrial_compute_pp_efficacy_sa_cpp, 11},
     {"_evolveTrial_compute_pp_futility_sa_cpp", (DL_FUNC) &_evolveTrial_compute_pp_futility_sa_cpp, 11},
+    {"_evolveTrial_rsem_ld_digits", (DL_FUNC) &_evolveTrial_rsem_ld_digits, 0},
+    {"_evolveTrial_rsem_sum", (DL_FUNC) &_evolveTrial_rsem_sum, 1},
+    {"_evolveTrial_rsem_mean", (DL_FUNC) &_evolveTrial_rsem_mean, 1},
+    {"_evolveTrial_rsem_median", (DL_FUNC) &_evolveTrial_rsem_median, 1},
+    {"_evolveTrial_rsem_quantile7", (DL_FUNC) &_evolveTrial_rsem_quantile7, 2},
+    {"_evolveTrial_rsem_find_interval", (DL_FUNC) &_evolveTrial_rsem_find_interval, 5},
+    {"_evolveTrial_rsem_mean_logical", (DL_FUNC) &_evolveTrial_rsem_mean_logical, 2},
+    {"_evolveTrial_rsem_seq_probs", (DL_FUNC) &_evolveTrial_rsem_seq_probs, 1},
+    {"_evolveTrial_rsem_rebalance_cutpoints", (DL_FUNC) &_evolveTrial_rsem_rebalance_cutpoints, 3},
     {"_evolveTrial_test_rcpp_sum", (DL_FUNC) &_evolveTrial_test_rcpp_sum, 1},
     {"_evolveTrial_test_armadillo_random", (DL_FUNC) &_evolveTrial_test_armadillo_random, 1},
     {NULL, NULL, 0}

@@ -248,6 +248,42 @@ compute_pp_futility_sa_cpp <- function(a_arm, b_arm, hist_hazard, hr_threshold, 
     .Call(`_evolveTrial_compute_pp_futility_sa_cpp`, a_arm, b_arm, hist_hazard, hr_threshold, n_add, interval_cutpoints, accrual_rate, followup, fut_threshold, n_outer, use_antithetic)
 }
 
+rsem_ld_digits <- function() {
+    .Call(`_evolveTrial_rsem_ld_digits`)
+}
+
+rsem_sum <- function(x) {
+    .Call(`_evolveTrial_rsem_sum`, x)
+}
+
+rsem_mean <- function(x) {
+    .Call(`_evolveTrial_rsem_mean`, x)
+}
+
+rsem_median <- function(x) {
+    .Call(`_evolveTrial_rsem_median`, x)
+}
+
+rsem_quantile7 <- function(x, p) {
+    .Call(`_evolveTrial_rsem_quantile7`, x, p)
+}
+
+rsem_find_interval <- function(x, breaks, rightmost_closed, all_inside, left_open) {
+    .Call(`_evolveTrial_rsem_find_interval`, x, breaks, rightmost_closed, all_inside, left_open)
+}
+
+rsem_mean_logical <- function(count, n) {
+    .Call(`_evolveTrial_rsem_mean_logical`, count, n)
+}
+
+rsem_seq_probs <- function(K) {
+    .Call(`_evolveTrial_rsem_seq_probs`, K)
+}
+
+rsem_rebalance_cutpoints <- function(event_times, max_follow_up, num_intervals) {
+    .Call(`_evolveTrial_rsem_rebalance_cutpoints`, event_times, max_follow_up, num_intervals)
+}
+
 #' Test Rcpp setup
 #'
 #' Simple test function to verify Rcpp and RcppArmadillo are working.
