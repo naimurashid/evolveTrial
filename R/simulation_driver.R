@@ -943,7 +943,22 @@ run_simulation_pure <- function(
     }
   }
 
-  simulate_chunk <- simulate_chunk_r
+  # C++ chunk engine (engine C++ port, step 3; R/simulate_chunk_cpp.R, src/simulate_chunk.cpp). The configuration is
+  # packed once per frame and draws nothing. simulate_chunk_cpp never falls back: outside the supported set it stops.
+  # simulate_chunk dispatches: the C++ body when the option allows it and the configuration is supported, else the R body.
+  cfg <- .pack_chunk_cfg(environment())
+  simulate_chunk_cpp <- function(sim_indices, seed = NULL, tick = function() {}) {
+    .chunk_cpp_assert_supported(parent.env(environment()), cfg)
+    if (!is.null(seed)) set.seed(seed)
+    .simulate_chunk_cpp(sim_indices, cfg)
+  }
+  simulate_chunk <- function(sim_indices, seed = NULL, tick = function() {}) {
+    if (isTRUE(getOption("evolveTrial.use_cpp_engine", TRUE)) && .chunk_cpp_supported(parent.env(environment()))) {
+      simulate_chunk_cpp(sim_indices, seed = seed, tick = tick)
+    } else {
+      simulate_chunk_r(sim_indices, seed = seed, tick = tick)
+    }
+  }
 
   # Test seam for the C++ engine gate (dev/perf/harness): hand the frame to a probe before any chunk runs.
   chunk_probe <- getOption("evolveTrial.chunk_probe")

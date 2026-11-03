@@ -356,6 +356,29 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// chunk_sample_one
+int chunk_sample_one(Rcpp::NumericVector prob);
+RcppExport SEXP _evolveTrial_chunk_sample_one(SEXP probSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type prob(probSEXP);
+    rcpp_result_gen = Rcpp::wrap(chunk_sample_one(prob));
+    return rcpp_result_gen;
+END_RCPP
+}
+// simulate_chunk_cpp
+Rcpp::List simulate_chunk_cpp(Rcpp::IntegerVector sim_indices, Rcpp::List cfg);
+RcppExport SEXP _evolveTrial_simulate_chunk_cpp(SEXP sim_indicesSEXP, SEXP cfgSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type sim_indices(sim_indicesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type cfg(cfgSEXP);
+    rcpp_result_gen = Rcpp::wrap(simulate_chunk_cpp(sim_indices, cfg));
+    return rcpp_result_gen;
+END_RCPP
+}
 // test_rcpp_sum
 double test_rcpp_sum(const arma::vec& x);
 RcppExport SEXP _evolveTrial_test_rcpp_sum(SEXP xSEXP) {
@@ -404,6 +427,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_evolveTrial_rsem_mean_logical", (DL_FUNC) &_evolveTrial_rsem_mean_logical, 2},
     {"_evolveTrial_rsem_seq_probs", (DL_FUNC) &_evolveTrial_rsem_seq_probs, 1},
     {"_evolveTrial_rsem_rebalance_cutpoints", (DL_FUNC) &_evolveTrial_rsem_rebalance_cutpoints, 3},
+    {"_evolveTrial_chunk_sample_one", (DL_FUNC) &_evolveTrial_chunk_sample_one, 1},
+    {"_evolveTrial_simulate_chunk_cpp", (DL_FUNC) &_evolveTrial_simulate_chunk_cpp, 2},
     {"_evolveTrial_test_rcpp_sum", (DL_FUNC) &_evolveTrial_test_rcpp_sum, 1},
     {"_evolveTrial_test_armadillo_random", (DL_FUNC) &_evolveTrial_test_armadillo_random, 1},
     {NULL, NULL, 0}

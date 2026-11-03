@@ -284,6 +284,14 @@ rsem_rebalance_cutpoints <- function(event_times, max_follow_up, num_intervals) 
     .Call(`_evolveTrial_rsem_rebalance_cutpoints`, event_times, max_follow_up, num_intervals)
 }
 
+.chunk_sample_one <- function(prob) {
+    .Call(`_evolveTrial_chunk_sample_one`, prob)
+}
+
+.simulate_chunk_cpp <- function(sim_indices, cfg) {
+    .Call(`_evolveTrial_simulate_chunk_cpp`, sim_indices, cfg)
+}
+
 #' Test Rcpp setup
 #'
 #' Simple test function to verify Rcpp and RcppArmadillo are working.
