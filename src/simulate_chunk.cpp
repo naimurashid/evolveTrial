@@ -7,9 +7,11 @@
 // of the generated wrapper. Every sum, mean, median, quantile and findInterval goes through src/r_semantics.h. The gamma
 // sampler and the piecewise median are the existing C++ functions in src/posterior_sampling.cpp, called directly.
 //
-// Scope: exactly the configuration set checked by .chunk_cpp_supported() in R/simulate_chunk_cpp.R (single arm, HC
-// analysis, looks_stop_at_final = TRUE, calendar-beat looks, rebalancing on, dropout off, finite max_trial_time, interim
-// efficacy stopping off). The R side refuses anything else before this function is called; the checks below that can be
+// Scope: exactly the configuration set checked by .chunk_cpp_supported() in R/simulate_chunk_cpp.R. Common to both
+// paths: looks_stop_at_final = TRUE, calendar-beat looks, rebalancing on, dropout off, finite max_trial_time. Step 3:
+// single arm, HC analysis, interim efficacy stopping off. Step 4 (cfg$mode "vsref"): two arms, one reference and one
+// experimental, vs-reference analysis on the PH model (the live R sampler sample_vs_ref_medians_ph, PH:105-135, with
+// ph_beta_mode_var_cpp called unchanged), HR futility margin set, efficacy margin NULL, interim efficacy stopping off. The R side refuses anything else before this function is called; the checks below that can be
 // made cheaply here stop() as a second line, they never fall back.
 //
 // [[Rcpp::depends(RcppArmadillo)]]
@@ -28,6 +30,12 @@ arma::mat draw_posterior_hazard_samples_cpp(int num_intervals, const arma::ivec&
                                             const arma::vec& prior_alpha_params, const arma::vec& prior_beta_params,
                                             int num_samples);
 arma::vec calculate_median_survival_matrix_cpp(const arma::mat& hazard_samples, const arma::vec& interval_lengths);
+// The one definition is src/posterior_sampling.cpp:196 (step 4). It is what the R dispatcher ph_beta_mode_var
+// (R/posterior_cpp_dispatchers.R:98-118) reaches through RcppExports. src/hybrid_trial_sim.cpp:88 is a declaration of
+// the same function, not a second definition. No default arguments here: every argument is passed explicitly.
+Rcpp::List ph_beta_mode_var_cpp(const arma::ivec& E_C, const arma::vec& PT_C, const arma::ivec& E_T, const arma::vec& PT_T,
+                                const arma::vec& alpha_prior, const arma::vec& beta_prior, double mu, double sigma,
+                                double tol, int max_iter);
 
 namespace {
 
@@ -97,6 +105,15 @@ struct Cfg {
   std::vector<double> futility_thr_interim, success_thr, futility_thr;
   double final_success_prob, final_futility_prob;
   bool collect_raw_n, return_variance;
+  // vs-reference path (step 4): mode "vsref", two arms, one reference, one experimental
+  bool vsref = false;
+  int ref_idx = -1, trt_idx = -1;                     // 0-based positions in arm_names
+  std::vector<double> vr_min_ev, vr_min_mfu, vr_min_pt, vr_max_pt;   // gates, {ctrl, trt} (SM:186-240)
+  int draws_vsref_interim = 0;                        // args$num_posterior_draws (IL:7)
+  double ph_mu = 0, ph_sigma = 1, ph_tol = 0;         // PH:113-114, PD:98-99
+  int ph_max_iter = 0;
+  double log_margin_interim = 0, log_eff_interim = 0, log_margin_final = 0, log_eff_final = 0;
+  double vr_fut_prob_interim = 0, vr_eff_prob_final = 0, vr_fut_prob_final = 0;
 };
 
 double num1(const Rcpp::List& cfg, const char* name) {
@@ -127,7 +144,15 @@ Cfg unpack(const Rcpp::List& cfg) {
   Cfg c;
   c.arm_names = cfg["arm_names"];
   c.n_arms = c.arm_names.size();
-  if (c.n_arms != 1) Rcpp::stop("simulate_chunk_cpp: only the single-arm configuration is supported (step 3)");
+  const std::string mode = cfg.containsElementNamed("mode") ? Rcpp::as<std::string>(cfg["mode"]) : std::string("hc");
+  if (mode == "vsref") {
+    c.vsref = true;
+    if (c.n_arms != 2) Rcpp::stop("simulate_chunk_cpp: the vs-reference configuration needs exactly two arms");
+  } else if (mode == "hc") {
+    if (c.n_arms != 1) Rcpp::stop("simulate_chunk_cpp: the single-arm configuration needs exactly one arm");
+  } else {
+    Rcpp::stop("simulate_chunk_cpp: unknown cfg$mode");
+  }
   c.mtpa = numv(cfg, "mtpa", c.n_arms);
   Rcpp::IntegerVector cap = cfg["capacity"];
   if (cap.size() != c.n_arms) Rcpp::stop("simulate_chunk_cpp: cfg$capacity has the wrong length");
@@ -151,8 +176,35 @@ Cfg unpack(const Rcpp::List& cfg) {
   c.rebalance_threshold = num1(cfg, "rebalance_threshold");
   c.prior_alpha = numv(cfg, "prior_alpha", c.K);
   c.prior_beta = numv(cfg, "prior_beta", c.K);
-  c.draws_interim = int1(cfg, "draws_interim");
   c.draws_final = int1(cfg, "draws_final");
+  c.collect_raw_n = lgl1(cfg, "collect_raw_n");
+  c.return_variance = lgl1(cfg, "return_variance");
+  if (c.vsref) {
+    c.ref_idx = int1(cfg, "ref_idx");
+    c.trt_idx = int1(cfg, "trt_idx");
+    if (c.ref_idx < 0 || c.ref_idx > 1 || c.trt_idx < 0 || c.trt_idx > 1 || c.ref_idx == c.trt_idx) {
+      Rcpp::stop("simulate_chunk_cpp: cfg$ref_idx and cfg$trt_idx must be the two distinct arm positions");
+    }
+    c.vr_min_ev = numv(cfg, "vr_min_ev", 2);
+    c.vr_min_mfu = numv(cfg, "vr_min_mfu", 2);
+    c.vr_min_pt = numv(cfg, "vr_min_pt", 2);
+    c.vr_max_pt = numv(cfg, "vr_max_pt", 2);
+    c.draws_vsref_interim = int1(cfg, "draws_vsref_interim");
+    if (c.draws_vsref_interim < 1 || c.draws_final < 1) Rcpp::stop("simulate_chunk_cpp: posterior draw counts must be >= 1");
+    c.ph_mu = num1(cfg, "ph_mu");
+    c.ph_sigma = num1(cfg, "ph_sigma");
+    c.ph_tol = num1(cfg, "ph_tol");
+    c.ph_max_iter = int1(cfg, "ph_max_iter");
+    c.log_margin_interim = num1(cfg, "log_margin_interim");
+    c.log_eff_interim = num1(cfg, "log_eff_interim");
+    c.log_margin_final = num1(cfg, "log_margin_final");
+    c.log_eff_final = num1(cfg, "log_eff_final");
+    c.vr_fut_prob_interim = num1(cfg, "vr_fut_prob_interim");
+    c.vr_eff_prob_final = num1(cfg, "vr_eff_prob_final");
+    c.vr_fut_prob_final = num1(cfg, "vr_fut_prob_final");
+    return c;
+  }
+  c.draws_interim = int1(cfg, "draws_interim");
   if (c.draws_interim < 1 || c.draws_final < 1) Rcpp::stop("simulate_chunk_cpp: posterior draw counts must be >= 1");
   c.min_pat = numv(cfg, "min_pat", c.n_arms);
   c.min_events = numv(cfg, "min_events", c.n_arms);
@@ -165,8 +217,6 @@ Cfg unpack(const Rcpp::List& cfg) {
   c.futility_thr = numv(cfg, "futility_thr", c.n_arms);
   c.final_success_prob = num1(cfg, "final_success_prob");
   c.final_futility_prob = num1(cfg, "final_futility_prob");
-  c.collect_raw_n = lgl1(cfg, "collect_raw_n");
-  c.return_variance = lgl1(cfg, "return_variance");
   return c;
 }
 
@@ -339,7 +389,168 @@ bool any_recruiting(const TrialState& st) {
   return false;
 }
 
+// ---- vs-reference path (step 4) -------------------------------------------------------------------------------------
+
+// calculate_median_survival_piecewise (PH:16-57) on one hazard vector. It draws nothing. Its value is not read on the
+// supported (PH) path, but R evaluates it for every sample, and its if() conditions error on NaN ("missing value where
+// TRUE/FALSE needed"), so the port evaluates it too and stops where R would stop.
+double median_piecewise_r(const double* lam, const std::vector<double>& lens) {
+  const int K = (int) lens.size();
+  const double log2 = std::log(2.0);
+  double cum = 0.0, t = 0.0;
+  for (int k = 0; k < K; k++) {
+    const double lj = lam[k], dt = lens[k];
+    const double cend = cum + (lj * dt);
+    if (ISNAN(cend)) Rcpp::stop("missing value where TRUE/FALSE needed (piecewise median)");
+    if (cend >= log2) {
+      if (lj == 0) return t;
+      return t + (log2 - cum) / lj;
+    }
+    cum = cend;
+    t = t + dt;
+  }
+  const double last = lam[K - 1];
+  if (ISNAN(last)) Rcpp::stop("missing value where TRUE/FALSE needed (piecewise median)");
+  if (last > 0) return t + (log2 - cum) / last;
+  return R_PosInf;
+}
+
+struct PhScratch {
+  std::vector<double> logHR, shapes, lam, lamT, medC, medT;
+};
+
+// sample_vs_ref_medians_ph (PH:105-135, the live definition; PD:241-271 is shadowed, inventory 6.2) on raw slice vectors.
+// ph_beta_mode_var (PD:98-118) with EVOLVETRIAL_USE_CPP TRUE: ph_beta_mode_var_cpp(as.integer(E_C), as.numeric(PT_C),
+// as.integer(E_T), as.numeric(PT_T), as.numeric(alpha), as.numeric(beta), mu, sigma, tol, as.integer(max_iter)).
+// Then rnorm(n, mean, sd): n draws R::rnorm(mean, sd) in index order (R's C_rnorm calls the same rnorm(mu, sigma) per
+// element). Then per sample, in order: exp(beta_i); rates <- (beta_prior + PT_C) + exp_beta * PT_T; rgamma(K, shapes,
+// rate = rates), which is .Call(C_rgamma, K, shapes, scale = 1 / rates), so K draws R::rgamma(shape_k, 1 / rate_k) in
+// interval order; then the two medians (no draws). keep_medians stores them (the unit-test hook); otherwise they are
+// evaluated for their error conditions only.
+void ph_sample_core(const int* EC, const double* PTC, const int* ET, const double* PTT, const std::vector<double>& alpha,
+                    const std::vector<double>& bprior, const std::vector<double>& lens, double mu, double sigma,
+                    double tol, int max_iter, int n, bool keep_medians, PhScratch& ph) {
+  const int K = (int) alpha.size();
+  arma::ivec aEC(K), aET(K);
+  arma::vec aPTC(K), aPTT(K);
+  for (int k = 0; k < K; k++) {
+    aEC(k) = EC[k];
+    aET(k) = ET[k];
+    aPTC(k) = PTC[k];
+    aPTT(k) = PTT[k];
+  }
+  arma::vec aA(alpha), aB(bprior);
+  Rcpp::List bp = ph_beta_mode_var_cpp(aEC, aPTC, aET, aPTT, aA, aB, mu, sigma, tol, max_iter);
+  const double bmean = Rcpp::as<double>(bp["mean"]);
+  const double bsd = Rcpp::as<double>(bp["sd"]);
+
+  ph.logHR.resize(n);
+  for (int i = 0; i < n; i++) ph.logHR[i] = R::rnorm(bmean, bsd);
+
+  ph.shapes.resize(K);
+  for (int k = 0; k < K; k++) ph.shapes[k] = (alpha[k] + (double) EC[k]) + (double) ET[k];   // alpha_prior + E_C + E_T
+  ph.lam.resize(K);
+  ph.lamT.resize(K);
+  if (keep_medians) {
+    ph.medC.assign(n, 0.0);
+    ph.medT.assign(n, 0.0);
+  }
+  for (int i = 0; i < n; i++) {
+    const double eb = std::exp(ph.logHR[i]);
+    for (int k = 0; k < K; k++) {
+      const double rate = (bprior[k] + PTC[k]) + eb * PTT[k];
+      const double scale = 1 / rate;
+      ph.lam[k] = R::rgamma(ph.shapes[k], scale);
+    }
+    for (int k = 0; k < K; k++) ph.lamT[k] = ph.lam[k] * eb;   // lambda * exp_beta
+    const double mc = median_piecewise_r(ph.lam.data(), lens);
+    const double mt = median_piecewise_r(ph.lamT.data(), lens);
+    if (keep_medians) {
+      ph.medC[i] = mc;
+      ph.medT[i] = mt;
+    }
+  }
+}
+
+void ph_sample(const Cfg& c, const Slice& sC, const Slice& sT, const std::vector<double>& lens, int n, PhScratch& ph) {
+  ph_sample_core(sC.events.data(), sC.pt.data(), sT.events.data(), sT.pt.data(), c.prior_alpha, c.prior_beta, lens,
+                 c.ph_mu, c.ph_sigma, c.ph_tol, c.ph_max_iter, n, false, ph);
+}
+
+// mean(logHR < thr) (lt = true) or mean(logHR >= thr) (lt = false), inventory 4.37: NA if any comparison is NA.
+double logical_mean(const std::vector<double>& x, double thr, bool lt) {
+  int count = 0;
+  for (double v : x) {
+    if (std::isnan(v)) return NA_REAL;
+    if (lt ? (v < thr) : (v >= thr)) count++;
+  }
+  return evt_rsem::mean_logical(count, (R_xlen_t) x.size());
+}
+
+// gates_pass_for_both_arms (SM:153-258) with the thresholds resolved in R once per frame (cfg$vr_*: {ctrl, trt}).
+bool gates_pass_vsref(const Cfg& c, const Slice& sC, const Slice& sT) {
+  const double evC = (double) sC.events_total, evT = (double) sT.events_total;   // coalesce_num(events_total, 0)
+  const double mfuC = sC.median_fu, mfuT = sT.median_fu;                         // median_followup (0 when no rows)
+  const double ptC = sC.pt_total, ptT = sT.pt_total;                             // person_time_total
+  const double maxPT_C = c.vr_max_pt[0], maxPT_T = c.vr_max_pt[1];
+  const double fracC = (maxPT_C > 0) ? ptC / maxPT_C : 0;
+  const double fracT = (maxPT_T > 0) ? ptT / maxPT_T : 0;
+  const bool passC = (evC >= c.vr_min_ev[0]) && (mfuC >= c.vr_min_mfu[0]) && (fracC >= c.vr_min_pt[0]);
+  const bool passT = (evT >= c.vr_min_ev[1]) && (mfuT >= c.vr_min_mfu[1]) && (fracT >= c.vr_min_pt[1]);
+  return passC && passT;
+}
+
+// interim_check_vs_ref (IL:84-169) on the supported set: one experimental arm, PH model, no target override, interim
+// efficacy stopping off (so pr_eff, IL:30, is computed by R but never read: IL:147 short-circuits on the rule).
+void interim_vsref(const Cfg& c, TrialState& st, double cal, const std::vector<double>& cut,
+                   const std::vector<double>& lens, Slice& sC, Slice& sT, PhScratch& ph) {
+  const int r = c.ref_idx, t = c.trt_idx;
+  if (st.status[t] != RECRUITING) return;                                       // IL:96-103
+  slice_arm(st.reg[r], cal, c.max_follow_up_sim, cut, c.K, sC);                 // IL:111-112
+  // IL:116-119: the control-cache precompute is for the independent model only (not reached, V2)
+  slice_arm(st.reg[t], cal, c.max_follow_up_sim, cut, c.K, sT);                 // IL:124-125
+  if (!gates_pass_vsref(c, sC, sT)) return;                                     // IL:127-133
+  ph_sample(c, sC, sT, lens, c.draws_vsref_interim, ph);                        // IL:3-9, PH:93-135
+  const double pr_fut = logical_mean(ph.logHR, c.log_margin_interim, false);    // IL:31
+  if (ISNAN(pr_fut)) Rcpp::stop("missing value where TRUE/FALSE needed (interim vs-ref futility probability is NA)");
+  if (pr_fut >= c.vr_fut_prob_interim) {                                        // IL:158-166
+    st.status[t] = STOPPED_FUTILITY;
+    st.stop_fut[t] = 1;
+    st.final_n_cur[t] = st.enrolled[t];
+    st.stop_time[t] = cal;
+  }
+}
+
+// the experimental arm is recruiting and below its cap (SD:562-566, SD:641-644, by name; names(mtpa) == arm_names)
+bool trt_can_enroll(const Cfg& c, const TrialState& st) {
+  const int t = c.trt_idx;
+  return st.status[t] == RECRUITING && (double) st.enrolled[t] < c.mtpa[t];
+}
+
 }  // namespace
+
+// [[Rcpp::export(name = ".chunk_ph_sample")]]
+Rcpp::List chunk_ph_sample(Rcpp::IntegerVector E_C, Rcpp::NumericVector PT_C, Rcpp::IntegerVector E_T,
+                           Rcpp::NumericVector PT_T, Rcpp::NumericVector alpha, Rcpp::NumericVector beta,
+                           Rcpp::NumericVector interval_lengths, double mu, double sigma, double tol, int max_iter,
+                           int num_samples) {
+  // Test hook for the PH sampler port (plan P5, P15, P16): the same draws, in the same order, as
+  // sample_vs_ref_medians_ph (PH:105-135). Returns list(medCtrl, medTrt, logHR) like the R function.
+  const int K = alpha.size();
+  if (E_C.size() != K || PT_C.size() != K || E_T.size() != K || PT_T.size() != K || beta.size() != K ||
+      interval_lengths.size() != K) {
+    Rcpp::stop(".chunk_ph_sample: all vectors must have the same length");
+  }
+  PhScratch ph;
+  std::vector<double> a(alpha.begin(), alpha.end()), b(beta.begin(), beta.end());
+  std::vector<double> il(interval_lengths.begin(), interval_lengths.end());
+  std::vector<double> ptc(PT_C.begin(), PT_C.end()), ptt(PT_T.begin(), PT_T.end());
+  std::vector<int> ec(E_C.begin(), E_C.end()), et(E_T.begin(), E_T.end());
+  ph_sample_core(ec.data(), ptc.data(), et.data(), ptt.data(), a, b, il, mu, sigma, tol, max_iter, num_samples, true, ph);
+  return Rcpp::List::create(Rcpp::Named("medCtrl") = Rcpp::NumericVector(ph.medC.begin(), ph.medC.end()),
+                            Rcpp::Named("medTrt") = Rcpp::NumericVector(ph.medT.begin(), ph.medT.end()),
+                            Rcpp::Named("logHR") = Rcpp::NumericVector(ph.logHR.begin(), ph.logHR.end()));
+}
 
 // [[Rcpp::export(name = ".chunk_sample_one")]]
 int chunk_sample_one(Rcpp::NumericVector prob) {
@@ -374,7 +585,8 @@ Rcpp::List simulate_chunk_cpp(Rcpp::IntegerVector sim_indices, Rcpp::List cfg) {
   }
 
   TrialState st;
-  Slice sl;
+  Slice sl, sl_ref, sl_trt;
+  PhScratch ph;
   std::vector<double> cut, lens, ev_times;
   std::vector<double> final_n(A), final_ev(A);
   std::vector<int> final_eff(A), final_fut(A), final_inc(A);
@@ -406,7 +618,12 @@ Rcpp::List simulate_chunk_cpp(Rcpp::IntegerVector sim_indices, Rcpp::List cfg) {
         current_time = last_enroll_time;
         break;
       }
-      // SD:561-570 is the vs-reference phantom-arrival rule: compare_arms_option is FALSE here.
+      // SD:561-570 (looks_stop_at_final, vs-reference): an arrival that would end the loop through the vs-reference
+      // break below enrolls nobody and fires no rebalancing and no look
+      if (c.vsref && !trt_can_enroll(c, st)) {
+        current_time = last_enroll_time;
+        break;
+      }
 
       // SD:572-603: rebalancing check on every arrival until done
       if (!rebalance_done) {
@@ -440,7 +657,8 @@ Rcpp::List simulate_chunk_cpp(Rcpp::IntegerVector sim_indices, Rcpp::List cfg) {
 
       // SD:628-633: calendar-beat look (pt_targets_abs is NULL in the supported set)
       if (current_time >= next_calendar_look) {
-        interim_hc(c, st, current_time, cut, lens, sl);
+        if (c.vsref) interim_vsref(c, st, current_time, cut, lens, sl_ref, sl_trt, ph);
+        else interim_hc(c, st, current_time, cut, lens, sl);
         next_calendar_look = next_calendar_look + c.beat;
       }
 
@@ -449,7 +667,7 @@ Rcpp::List simulate_chunk_cpp(Rcpp::IntegerVector sim_indices, Rcpp::List cfg) {
       for (int a = 0; a < A; a++)
         if (st.status[a] == RECRUITING && (double) st.enrolled[a] < c.mtpa[a]) elig.push_back(a);
       if (elig.empty()) break;
-      // SD:640-646 is the vs-reference break: compare_arms_option is FALSE here.
+      if (c.vsref && !trt_can_enroll(c, st)) break;                     // SD:640-646 (current_time not reset, 6.12)
 
       // SD:648-652: probs <- randomization_probs[elig_arms]; probs <- probs / sum(probs); sample(elig_arms, 1, prob = probs)
       std::vector<double> probs(elig.size());
@@ -484,7 +702,8 @@ Rcpp::List simulate_chunk_cpp(Rcpp::IntegerVector sim_indices, Rcpp::List cfg) {
       post_enroll_time = post_enroll_time + c.beat;                    // repeated addition (inventory 4.41, plan P17)
       if (post_enroll_time >= t_star) break;
       if (post_enroll_time <= current_time) continue;
-      interim_hc(c, st, post_enroll_time, cut, lens, sl);
+      if (c.vsref) interim_vsref(c, st, post_enroll_time, cut, lens, sl_ref, sl_trt, ph);
+      else interim_hc(c, st, post_enroll_time, cut, lens, sl);
     }
 
     // ---- final analysis time (SD:722-730) ----
@@ -504,11 +723,35 @@ Rcpp::List simulate_chunk_cpp(Rcpp::IntegerVector sim_indices, Rcpp::List cfg) {
       final_time = std::min(last_enroll_time + c.min_follow_up_at_final, c.max_trial_time);
     }
 
-    // ---- final HC analysis (SD:744-793) ----
     std::fill(final_eff.begin(), final_eff.end(), 0);
     std::fill(final_fut.begin(), final_fut.end(), 0);
     std::fill(final_inc.begin(), final_inc.end(), 0);
-    for (int a = 0; a < A; a++) {
+    if (c.vsref) {
+      // ---- final vs-reference analysis (SD:736-742, 744-756, 794-833), PH branch ----
+      slice_arm(st.reg[c.ref_idx], final_time, c.max_follow_up_sim, cut, K, sl_ref);   // ref_slice_final
+      for (int a = 0; a < A; a++) {
+        slice_arm(st.reg[a], final_time, c.max_follow_up_sim, cut, K, sl);            // arm slice (or SD:845-853)
+        final_ev[a] = (double) sl.events_total;
+        if (st.status[a] != RECRUITING) continue;
+        if (a == c.ref_idx) {
+          final_inc[a] = 1;                                                            // SD:795-796
+          continue;
+        }
+        ph_sample(c, sl_ref, sl, lens, c.draws_final, ph);                            // SD:798-803
+        const double p_eff = logical_mean(ph.logHR, c.log_eff_final, true);           // SD:816
+        const double p_fut = logical_mean(ph.logHR, c.log_margin_final, false);       // SD:817
+        if (ISNAN(p_eff)) Rcpp::stop("missing value where TRUE/FALSE needed (final vs-ref efficacy probability is NA)");
+        if (p_eff >= c.vr_eff_prob_final) {
+          final_eff[a] = 1;
+        } else {
+          if (ISNAN(p_fut)) Rcpp::stop("missing value where TRUE/FALSE needed (final vs-ref futility probability is NA)");
+          if (p_fut >= c.vr_fut_prob_final) final_fut[a] = 1;
+          else final_inc[a] = 1;
+        }
+      }
+    }
+    // ---- final HC analysis (SD:744-793) ----
+    for (int a = 0; a < A && !c.vsref; a++) {
       if (st.status[a] != RECRUITING) {
         slice_arm(st.reg[a], final_time, c.max_follow_up_sim, cut, K, sl);   // SD:845-853, re-sliced for events
         final_ev[a] = (double) sl.events_total;

@@ -172,7 +172,9 @@ test_that("each violated predicate item sends the dispatcher to the R body and m
   expect_identical(dispatch_hits(e), c(cpp = 0L, r = 1L))
 })
 
-test_that("an unsupported frame (between-arm) packs without error and falls back", {
+# Step 4: between-arm frames are now checked against the vs-ref items. This frame leaves compare_arms_hr_margin at its
+# NULL default, so it fails item V6 (it failed item 1 in step 3) and must still fall back.
+test_that("an unsupported between-arm frame (no HR margin) packs without error and falls back", {
   rsp <- ns("run_simulation_pure")
   old <- options(evolveTrial.chunk_probe = function(env) env, evolveTrial.looks_stop_at_final = TRUE)
   on.exit(options(old), add = TRUE)
@@ -185,7 +187,7 @@ test_that("an unsupported frame (between-arm) packs without error and falls back
              randomization_probs = c(Doublet = 0.5, Triplet = 0.5), max_trial_time = 72, use_ph_model_vs_ref = TRUE,
              efficacy_threshold_vs_ref_prob = 0.95, futility_threshold_vs_ref_prob = 0.4, rebalance_after_events = 50)
   expect_false(isTRUE(env$cfg$supported))
-  expect_true(any(grepl("^1 ", env$cfg$violations)))
+  expect_true(any(grepl("^V6 ", env$cfg$violations)))
   expect_error(env$simulate_chunk_cpp(1:2, seed = 3L), "outside the supported set")
   a <- env$simulate_chunk(1:4, seed = 3L); ra <- rng_now()
   b <- env$simulate_chunk_r(1:4, seed = 3L); rb <- rng_now()

@@ -356,6 +356,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// chunk_ph_sample
+Rcpp::List chunk_ph_sample(Rcpp::IntegerVector E_C, Rcpp::NumericVector PT_C, Rcpp::IntegerVector E_T, Rcpp::NumericVector PT_T, Rcpp::NumericVector alpha, Rcpp::NumericVector beta, Rcpp::NumericVector interval_lengths, double mu, double sigma, double tol, int max_iter, int num_samples);
+RcppExport SEXP _evolveTrial_chunk_ph_sample(SEXP E_CSEXP, SEXP PT_CSEXP, SEXP E_TSEXP, SEXP PT_TSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP interval_lengthsSEXP, SEXP muSEXP, SEXP sigmaSEXP, SEXP tolSEXP, SEXP max_iterSEXP, SEXP num_samplesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type E_C(E_CSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type PT_C(PT_CSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type E_T(E_TSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type PT_T(PT_TSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type interval_lengths(interval_lengthsSEXP);
+    Rcpp::traits::input_parameter< double >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type num_samples(num_samplesSEXP);
+    rcpp_result_gen = Rcpp::wrap(chunk_ph_sample(E_C, PT_C, E_T, PT_T, alpha, beta, interval_lengths, mu, sigma, tol, max_iter, num_samples));
+    return rcpp_result_gen;
+END_RCPP
+}
 // chunk_sample_one
 int chunk_sample_one(Rcpp::NumericVector prob);
 RcppExport SEXP _evolveTrial_chunk_sample_one(SEXP probSEXP) {
@@ -427,6 +449,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_evolveTrial_rsem_mean_logical", (DL_FUNC) &_evolveTrial_rsem_mean_logical, 2},
     {"_evolveTrial_rsem_seq_probs", (DL_FUNC) &_evolveTrial_rsem_seq_probs, 1},
     {"_evolveTrial_rsem_rebalance_cutpoints", (DL_FUNC) &_evolveTrial_rsem_rebalance_cutpoints, 3},
+    {"_evolveTrial_chunk_ph_sample", (DL_FUNC) &_evolveTrial_chunk_ph_sample, 12},
     {"_evolveTrial_chunk_sample_one", (DL_FUNC) &_evolveTrial_chunk_sample_one, 1},
     {"_evolveTrial_simulate_chunk_cpp", (DL_FUNC) &_evolveTrial_simulate_chunk_cpp, 2},
     {"_evolveTrial_test_rcpp_sum", (DL_FUNC) &_evolveTrial_test_rcpp_sum, 1},

@@ -284,6 +284,10 @@ rsem_rebalance_cutpoints <- function(event_times, max_follow_up, num_intervals) 
     .Call(`_evolveTrial_rsem_rebalance_cutpoints`, event_times, max_follow_up, num_intervals)
 }
 
+.chunk_ph_sample <- function(E_C, PT_C, E_T, PT_T, alpha, beta, interval_lengths, mu, sigma, tol, max_iter, num_samples) {
+    .Call(`_evolveTrial_chunk_ph_sample`, E_C, PT_C, E_T, PT_T, alpha, beta, interval_lengths, mu, sigma, tol, max_iter, num_samples)
+}
+
 .chunk_sample_one <- function(prob) {
     .Call(`_evolveTrial_chunk_sample_one`, prob)
 }
