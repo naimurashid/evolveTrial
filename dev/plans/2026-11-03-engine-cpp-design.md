@@ -145,3 +145,20 @@ Risks.
   constraint. It is a measurement setting. If it stays finite after phase 2, it belongs with R as a fidelity
   setting (low in search, high at certification).
 - BoTorch or GPyTorch are not pursued for speed, because the surrogate is 2 to 4% of wall time.
+
+## 6. Future extensions (PI 2026-11-03, keep in mind, not scheduled)
+
+These apply only once differences from the engine of record are allowed, and each needs the phase 2
+statistical gate.
+
+- **Faster generator family.** A counter-based or xoshiro stream with a ziggurat normal and Marsaglia-Tsang
+  gammas, in place of R's Mersenne Twister and its gamma method. Estimated 3 to 5x on the draw portion only.
+  It is a fallback for any path that still samples after exact integration, since integration removes the
+  draws altogether.
+- **The dead C++ hazard-ratio sampler** (`sample_vs_ref_medians_ph_cpp`, `arma::randn`). Its 2.5x speed-up
+  came from compiled code, not from its normal generator, so phase 1 already captures that gain. The R23
+  power shift it showed (0.79 to 0.75 at R = 300) is within noise for a difference of two runs on different
+  streams (standard error about 0.033), but that is not evidence of equivalence. It has never been tested
+  against the live R sampler.
+- **Posterior draw count as a fidelity setting.** If any finite draw count survives phase 2, it sits with R
+  (low in search, high at certification), never as a searched design coordinate.
