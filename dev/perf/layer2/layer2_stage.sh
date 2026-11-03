@@ -15,7 +15,9 @@ H=longleaf.unc.edu; AL=${AL_LOCAL:-$HOME/Downloads/atbo-longleaf}
   { echo "layer 2 files are uncommitted or differ from HEAD: commit first" >&2; exit 2; }
 [ "$(md5sum < dev/perf/evidence/acceptance_set_reference_rows.csv | cut -c1-32)" = "$L2_REF_ROWS_MD5" ] || { echo "reference rows md5 != env" >&2; exit 2; }
 [ "$(md5sum < dev/perf/layer2/layer2_cert.R | cut -c1-32)" = "$L2_CERT_MD5" ] || { echo "layer2_cert.R md5 != env" >&2; exit 2; }
-ssh -o BatchMode=yes "$H" "[ ! -e '$L2_LIB/evolveTrial' ]" || { echo "refusing: $L2_LIB/evolveTrial exists on Longleaf" >&2; exit 2; }
+ssh -o BatchMode=yes -o ConnectTimeout=20 "$H" true || { echo "cannot reach $H by ssh (VPN?)" >&2; exit 2; }
+ssh -o BatchMode=yes "$H" "[ ! -e '$L2_LIB/evolveTrial' ] && [ ! -e '$L2_TREE' ]" ||
+  { echo "refusing: $L2_LIB/evolveTrial or $L2_TREE exists on Longleaf" >&2; exit 2; }
 ALF=(pilot/retune/R/retune_run.R pilot/retune2a/R/retune2a_run.R pilot/p6recert/R/p6r_protocol.R pilot/verify/R/verify_m4_switch.R
      results/retune_t1/cert_design.csv results/retune_t2a/cert_design.csv)
 mapfile -t STG < <(cd "$AL" && find pilot/retune/staged pilot/retune2a/staged -type f | sort)
