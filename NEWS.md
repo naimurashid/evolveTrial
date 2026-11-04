@@ -58,6 +58,45 @@ the `Var_` proportion variances clamp p to [0, 1]. The old form gave -1.1e-16
 at 7 + 93 early stops in 100 trials, so `Var_Pr_Reach_Max_N` was negative.
 Every engine shares this summary. Values move by at most about 1e-16.
 
+## Engine coverage at the close of phase 3 (2026-11-04)
+
+Phase 3 of the engine speed-up stops after P3-2. The fast engines (the exact
+engine by default, the draw-based `"cpp"` engine on request) now run:
+
+* the single-arm design against a historical control (one arm), and the
+  between-arm design with one reference and one experimental arm under the PH
+  model;
+* both timing rules (`looks_stop_at_final` TRUE and FALSE), random dropout,
+  `max_trial_time = Inf`, no rebalancing, the median-threshold fallbacks and a
+  `NULL` interim futility threshold, so a call with every option unset is fast;
+* interim futility and efficacy stopping, and the `current`, `symmetric` and
+  `no_margin` hazard-ratio margin variants.
+
+Every other configuration runs the R body, as before. Results stay correct
+there, and only the speed differs. These are candidates for a future speed-up,
+with the inventory item numbers of
+`dev/plans/2026-11-04-phase3-coverage-inventory.md`:
+
+* hybrid and seamless designs (`compute_hybrid_oc_cpp()`), the one candidate
+  with production callers, the largest payoff and the most work
+  (`dev/plans/2026-11-04-hybrid-seamless-speedup-note.md`);
+* the binary-endpoint simulator (not yet inventoried);
+* the independent-arms between-arm model, `use_ph_model_vs_ref = FALSE` (V2),
+  which needs a new exact tail;
+* several arms each against a historical control (2), more than one
+  experimental arm against the reference (V3), and person-time milestones (5);
+* input shapes: an unnamed or positional `max_total_patients_per_arm` (3, V4),
+  named or positional between-arm gate vectors (V9), and a binding person-time
+  fraction gate (13a);
+* the progress display when `parallel_replicates = FALSE` in an interactive
+  session (12).
+
+A future step that compares a fast engine with the R body on designs whose
+thresholds sit in a tail (such as an efficacy threshold of 0.95 checked at
+several looks) should compare against a high-draw R body. At the usual draw
+counts, Monte Carlo noise in the R body itself shifts type I error by a few
+thousandths (P3-2 report, Section 6).
+
 # evolveTrial 0.0.0.9004
 
 ## Fast engines cover the default single-arm call (phase 3, step P3-1)
