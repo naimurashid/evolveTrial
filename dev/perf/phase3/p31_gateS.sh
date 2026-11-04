@@ -2,7 +2,7 @@
 # P3-1 gate S driver: fresh R-body runs (4 FORK workers each, 4 runs at a time) and exact-engine runs, nice'd, then the
 # comparison. Seeds 3120xxx (R body) and 3121xxx (exact) are not used anywhere else in dev/perf.
 cd ~/research/evolveTrial-merge
-LIB=dev/perf/lib/p31_dev; OUT=dev/perf/phase3/p31_gateS
+LIB=dev/perf/lib/p31_dev; OUT=dev/perf/phase3/p31_gateS; mkdir -p $OUT
 jobs() {
   # frame  r_seeds(first count)  r_n  exact_first exact_count exact_n
   echo "B16_R01_unset_thr 3120011 4 5000 3121011 4 50000"
