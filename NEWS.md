@@ -72,15 +72,18 @@ engine by default, the draw-based `"cpp"` engine on request) now run:
 * interim futility and efficacy stopping, and the `current`, `symmetric` and
   `no_margin` hazard-ratio margin variants.
 
-Every other configuration runs the R body, as before. Results stay correct
-there, and only the speed differs. These are candidates for a future speed-up,
-with the inventory item numbers of
+Two other paths have their own engines and were not changed. Hybrid and
+seamless designs run the draw-based C++ engine `compute_hybrid_oc_cpp()`. An
+exact posterior there is the one candidate with production callers, the
+largest payoff and the most work
+(`dev/plans/2026-11-04-hybrid-seamless-speedup-note.md`). The binary-endpoint
+simulator is not yet inventoried.
+
+Every other configuration of `run_simulation_pure()` runs the R body, as
+before. Results stay correct there, and only the speed differs. These are
+candidates for a future speed-up, with the inventory item numbers of
 `dev/plans/2026-11-04-phase3-coverage-inventory.md`:
 
-* hybrid and seamless designs (`compute_hybrid_oc_cpp()`), the one candidate
-  with production callers, the largest payoff and the most work
-  (`dev/plans/2026-11-04-hybrid-seamless-speedup-note.md`);
-* the binary-endpoint simulator (not yet inventoried);
 * the independent-arms between-arm model, `use_ph_model_vs_ref = FALSE` (V2),
   which needs a new exact tail;
 * several arms each against a historical control (2), more than one
