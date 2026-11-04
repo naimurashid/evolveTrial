@@ -53,6 +53,96 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// exact_gamma_sum_tail
+Rcpp::List exact_gamma_sum_tail(Rcpp::NumericVector shape, Rcpp::NumericVector scale, double c);
+RcppExport SEXP _evolveTrial_exact_gamma_sum_tail(SEXP shapeSEXP, SEXP scaleSEXP, SEXP cSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type shape(shapeSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type scale(scaleSEXP);
+    Rcpp::traits::input_parameter< double >::type c(cSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_gamma_sum_tail(shape, scale, c));
+    return rcpp_result_gen;
+END_RCPP
+}
+// exact_pr_median
+Rcpp::List exact_pr_median(Rcpp::IntegerVector E, Rcpp::NumericVector PT, Rcpp::NumericVector alpha, Rcpp::NumericVector beta, Rcpp::NumericVector lens, double thr);
+RcppExport SEXP _evolveTrial_exact_pr_median(SEXP ESEXP, SEXP PTSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP lensSEXP, SEXP thrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type E(ESEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type PT(PTSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type lens(lensSEXP);
+    Rcpp::traits::input_parameter< double >::type thr(thrSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_pr_median(E, PT, alpha, beta, lens, thr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// exact_pr_median_below
+Rcpp::NumericVector exact_pr_median_below(Rcpp::IntegerVector E, Rcpp::NumericVector PT, Rcpp::NumericVector alpha, Rcpp::NumericVector beta, Rcpp::NumericVector lens, Rcpp::NumericVector thr);
+RcppExport SEXP _evolveTrial_exact_pr_median_below(SEXP ESEXP, SEXP PTSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP lensSEXP, SEXP thrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type E(ESEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type PT(PTSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type lens(lensSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type thr(thrSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_pr_median_below(E, PT, alpha, beta, lens, thr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// exact_pr_median_above
+Rcpp::NumericVector exact_pr_median_above(Rcpp::IntegerVector E, Rcpp::NumericVector PT, Rcpp::NumericVector alpha, Rcpp::NumericVector beta, Rcpp::NumericVector lens, Rcpp::NumericVector thr);
+RcppExport SEXP _evolveTrial_exact_pr_median_above(SEXP ESEXP, SEXP PTSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP lensSEXP, SEXP thrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type E(ESEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type PT(PTSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type lens(lensSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type thr(thrSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_pr_median_above(E, PT, alpha, beta, lens, thr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// exact_loghr_probs
+Rcpp::NumericMatrix exact_loghr_probs(double bmean, double bsd, Rcpp::NumericVector m);
+RcppExport SEXP _evolveTrial_exact_loghr_probs(SEXP bmeanSEXP, SEXP bsdSEXP, SEXP mSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< double >::type bmean(bmeanSEXP);
+    Rcpp::traits::input_parameter< double >::type bsd(bsdSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type m(mSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_loghr_probs(bmean, bsd, m));
+    return rcpp_result_gen;
+END_RCPP
+}
+// exact_pr_loghr
+Rcpp::List exact_pr_loghr(Rcpp::IntegerVector E_C, Rcpp::NumericVector PT_C, Rcpp::IntegerVector E_T, Rcpp::NumericVector PT_T, Rcpp::NumericVector alpha, Rcpp::NumericVector beta, Rcpp::NumericVector interval_lengths, double mu, double sigma, double tol, int max_iter, Rcpp::NumericVector margins);
+RcppExport SEXP _evolveTrial_exact_pr_loghr(SEXP E_CSEXP, SEXP PT_CSEXP, SEXP E_TSEXP, SEXP PT_TSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP interval_lengthsSEXP, SEXP muSEXP, SEXP sigmaSEXP, SEXP tolSEXP, SEXP max_iterSEXP, SEXP marginsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type E_C(E_CSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type PT_C(PT_CSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type E_T(E_TSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type PT_T(PT_TSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type interval_lengths(interval_lengthsSEXP);
+    Rcpp::traits::input_parameter< double >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type margins(marginsSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_pr_loghr(E_C, PT_C, E_T, PT_T, alpha, beta, interval_lengths, mu, sigma, tol, max_iter, margins));
+    return rcpp_result_gen;
+END_RCPP
+}
 // draw_posterior_hazard_samples_cpp
 arma::mat draw_posterior_hazard_samples_cpp(int num_intervals, const arma::ivec& events_per_interval, const arma::vec& person_time_per_interval, const arma::vec& prior_alpha_params, const arma::vec& prior_beta_params, int num_samples);
 RcppExport SEXP _evolveTrial_draw_posterior_hazard_samples_cpp(SEXP num_intervalsSEXP, SEXP events_per_intervalSEXP, SEXP person_time_per_intervalSEXP, SEXP prior_alpha_paramsSEXP, SEXP prior_beta_paramsSEXP, SEXP num_samplesSEXP) {
@@ -428,6 +518,12 @@ static const R_CallMethodDef CallEntries[] = {
     {"_evolveTrial_simulate_hybrid_trial_cpp", (DL_FUNC) &_evolveTrial_simulate_hybrid_trial_cpp, 3},
     {"_evolveTrial_run_hybrid_simulations_cpp", (DL_FUNC) &_evolveTrial_run_hybrid_simulations_cpp, 4},
     {"_evolveTrial_compute_hybrid_oc_cpp", (DL_FUNC) &_evolveTrial_compute_hybrid_oc_cpp, 5},
+    {"_evolveTrial_exact_gamma_sum_tail", (DL_FUNC) &_evolveTrial_exact_gamma_sum_tail, 3},
+    {"_evolveTrial_exact_pr_median", (DL_FUNC) &_evolveTrial_exact_pr_median, 6},
+    {"_evolveTrial_exact_pr_median_below", (DL_FUNC) &_evolveTrial_exact_pr_median_below, 6},
+    {"_evolveTrial_exact_pr_median_above", (DL_FUNC) &_evolveTrial_exact_pr_median_above, 6},
+    {"_evolveTrial_exact_loghr_probs", (DL_FUNC) &_evolveTrial_exact_loghr_probs, 3},
+    {"_evolveTrial_exact_pr_loghr", (DL_FUNC) &_evolveTrial_exact_pr_loghr, 12},
     {"_evolveTrial_draw_posterior_hazard_samples_cpp", (DL_FUNC) &_evolveTrial_draw_posterior_hazard_samples_cpp, 6},
     {"_evolveTrial_calculate_median_survival_piecewise_cpp", (DL_FUNC) &_evolveTrial_calculate_median_survival_piecewise_cpp, 2},
     {"_evolveTrial_calculate_median_survival_matrix_cpp", (DL_FUNC) &_evolveTrial_calculate_median_survival_matrix_cpp, 2},

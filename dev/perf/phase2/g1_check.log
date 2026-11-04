@@ -1,0 +1,45 @@
+single-arm cases: 2400  with a deterministic reference: 2264  contour cases: 2094  max contour err_est: 9.74e-13  max round_est: 2.7e-16  all converged: TRUE 
+                  check
+         ba_closed_form
+               ba_edges
+                  ba_mc
+ median_functions_agree
+        median_identity
+                 sa_det
+                 sa_det
+                 sa_det
+                  sa_mc
+             sa_weights
+                                                  reference rows cases_n_pos
+                                    pnorm on Laplace output    1            
+                                            rnorm semantics    1            
+                                                     mc_1e6  300            
+ median_piecewise_r vs calculate_median_survival_matrix_cpp    1            
+                                             phase1 medians    1            
+                                                  integrate  292         2-3
+                                               moschopoulos 1955         2-8
+                                                     pgamma  304         1-2
+                                                     mc_1e7  200         1-8
+                                                  R weights 2400         1-8
+ max_abs_err max_abs_z failed
+    0.00e+00        NA      0
+          NA        NA      0
+    1.20e-03      2.65      0
+    0.00e+00        NA      0
+    0.00e+00        NA      0
+    2.21e-14        NA      0
+    9.99e-14        NA      0
+    0.00e+00        NA      0
+    4.05e-04      2.86      0
+    0.00e+00        NA      0
+n_pos=1: det rows 298 (max err 0.00e+00), mc rows 10 (max |z| 2.00)
+n_pos=2: det rows 582 (max err 9.99e-14), mc rows 8 (max |z| 2.86)
+n_pos=3: det rows 286 (max err 9.82e-14), mc rows 27 (max |z| 2.36)
+n_pos=4: det rows 284 (max err 9.84e-14), mc rows 24 (max |z| 2.23)
+n_pos=5: det rows 280 (max err 2.65e-14), mc rows 28 (max |z| 2.56)
+n_pos=6: det rows 274 (max err 1.82e-14), mc rows 34 (max |z| 1.80)
+n_pos=7: det rows 278 (max err 1.73e-14), mc rows 30 (max |z| 2.37)
+n_pos=8: det rows 269 (max err 2.01e-14), mc rows 39 (max |z| 2.23)
+thr modes with a deterministic reference: at 855, beyond 862, inside 834 
+cases without a deterministic reference: 136 (covered by MC: 136 )
+G1 PASS  wall seconds 69 

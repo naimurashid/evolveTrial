@@ -37,6 +37,30 @@ compute_hybrid_oc_cpp <- function(n_sim, theta_list, base_args_list, scenario_pa
     .Call(`_evolveTrial_compute_hybrid_oc_cpp`, n_sim, theta_list, base_args_list, scenario_params_list, null_scenario_list)
 }
 
+.exact_gamma_sum_tail <- function(shape, scale, c) {
+    .Call(`_evolveTrial_exact_gamma_sum_tail`, shape, scale, c)
+}
+
+.exact_pr_median <- function(E, PT, alpha, beta, lens, thr) {
+    .Call(`_evolveTrial_exact_pr_median`, E, PT, alpha, beta, lens, thr)
+}
+
+.exact_pr_median_below <- function(E, PT, alpha, beta, lens, thr) {
+    .Call(`_evolveTrial_exact_pr_median_below`, E, PT, alpha, beta, lens, thr)
+}
+
+.exact_pr_median_above <- function(E, PT, alpha, beta, lens, thr) {
+    .Call(`_evolveTrial_exact_pr_median_above`, E, PT, alpha, beta, lens, thr)
+}
+
+.exact_loghr_probs <- function(bmean, bsd, m) {
+    .Call(`_evolveTrial_exact_loghr_probs`, bmean, bsd, m)
+}
+
+.exact_pr_loghr <- function(E_C, PT_C, E_T, PT_T, alpha, beta, interval_lengths, mu, sigma, tol, max_iter, margins) {
+    .Call(`_evolveTrial_exact_pr_loghr`, E_C, PT_C, E_T, PT_T, alpha, beta, interval_lengths, mu, sigma, tol, max_iter, margins)
+}
+
 #' Draw posterior hazard samples (C++ implementation)
 #'
 #' Draws samples from the posterior distribution of hazard rates for each interval
