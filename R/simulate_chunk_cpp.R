@@ -12,7 +12,9 @@
 # A frame is checked against the common items plus the HC items when compare_arms_option is not TRUE in the frame, and
 # against the common items plus the vs-ref items when it is (inventory dev/perf/evidence/chunk_body_inventory.md,
 # Section 2). The HC list is the step 3 list in the step 3 order. P3-1 (dev/plans/2026-11-04-p3-1-plan.md) relaxed items 4,
-# 6, 7, 8, 10 and 13c and renamed their labels to say what each now requires.
+# 6, 7, 8, 10 and 13c and renamed their labels to say what each now requires. P3-2 (dev/plans/2026-11-04-p3-2-plan.md)
+# relaxed items 9, V5 and V6 (interim efficacy stopping on both paths, the HR margins NULL or one finite number) and
+# item 10's interim condition (the success value is read when interim efficacy is on).
 
 # Items shared by both paths (step 3 items 4 to 8, 12, 13b and 13g; items 4, 6, 7 and 8 relaxed in P3-1). Item 11 (EVOLVETRIAL_USE_CPP) is read at dispatch
 # by .chunk_cpp_env_ok(). Item 13e has a path-specific form, see the two lists below.
@@ -98,24 +100,37 @@
       is.numeric(m) && identical(names(m), arm_names) && all(is.finite(m)) && all(m >= 0) &&
         identical(args$max_total_patients_per_arm, m)
     },
-    # 9. no interim efficacy stopping (2.53)
-    "9 efficacy_stopping_rule_hc not TRUE" = function() !isTRUE(args$efficacy_stopping_rule_hc) &&
-      !isTRUE(g("efficacy_stopping_rule_hc")),
+    # 9. interim efficacy stopping (2.53). P3-2: admitted. The R body reads the rule and the probability threshold from
+    #    args (IL:240-243): isTRUE(rule) && !is.null(thr) && is.finite(thr) && pr_eff >= thr. A threshold of length > 1
+    #    errors in `&&` and a non-numeric one has R's is.finite semantics (TRUE is finite), so with the rule TRUE the
+    #    threshold must be NULL or one number; NULL, NA, NaN or +-Inf never stop (packed as eff_interim FALSE, see
+    #    .chunk_cpp_eff_interim_hc). The success value the rule compares against is item 10's.
+    "9 efficacy_stopping_rule_hc not TRUE, or TRUE with efficacy_threshold_hc_prob NULL or one number" = function() {
+      rule <- isTRUE(args$efficacy_stopping_rule_hc)
+      thr <- args$efficacy_threshold_hc_prob
+      identical(rule, isTRUE(g("efficacy_stopping_rule_hc"))) &&
+        (!rule || is.null(thr) || (is.numeric(thr) && length(thr) == 1L))
+    },
     # 10. median thresholds (P3-1: the fallbacks are admitted).
     #     Final (SD:868-891): the frame's vector, NULL or numeric; an arm not in its names falls back to Inf (success) or
     #     -Inf (futility), and a non-finite value gives p = 0 (SD:876, 887). Any numeric value resolves.
     #     Interim (IL:57-61, from args; args has no median_pfs_futility_threshold_arms element): `vec[[arm]] %||% vec[1]`
     #     resolves only for a NULL vector or a numeric one whose names contain the arm (any other vector errors in
-    #     `[[`). The success value is never read (item 9). The futility value is read only when item 13c's probability
-    #     is set, and must then be finite.
+    #     `[[`). The futility value is read only when item 13c's probability is set, and must then be finite. P3-2: the
+    #     success value is read when interim efficacy is on (item 9, .chunk_cpp_eff_interim_hc); it must then resolve to
+    #     a number that is not NA (+-Inf allowed: mean(med > Inf) is 0 and mean(med > -Inf) is 1 in the R body). A NULL
+    #     vector gives mean(logical(0)) = NaN and an NA value gives NA, and the R body errors in if() (IL:240-243).
     "10 median thresholds resolve as in the R body" = function() {
       s <- g("median_pfs_success_threshold_arms"); f <- g("median_pfs_futility_threshold_arms")
       iv <- .chunk_cpp_interim_thresholds(args)
       null_or_num <- function(x) is.null(x) || is.numeric(x)
       resolves <- function(x) is.null(x) || (is.numeric(x) && !is.null(names(x)) && all(arm_names %in% names(x)))
       fut_used <- !is.null(args$futility_threshold_hc_prob)
+      eff_used <- .chunk_cpp_eff_interim_hc(args)
       null_or_num(s) && null_or_num(f) && resolves(iv$success) && resolves(iv$futility) &&
-        (!fut_used || named_finite_has_arm(iv$futility))
+        (!fut_used || named_finite_has_arm(iv$futility)) &&
+        (!eff_used || (is.numeric(iv$success) && !is.null(names(iv$success)) && all(arm_names %in% names(iv$success)) &&
+                         !anyNA(vapply(arm_names, function(arm) as.numeric(iv$success[[arm]]), numeric(1)))))
     },
     # 13. other single-arm branches the packed configuration can reach, pinned to the frozen branch or value
     "13a min_person_time_frac_per_arm is the frozen unnamed 0 (2.49)" = function() {
@@ -172,13 +187,17 @@
       is.numeric(m) && identical(names(m), arm_names) && all(is.finite(m)) && all(m >= 0) &&
         identical(args$max_total_patients_per_arm, m)
     },
-    # V5. no interim efficacy stopping (IL:147-149, 2.44)
-    "V5 efficacy_stopping_rule_vs_ref not TRUE" = function() {
-      !isTRUE(args$efficacy_stopping_rule_vs_ref) && !isTRUE(g("efficacy_stopping_rule_vs_ref"))
+    # V5. interim efficacy stopping (IL:147-149, 2.44). P3-2: admitted. The rule is read from args; the probability
+    #     threshold is one finite number by V7, so the rule TRUE always packs as eff_interim TRUE on this path.
+    "V5 efficacy_stopping_rule_vs_ref TRUE or not TRUE, the same in args and the frame" = function() {
+      identical(isTRUE(args$efficacy_stopping_rule_vs_ref), isTRUE(g("efficacy_stopping_rule_vs_ref")))
     },
-    # V6. futility HR margin set, efficacy HR margin NULL, both read through args (IL:13-28, SD:806-815) (2.30, 2.31, 2.43)
-    "V6 compare_arms_hr_margin one finite number, compare_arms_hr_eff_margin NULL" = function() {
-      is_fin1(args$compare_arms_hr_margin) && is.null(args$compare_arms_hr_eff_margin)
+    # V6. the HR margins, both read through args (IL:11-28, SD:906-918) (2.30, 2.31, 2.43). P3-2: each NULL (log margin
+    #     exactly 0) or one finite number (log1p(-min(max(0, m), 0.95)), so a negative margin clamps to 0 and one above
+    #     0.95 caps at 0.95). NA, a longer vector and a non-numeric value stay excluded.
+    "V6 compare_arms_hr_margin and compare_arms_hr_eff_margin each NULL or one finite number" = function() {
+      (is.null(args$compare_arms_hr_margin) || is_fin1(args$compare_arms_hr_margin)) &&
+        (is.null(args$compare_arms_hr_eff_margin) || is_fin1(args$compare_arms_hr_eff_margin))
     },
     # V7. the probability thresholds: the interim reads args (IL:142-159), the final the frame (SD:825, 827) (2.32, 2.45)
     "V7 vs-ref probability thresholds one finite number" = function() {
@@ -229,6 +248,14 @@
   futility_thr_vec <- args$median_pfs_futility_threshold_arms %||%
     args$futility_median_arms %||% success_thr_vec
   list(success = success_thr_vec, futility = futility_thr_vec)
+}
+
+# Item 9 (IL:240-243): TRUE when the interim efficacy check can stop an arm, that is the rule is TRUE and the probability
+# threshold is one finite number. Rule TRUE with a NULL, NA, NaN or infinite threshold never stops in the R body and is
+# packed as FALSE. The rule and the threshold are read from args, as the R body reads them.
+.chunk_cpp_eff_interim_hc <- function(args) {
+  thr <- args$efficacy_threshold_hc_prob
+  isTRUE(args$efficacy_stopping_rule_hc) && is.numeric(thr) && length(thr) == 1L && is.finite(thr)
 }
 
 # The labels of the static items that fail for a frame (character(0) when all hold).
@@ -359,6 +386,17 @@
       x <- fv[[arm]] %||% fv[1]
       if (is.null(x)) NA_real_ else as.numeric(x)
     }, numeric(1), USE.NAMES = FALSE),
+    # item 9 (P3-2): interim efficacy stop, IL:240-249. An explicit flag; when FALSE the probability and the success
+    # values are NA and not read. The success value is IL:60, success_thr_vec[[arm_name]] %||% success_thr_vec[1], and
+    # the comparison is mean(med_draws > success_thr) (IL:63), on the same draws as the futility tally.
+    eff_interim = .chunk_cpp_eff_interim_hc(args),
+    eff_prob_interim = if (.chunk_cpp_eff_interim_hc(args)) as.numeric(args$efficacy_threshold_hc_prob) else NA_real_,
+    success_thr_interim = vapply(arm_names, function(arm) {
+      if (!.chunk_cpp_eff_interim_hc(args)) return(NA_real_)
+      sv <- .chunk_cpp_interim_thresholds(args)$success
+      x <- sv[[arm]] %||% sv[1]
+      if (is.null(x)) NA_real_ else as.numeric(x)
+    }, numeric(1), USE.NAMES = FALSE),
     # final thresholds, resolved per arm exactly as SD:868-876 and SD:879-887 do (Inf / -Inf when the vector is NULL or
     # lacks the arm). The C++ gives p = 0 for a non-finite value, as the R body's is.finite() test does.
     success_thr = vapply(arm_names, function(arm) {
@@ -396,6 +434,7 @@
   mtn <- args$max_total_patients_per_arm
   max_follow <- coalesce_num(args$max_trial_time, coalesce_num(args$max_follow_up_sim, 0))
 
+  is_fin1_eff <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x)
   # sample_vs_ref_medians_ph (PH:113-114) and the ph_beta_mode_var dispatcher's defaults (PD:98-99)
   ph_formals <- formals(ph_beta_mode_var)
 
@@ -431,6 +470,11 @@
     log_margin_final = as.numeric(log_margin_final),
     log_eff_final = as.numeric(log_eff_final),
     vr_fut_prob_interim = as.numeric(args$futility_threshold_vs_ref_prob),   # IL:158-159
+    # V5 (P3-2): interim efficacy stop, IL:147-155, pr_eff = mean(logHR < log_eff) (IL:30) on the same draws as pr_fut.
+    # The threshold is one finite number by V7, so the flag is the rule; when FALSE the threshold is NA and not read.
+    eff_interim = isTRUE(args$efficacy_stopping_rule_vs_ref) && is_fin1_eff(args$efficacy_threshold_vs_ref_prob),
+    vr_eff_prob_interim = if (isTRUE(args$efficacy_stopping_rule_vs_ref) && is_fin1_eff(args$efficacy_threshold_vs_ref_prob))
+      as.numeric(args$efficacy_threshold_vs_ref_prob) else NA_real_,
     vr_eff_prob_final = as.numeric(g("efficacy_threshold_vs_ref_prob")),     # SD:825
     vr_fut_prob_final = as.numeric(g("futility_threshold_vs_ref_prob"))      # SD:827
   )

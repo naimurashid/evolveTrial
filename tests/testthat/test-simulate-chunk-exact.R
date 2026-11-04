@@ -101,6 +101,81 @@ test_that("P3-1: the replay instantiation equals the R body on looks_stop_at_fin
   }
 })
 
+# P3-2: the same replay identity on frames with interim efficacy stopping (items 9 and V5) and the HR margins (V6). The
+# replay runs the exact file's interim functions (efficacy before futility, both tails from one posterior: hc_interim_begin
+# / above / below, ph_lt / ph_ge) with the Monte Carlo policy, so a wrong order, a wrong tail or a second draw shows here.
+test_that("P3-2: the replay instantiation equals the R body on interim-efficacy frames (exact file's interim functions)", {
+  hc <- list(efficacy_stopping_rule_hc = TRUE)
+  vs <- list(efficacy_stopping_rule_vs_ref = TRUE)
+  frames <- list(
+    list(D = "R01", lsaf = TRUE, mod = hc, R = 60L),
+    list(D = "R01", lsaf = FALSE, mod = c(hc, list(efficacy_threshold_hc_prob = 0.3, futility_threshold_hc_prob = 0.3)), R = 60L),
+    list(D = "R01", lsaf = FALSE, mod = c(hc, list(futility_threshold_hc_prob = NULL)), R = 60L),
+    list(D = "R01", lsaf = TRUE, mod = c(hc, list(median_pfs_success_threshold_arms = NULL)), R = 60L),
+    list(D = "R01", lsaf = FALSE, mod = c(hc, list(median_pfs_success_threshold_arms = c(Experimental = Inf))), R = 40L),
+    list(D = "R23", lsaf = TRUE, mod = c(vs, list(compare_arms_hr_margin = 0.1, compare_arms_hr_eff_margin = 0.1)), R = 15L),
+    list(D = "R23", lsaf = FALSE, mod = c(vs, list(compare_arms_hr_margin = 0.1, compare_arms_hr_eff_margin = 0.1,
+                                                 efficacy_threshold_vs_ref_prob = 0.45, futility_threshold_vs_ref_prob = 0.45)), R = 15L),
+    list(D = "R23", lsaf = FALSE, mod = c(vs, list(compare_arms_hr_margin = NULL, compare_arms_hr_eff_margin = 0.1)), R = 15L)
+  )
+  n_eff <- 0
+  for (f in frames) for (s in 1:2) {
+    env <- build_frame_p31(f$D, s, f$R, f$lsaf, f$mod)
+    info <- paste(f$D, s, f$lsaf, paste(names(f$mod), unlist(f$mod), collapse = " "))
+    expect_true(isTRUE(env$cfg$supported), info = info)
+    expect_true(env$cfg$eff_interim, info = info)
+    a <- env$simulate_chunk_r(seq_len(f$R), seed = 5250L); ra <- .Random.seed
+    set.seed(5250L); b <- ns(".simulate_chunk_exact_replay")(seq_len(f$R), env$cfg); rb <- .Random.seed
+    expect_identical(b, a, info = info)
+    expect_identical(rb, ra, info = info)
+    n_eff <- n_eff + sum(a$sum_stop_eff)
+  }
+  expect_gt(n_eff, 0)   # interim efficacy stops were taken
+})
+
+test_that("P3-2 M1: interim efficacy call sites use the interim success value and the efficacy margin, efficacy first", {
+  # HC: the interim success value is the scenario's null_median_arms (3.8), since median_pfs_success_threshold_arms is
+  # NULL; the final falls back to Inf
+  env <- build_frame_p31("R01", 2, 150L, TRUE, list(efficacy_stopping_rule_hc = TRUE, median_pfs_success_threshold_arms = NULL))
+  cfg <- env$cfg
+  expect_identical(cfg$success_thr_interim, 3.8)
+  expect_identical(cfg$success_thr, Inf)
+  tr <- ns(".exact_trace")(1:150, cfg, c(41L, 9L))
+  expect_identical(tr$result, ns(".simulate_chunk_exact")(1:150, cfg, c(41L, 9L)))
+  P <- tr$post
+  i6 <- which(P$kind == 6L)
+  expect_gt(length(i6), 0L)
+  expect_true(all(P$thr[i6] == cfg$success_thr_interim))
+  expect_true(all(P$n[i6] == cfg$draws_interim))
+  # every interim futility record (kind 1) follows an efficacy record on the same inputs
+  i1 <- which(P$kind == 1L)
+  expect_true(all(P$kind[i1 - 1L] == 6L))
+  expect_identical(P$ev1[i1], P$ev1[i1 - 1L])
+  expect_identical(P$pt1[i1], P$pt1[i1 - 1L])
+  above <- ns(".exact_pr_median_above")
+  direct <- vapply(i6, function(i) above(P$ev1[[i]], P$pt1[[i]], cfg$prior_alpha, cfg$prior_beta, P$lens[[i]], P$thr[i]),
+                   numeric(1))
+  expect_identical(P$prob[i6], direct)
+  # an efficacy record at or above the threshold is never followed by a futility record on the same look
+  stop_e <- i6[P$prob[i6] >= cfg$eff_prob_interim]
+  expect_gt(length(stop_e), 0L)
+  nxt <- stop_e + 1L
+  expect_false(any(nxt <= length(P$kind) & P$kind[pmin(nxt, length(P$kind))] == 1L & P$trial[pmin(nxt, length(P$kind))] == P$trial[stop_e]))
+  # PH: at an interim look ph_lt(log_eff_interim) comes first, then ph_ge(log_margin_interim) on the same posterior
+  env23 <- build_frame_p31("R23", 2, 150L, FALSE, list(efficacy_stopping_rule_vs_ref = TRUE, compare_arms_hr_margin = 0.05,
+                                                       compare_arms_hr_eff_margin = 0.1))
+  c23 <- env23$cfg
+  tr <- ns(".exact_trace")(1:150, c23, c(41L, 9L))
+  P <- tr$post
+  lt_int <- which(P$kind == 5L & P$n == c23$draws_vsref_interim & P$thr == c23$log_eff_interim)
+  expect_gt(length(lt_int), 0L)
+  ge_after <- lt_int + 1L
+  ge_after <- ge_after[ge_after <= length(P$kind) & P$kind[pmin(ge_after, length(P$kind))] == 4L & P$thr[pmin(ge_after, length(P$kind))] == c23$log_margin_interim]
+  expect_gt(length(ge_after), 0L)
+  expect_true(all(P$bmean[ge_after] == P$bmean[ge_after - 1L]))
+  expect_true(all(P$prob[ge_after - 1L] < c23$vr_eff_prob_interim))   # futility is evaluated only after no efficacy stop
+})
+
 test_that("P3-1 (Codex P2): an arrival time that overflows to Inf errors in the R body, cpp and the exact engine", {
   d <- readRDS(testthat::test_path("fixtures", "args_R01.rds"))
   ba <- utils::modifyList(d$base_args, list(max_trial_time = Inf, overall_accrual_rate = 1e-308,

@@ -234,7 +234,24 @@ golden_specs <- list(
   cpp_R03_p31 = list(D = "R03", engine = "cpp", n = 200L, seed = 413, rv = TRUE, lsaf = TRUE,
                      mod = list(max_trial_time = Inf, median_pfs_futility_threshold_arms = NULL, futility_threshold_hc_prob = NULL)),
   cpp_R23_p31 = list(D = "R23", engine = "cpp", n = 100L, seed = 423, rv = TRUE, lsaf = FALSE,
-                     mod = list(min_follow_up_at_final = 0, max_trial_time = Inf))
+                     mod = list(min_follow_up_at_final = 0, max_trial_time = Inf)),
+  # P3-2 frames (interim efficacy stopping on, the HR margins); the twelve entries above are unchanged
+  exact_R01_p32 = list(D = "R01", engine = "exact", n = 500L, seed = 321, rv = TRUE, lsaf = TRUE,
+                       mod = list(efficacy_stopping_rule_hc = TRUE)),
+  exact_R03_p32 = list(D = "R03", engine = "exact", n = 500L, seed = 322, rv = TRUE, lsaf = FALSE,
+                       mod = list(efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = 0.8,
+                                  futility_threshold_hc_prob = NULL)),
+  exact_R23_p32 = list(D = "R23", engine = "exact", n = 300L, seed = 324, rv = TRUE, lsaf = FALSE,
+                       mod = list(efficacy_stopping_rule_vs_ref = TRUE, compare_arms_hr_margin = 0.1,
+                                  compare_arms_hr_eff_margin = 0.1)),
+  cpp_R01_p32 = list(D = "R01", engine = "cpp", n = 200L, seed = 421, rv = TRUE, lsaf = FALSE,
+                     mod = list(efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = 0.3,
+                                futility_threshold_hc_prob = 0.3)),
+  cpp_R03_p32 = list(D = "R03", engine = "cpp", n = 200L, seed = 422, rv = TRUE, lsaf = TRUE,
+                     mod = list(efficacy_stopping_rule_hc = TRUE, median_pfs_success_threshold_arms = NULL)),
+  cpp_R23_p32 = list(D = "R23", engine = "cpp", n = 100L, seed = 424, rv = TRUE, lsaf = TRUE,
+                     mod = list(efficacy_stopping_rule_vs_ref = TRUE, compare_arms_hr_margin = NULL,
+                                compare_arms_hr_eff_margin = 0.1))
 )
 golden_run <- function(g) run_design(fx(g$D), g$n, seed = g$seed, engine = g$engine, rv = g$rv,
                                      looks_stop = if (is.null(g$lsaf)) TRUE else g$lsaf,
@@ -278,16 +295,17 @@ test_that("default falls back silently to the phase 1 dispatcher on unsupported 
   en <- ns(".exact_note_env"); en$noted <- NULL
   on.exit(en$noted <- NULL, add = TRUE)
   d <- fx("R01"); d23 <- fx("R23")
-  # (a) interim efficacy stopping (item 9, single-arm) and person-time milestones (item 5, between-arm). Before P3-1 this
-  #     case used looks_stop_at_final FALSE, which both engines now run.
-  eff <- list(efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = 0.99)
+  # (a) a person-time gate (item 13a, single-arm) and person-time milestones (item 5, between-arm). Before P3-1 this
+  #     case used looks_stop_at_final FALSE, which both engines now run; before P3-2 it used interim efficacy stopping
+  #     (item 9), which both engines now run.
+  eff <- list(min_person_time_frac_per_arm = 0.1)
   expect_no_message(a <- run_design(d, 15L, seed = 9, looks_stop = FALSE, base_mod = eff))
   expect_identical(a, run_design(d, 15L, seed = 9, engine = "cpp", looks_stop = FALSE, base_mod = eff))
   ptm <- list(person_time_milestones = c(0.3, 0.6))
   expect_no_message(a <- run_design(d23, 6L, seed = 9, looks_stop = FALSE, base_mod = ptm))
   expect_identical(a, run_design(d23, 6L, seed = 9, engine = "cpp", looks_stop = FALSE, base_mod = ptm))
-  # (b) a between-arm frame without the HR margin (vs-ref item V6)
-  nomargin <- list(compare_arms_hr_margin = NULL)
+  # (b) a between-arm frame with a two-element HR margin (vs-ref item V6; a NULL margin is admitted since P3-2)
+  nomargin <- list(compare_arms_hr_margin = c(0.05, 0.1))
   expect_no_message(a <- run_design(d23, 6L, seed = 10, base_mod = nomargin))
   expect_identical(a, run_design(d23, 6L, seed = 10, engine = "cpp", base_mod = nomargin))
   # (c) use_cpp_engine FALSE: the R body, no notice under the default
@@ -475,18 +493,21 @@ test_that("P3-1: min_follow_up_at_final < 0 trips the amd8 invariant with the R 
   }
 })
 
-test_that("P3-1: one frame of each still-excluded item falls back to the R body (2, 5, 9, V2, V5, V6, V9)", {
+test_that("P3-1: one frame of each still-excluded item falls back to the R body (2, 5, 9, 13a, V2, V6, V9)", {
   en <- ns(".exact_note_env"); en$noted <- NULL
   on.exit(en$noted <- NULL, add = TRUE)
   d <- fx("R01"); d23 <- fx("R23")
   hc <- list(
     "5" = list(person_time_milestones = c(0.4)),
-    "9" = list(efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = 0.99)
+    # P3-2: the rule TRUE is admitted; a non-numeric threshold is still refused. The R body runs it and never stops for
+    # efficacy (is.finite() of a character string is FALSE); a two-element threshold would make the R body error in `&&`
+    "9" = list(efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = "0.99"),
+    "13a" = list(min_person_time_frac_per_arm = 0.1)
   )
   vs <- list(
     "V2" = list(use_ph_model_vs_ref = FALSE),
-    "V5" = list(efficacy_stopping_rule_vs_ref = TRUE),
-    "V6" = list(compare_arms_hr_margin = NULL),
+    # P3-2: V5 (the rule TRUE) and V6 (NULL or one finite margin) are admitted; a two-element margin is still refused
+    "V6" = list(compare_arms_hr_margin = c(0.05, 0.1)),
     "V9" = list(min_events_per_arm = c(Doublet = 11, Triplet = 11))
   )
   chk <- function(dd, mods, n) for (k in names(mods)) {
@@ -540,4 +561,126 @@ test_that("Codex P2: invalid priors fall back to the R body; overflowed scales d
   # (c)
   mod$prior_alpha_params_model <- rep(0.01, K)
   expect_error(run_design(d, 10L, seed = 3, base_mod = mod), "exact posterior probability is not finite")
+})
+
+# ---- P3-2: interim efficacy stopping (items 9 and V5) and the HR margins (V6) --------------------------------------------
+# Plan dev/plans/2026-11-04-p3-2-plan.md. Frames with interim efficacy on under both chronologies, both stop types able to
+# hold at one look (low thresholds), an interim success value that differs from the final one (the interim reads
+# null_median_arms when median_pfs_success_threshold_arms is NULL, the final falls back to Inf), efficacy on with no interim
+# futility rule, and on the between-arm path the rule variants current, symmetric, no_margin (NULL and 0), efficacy margin
+# only, a margin above 0.95 (capped) and a negative one (clamped). Gate B (dev/perf/phase3/p32_gateB.R) runs the same
+# frames at chunk level with branch counts.
+p32_frames <- function(D) {
+  if (D == "R23") {
+    on <- list(efficacy_stopping_rule_vs_ref = TRUE)
+    return(list(
+      off_current = list(lsaf = FALSE, mod = on),
+      on_symmetric = list(lsaf = TRUE, mod = c(on, list(compare_arms_hr_margin = 0.1, compare_arms_hr_eff_margin = 0.1))),
+      off_nomargin = list(lsaf = FALSE, mod = c(on, list(compare_arms_hr_margin = NULL, compare_arms_hr_eff_margin = NULL))),
+      on_zeromargin = list(lsaf = TRUE, mod = c(on, list(compare_arms_hr_margin = 0, compare_arms_hr_eff_margin = 0))),
+      off_effonly = list(lsaf = FALSE, mod = c(on, list(compare_arms_hr_margin = NULL, compare_arms_hr_eff_margin = 0.1))),
+      on_capped = list(lsaf = TRUE, mod = c(on, list(compare_arms_hr_margin = 0.97, compare_arms_hr_eff_margin = 0.97))),
+      off_negative = list(lsaf = FALSE, mod = c(on, list(compare_arms_hr_margin = -0.2, compare_arms_hr_eff_margin = -0.2))),
+      off_compete = list(lsaf = FALSE, mod = c(on, list(compare_arms_hr_margin = 0.1, compare_arms_hr_eff_margin = 0.1,
+                                                        efficacy_threshold_vs_ref_prob = 0.45,
+                                                        futility_threshold_vs_ref_prob = 0.45))),
+      off_sym_noeff = list(lsaf = FALSE, mod = list(compare_arms_hr_margin = 0.1, compare_arms_hr_eff_margin = 0.1))))
+  }
+  on <- list(efficacy_stopping_rule_hc = TRUE)
+  list(
+    on_eff = list(lsaf = TRUE, mod = on),
+    off_eff = list(lsaf = FALSE, mod = on),
+    on_compete = list(lsaf = TRUE, mod = c(on, list(efficacy_threshold_hc_prob = 0.3, futility_threshold_hc_prob = 0.3))),
+    off_compete = list(lsaf = FALSE, mod = c(on, list(efficacy_threshold_hc_prob = 0.3, futility_threshold_hc_prob = 0.3))),
+    off_thrdiff = list(lsaf = FALSE, mod = c(on, list(median_pfs_success_threshold_arms = NULL))),
+    on_eff_futnull = list(lsaf = TRUE, mod = c(on, list(futility_threshold_hc_prob = NULL))),
+    off_succ_inf = list(lsaf = FALSE, mod = c(on, list(median_pfs_success_threshold_arms = c(Experimental = Inf)))))
+}
+p32_check <- function(D, n, seed) {
+  d <- fx(D)
+  for (nm in names(p32_frames(D))) {
+    f <- p32_frames(D)[[nm]]
+    info <- paste(D, nm)
+    a <- run_design(d, n, seed = seed, engine = "cpp", looks_stop = f$lsaf, base_mod = f$mod)
+    b <- run_design(d, n, seed = seed, use_cpp = FALSE, looks_stop = f$lsaf, base_mod = f$mod)
+    expect_identical(a, b, info = info)
+    ex <- run_design(d, n, seed = seed, looks_stop = f$lsaf, base_mod = f$mod)   # default: the exact engine
+    expect_identical(ex, run_design(d, n, seed = seed, engine = "exact", looks_stop = f$lsaf, base_mod = f$mod), info = info)
+    expect_false(anyNA(a$tab), info = info)
+    expect_false(anyNA(ex$tab), info = info)
+    # power = early efficacy + final efficacy, and PET_Efficacy is the early part (SD:1211-1225)
+    for (tb in list(a$tab, ex$tab)) {
+      expect_equal(tb$Type_I_Error_or_Power, tb$PET_Efficacy + tb$Pr_Final_Efficacy, tolerance = 1e-12, info = info)
+    }
+  }
+}
+
+test_that("P3-2 frames: cpp is identical to the R body, the default runs the exact engine, no NA reaches the table", {
+  p32_check("R01", 15L, 3601)
+  p32_check("R23", 5L, 3623)
+})
+
+test_that("P3-2 frames, long tier: larger sizes and R03 (EVOLVETRIAL_LONG_TESTS)", {
+  skip_if_not(long_tests(), "set EVOLVETRIAL_LONG_TESTS to run")
+  p32_check("R01", 150L, 3701)
+  p32_check("R03", 150L, 3703)
+  p32_check("R23", 40L, 3723)
+})
+
+test_that("P3-2: interim efficacy stops are taken, and their variance is filled, in both engines", {
+  d <- fx("R01"); d23 <- fx("R23")
+  hc <- list(efficacy_stopping_rule_hc = TRUE)
+  vs <- list(efficacy_stopping_rule_vs_ref = TRUE, compare_arms_hr_margin = 0.1, compare_arms_hr_eff_margin = 0.1)
+  for (x in list(list(d = d, mod = hc, n = 60L, lsaf = TRUE), list(d = d23, mod = vs, n = 20L, lsaf = FALSE))) {
+    for (eng in c("cpp", "exact")) {
+      tb <- run_design(x$d, x$n, seed = 3801, engine = eng, looks_stop = x$lsaf, base_mod = x$mod)$tab
+      alt <- tb[nrow(tb), ]   # the alternative scenario's experimental arm
+      expect_gt(alt$PET_Efficacy, 0)
+      expect_lt(alt$PET_Efficacy, 1)
+      expect_gt(alt$Var_PET_Efficacy, 0)
+      expect_equal(alt$Var_PET_Efficacy, alt$PET_Efficacy * (1 - alt$PET_Efficacy) / x$n, tolerance = 1e-12)
+    }
+  }
+})
+
+test_that("P3-2: the rule TRUE with a NULL or Inf probability threshold is the rule FALSE frame, bit for bit", {
+  d <- fx("R01")
+  rsp <- ns("run_simulation_pure")
+  for (thr in list(NULL, Inf, NA_real_)) {
+    on <- list(efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = thr)
+    off <- list(efficacy_stopping_rule_hc = FALSE, efficacy_threshold_hc_prob = thr)
+    info <- paste("threshold", if (is.null(thr)) "NULL" else thr)
+    for (lsaf in c(TRUE, FALSE)) {
+      expect_identical(run_design(d, 20L, seed = 3901, use_cpp = FALSE, looks_stop = lsaf, base_mod = on),
+                       run_design(d, 20L, seed = 3901, use_cpp = FALSE, looks_stop = lsaf, base_mod = off), info = info)
+      expect_identical(run_design(d, 20L, seed = 3901, engine = "cpp", looks_stop = lsaf, base_mod = on),
+                       run_design(d, 20L, seed = 3901, use_cpp = FALSE, looks_stop = lsaf, base_mod = on), info = info)
+      expect_identical(run_design(d, 60L, seed = 3902, engine = "exact", looks_stop = lsaf, base_mod = on),
+                       run_design(d, 60L, seed = 3902, engine = "exact", looks_stop = lsaf, base_mod = off), info = info)
+    }
+    old <- options(evolveTrial.chunk_probe = function(env) env, evolveTrial.looks_stop_at_final = TRUE)
+    args_i <- utils::modifyList(utils::modifyList(d$base_args, on, keep.null = TRUE), d$scens[[1]])
+    args_i$num_simulations <- 5L
+    env <- do.call(rsp, args_i[intersect(names(args_i), c(names(formals(rsp)), "num_simulations"))])
+    options(old)
+    expect_true(isTRUE(env$cfg$supported), info = info)
+    expect_false(env$cfg$eff_interim, info = info)
+    expect_identical(env$cfg$eff_prob_interim, NA_real_, info = info)
+  }
+})
+
+test_that("P3-2: frames the R body cannot run with interim efficacy on stay on the R body and error as it does", {
+  d <- fx("R01")
+  # a NULL interim success vector (both median_pfs_success_threshold_arms and null_median_arms NULL): mean(logical(0))
+  # is NaN and the R body errors in if(); an NA success value errors the same way
+  d$scens <- lapply(d$scens, function(s) { s$null_median_arms <- NULL; s })
+  for (mod in list(list(efficacy_stopping_rule_hc = TRUE, median_pfs_success_threshold_arms = NULL, null_median_arms = NULL),
+                   list(efficacy_stopping_rule_hc = TRUE, median_pfs_success_threshold_arms = c(Experimental = NA_real_)))) {
+    m_r <- tryCatch(run_design(d, 6L, seed = 3951, use_cpp = FALSE, base_mod = mod), error = conditionMessage)
+    m_d <- tryCatch(run_design(d, 6L, seed = 3951, base_mod = mod), error = conditionMessage)
+    expect_type(m_r, "character")
+    expect_match(m_r, "missing value where TRUE/FALSE needed")
+    expect_identical(m_d, m_r)
+    expect_error(run_design(d, 6L, seed = 3951, engine = "exact", base_mod = mod), "outside the supported set")
+  }
 })

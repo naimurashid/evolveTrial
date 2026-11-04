@@ -1,3 +1,44 @@
+# evolveTrial 0.0.0.9005
+
+## Fast engines cover bidirectional designs and the symmetric rule variant (phase 3, step P3-2)
+
+Both C++ engines (the draw-based `"cpp"` engine and the default exact engine)
+now run interim efficacy stopping and the between-arm hazard-ratio margins,
+which used to fall back to the R body.
+
+* **`efficacy_stopping_rule_hc = TRUE`** (single-arm). At each interim look the
+  efficacy probability `Pr(median > success value)` is checked before the
+  futility probability, from the same posterior, and an arm that crosses
+  `efficacy_threshold_hc_prob` stops for efficacy. The interim success value is
+  `median_pfs_success_threshold_arms`, or `null_median_arms` when that is
+  `NULL`, as in the R body. With the rule `TRUE` and
+  `efficacy_threshold_hc_prob` `NULL`, `NA` or infinite, the R body never stops
+  for efficacy, and neither do the engines (the result is the rule `FALSE`
+  result). Frames where the R body itself errors (an interim success value that
+  is `NULL` or `NA` with the rule on, a threshold of length above one) and a
+  non-numeric threshold still run the R body.
+* **`efficacy_stopping_rule_vs_ref = TRUE`** (between-arm, PH model).
+  `Pr(log HR < log(1 - compare_arms_hr_eff_margin))` is checked before the
+  futility probability at each interim look.
+* **`compare_arms_hr_margin` and `compare_arms_hr_eff_margin`** may each be
+  `NULL` (margin 0) or one finite number, so the `current`, `symmetric` and
+  `no_margin` rule variants all run on the fast engines. A negative margin is
+  clamped to 0 and one above 0.95 is capped at 0.95, as in the R body. `NA`, a
+  vector of length above one and a non-numeric margin still run the R body.
+
+An arm stopped for efficacy at an interim is treated downstream exactly as one
+stopped for futility (no final analysis, its enrolment at the stop as its final
+sample size). Power is early plus final efficacy, and `Var_PET_Efficacy` is
+filled under `return_variance = TRUE`.
+
+**Results change by design on these frames under the default engine.** The
+bidirectional rows of the paper wrappers (interim efficacy stopping on) and the
+symmetric rule variant used to run the R body and now run the exact engine.
+`options(evolveTrial.engine = "cpp")` gives the draw-based engine, which is
+bit-identical to the R body on every frame it admits, and
+`options(evolveTrial.use_cpp_engine = FALSE)` runs the R body itself. Frames
+admitted in 0.0.0.9004 give the same results as before.
+
 # evolveTrial 0.0.0.9004
 
 ## Fast engines cover the default single-arm call (phase 3, step P3-1)

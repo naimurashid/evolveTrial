@@ -119,6 +119,11 @@ struct Cfg {
   std::vector<double> min_pat, min_events, min_median_fu, min_pt_frac, max_pt_arm;
   bool futility_interim;              // FALSE: futility_threshold_hc_prob NULL, no interim futility stop (P3-1, item 13c)
   double futility_prob_interim;       // read only when futility_interim is TRUE
+  // interim efficacy stop (P3-2, items 9 and V5): the rule TRUE with a finite probability threshold (IL:147-149, 240-243).
+  // HC: eff_prob_interim and success_thr_interim (IL:60) are read only when eff_interim is TRUE. vs-ref: vr_eff_prob_interim.
+  bool eff_interim = false;
+  double eff_prob_interim = NA_REAL, vr_eff_prob_interim = NA_REAL;
+  std::vector<double> success_thr_interim;
   // thresholds on the median, per arm: the interim futility threshold as IL:57-61 resolves it from args, and the final
   // success and futility thresholds from the frame (SD:770-786). They come from different variables (args has no
   // median_pfs_futility_threshold_arms element), so they are kept apart.
@@ -224,6 +229,11 @@ Cfg unpack(const Rcpp::List& cfg) {
     c.vr_fut_prob_interim = num1(cfg, "vr_fut_prob_interim");
     c.vr_eff_prob_final = num1(cfg, "vr_eff_prob_final");
     c.vr_fut_prob_final = num1(cfg, "vr_fut_prob_final");
+    c.eff_interim = lgl1(cfg, "eff_interim");
+    c.vr_eff_prob_interim = num1(cfg, "vr_eff_prob_interim");
+    if (c.eff_interim && !R_FINITE(c.vr_eff_prob_interim)) {
+      Rcpp::stop("simulate_chunk_cpp: interim efficacy is on but cfg$vr_eff_prob_interim is not a finite number");
+    }
     return c;
   }
   c.draws_interim = int1(cfg, "draws_interim");
@@ -240,6 +250,17 @@ Cfg unpack(const Rcpp::List& cfg) {
   c.futility_thr = numv(cfg, "futility_thr", c.n_arms);
   c.final_success_prob = num1(cfg, "final_success_prob");
   c.final_futility_prob = num1(cfg, "final_futility_prob");
+  c.eff_interim = lgl1(cfg, "eff_interim");
+  c.eff_prob_interim = num1(cfg, "eff_prob_interim");
+  c.success_thr_interim = numv(cfg, "success_thr_interim", c.n_arms);
+  if (c.eff_interim) {
+    if (!R_FINITE(c.eff_prob_interim)) {
+      Rcpp::stop("simulate_chunk_cpp: interim efficacy is on but cfg$eff_prob_interim is not a finite number");
+    }
+    for (double v : c.success_thr_interim) {
+      if (ISNAN(v)) Rcpp::stop("simulate_chunk_cpp: interim efficacy is on but cfg$success_thr_interim is NA");
+    }
+  }
   return c;
 }
 
@@ -392,10 +413,22 @@ void interim_hc(const Cfg& c, TrialState& st, double cal, const std::vector<doub
         pt_frac < c.min_pt_frac[a]) {
       continue;
     }
-    // calculate_current_probs_hc (IL:43-66): interval_lengths <- diff(args$interval_cutpoints_sim); pr_eff is not read
-    // because efficacy_stopping_rule_hc is FALSE in the supported set (IL:240); computing it draws nothing. The draws are
-    // made whether or not the futility rule is on (P3-1, item 13c: the R body draws, then skips IL:251-253).
+    // calculate_current_probs_hc (IL:43-66): interval_lengths <- diff(args$interval_cutpoints_sim). One set of draws gives
+    // both tails (IL:62-65); tallying draws nothing. The draws are made whether or not either rule is on (P3-1, item 13c:
+    // the R body draws, then skips IL:251-253).
     arma::vec med = posterior_medians(c, sl, lens, c.draws_interim);
+    if (c.eff_interim) {
+      // IL:63 pr_eff = mean(med_draws > success_thr); IL:240-249, checked before futility, `next` on a stop (P3-2, item 9)
+      const double pr_eff = tally_mean(tally(med, c.success_thr_interim[a], false));
+      if (ISNAN(pr_eff)) Rcpp::stop("missing value where TRUE/FALSE needed (interim efficacy probability is NA)");
+      if (pr_eff >= c.eff_prob_interim) {
+        st.status[a] = STOPPED_EFFICACY;
+        st.stop_eff[a] = 1;
+        st.final_n_cur[a] = st.enrolled[a];
+        st.stop_time[a] = cal;
+        continue;
+      }
+    }
     if (!c.futility_interim) continue;   // IL:251: is.null(args$futility_threshold_hc_prob), no stop
     const double pr_fut = tally_mean(tally(med, c.futility_thr_interim[a], true));
     // IL:251-253: !is.null(thr) && is.finite(thr) && pr_fut >= thr; thr is finite when futility_interim is TRUE
@@ -525,8 +558,8 @@ bool gates_pass_vsref(const Cfg& c, const Slice& sC, const Slice& sT) {
   return passC && passT;
 }
 
-// interim_check_vs_ref (IL:84-169) on the supported set: one experimental arm, PH model, no target override, interim
-// efficacy stopping off (so pr_eff, IL:30, is computed by R but never read: IL:147 short-circuits on the rule).
+// interim_check_vs_ref (IL:84-169) on the supported set: one experimental arm, PH model, no target override. P3-2 (V5):
+// with interim efficacy on, pr_eff = mean(logHR < log_eff) (IL:30) from the same draws is checked first (IL:147-155).
 void interim_vsref(const Cfg& c, TrialState& st, double cal, const std::vector<double>& cut,
                    const std::vector<double>& lens, Slice& sC, Slice& sT, PhScratch& ph) {
   const int r = c.ref_idx, t = c.trt_idx;
@@ -536,6 +569,17 @@ void interim_vsref(const Cfg& c, TrialState& st, double cal, const std::vector<d
   slice_arm(st.reg[t], cal, c.max_follow_up_sim, cut, c.K, sT);                 // IL:124-125
   if (!gates_pass_vsref(c, sC, sT)) return;                                     // IL:127-133
   ph_sample(c, sC, sT, lens, c.draws_vsref_interim, ph);                        // IL:3-9, PH:93-135
+  if (c.eff_interim) {
+    const double pr_eff = logical_mean(ph.logHR, c.log_eff_interim, true);      // IL:30
+    if (ISNAN(pr_eff)) Rcpp::stop("missing value where TRUE/FALSE needed (interim vs-ref efficacy probability is NA)");
+    if (pr_eff >= c.vr_eff_prob_interim) {                                      // IL:147-155
+      st.status[t] = STOPPED_EFFICACY;
+      st.stop_eff[t] = 1;
+      st.final_n_cur[t] = st.enrolled[t];
+      st.stop_time[t] = cal;
+      return;
+    }
+  }
   const double pr_fut = logical_mean(ph.logHR, c.log_margin_interim, false);    // IL:31
   if (ISNAN(pr_fut)) Rcpp::stop("missing value where TRUE/FALSE needed (interim vs-ref futility probability is NA)");
   if (pr_fut >= c.vr_fut_prob_interim) {                                        // IL:158-166

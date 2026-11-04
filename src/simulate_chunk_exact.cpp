@@ -171,6 +171,10 @@ struct Cfg {
   std::vector<double> min_pat, min_events, min_median_fu, min_pt_frac, max_pt_arm;
   bool futility_interim;
   double futility_prob_interim;
+  // interim efficacy stop (P3-2, items 9 and V5), as src/simulate_chunk.cpp Cfg
+  bool eff_interim = false;
+  double eff_prob_interim = NA_REAL, vr_eff_prob_interim = NA_REAL;
+  std::vector<double> success_thr_interim;
   std::vector<double> futility_thr_interim, success_thr, futility_thr;
   double final_success_prob, final_futility_prob;
   bool collect_raw_n, return_variance;
@@ -272,6 +276,11 @@ Cfg unpack(const Rcpp::List& cfg) {
     c.vr_fut_prob_interim = num1(cfg, "vr_fut_prob_interim");
     c.vr_eff_prob_final = num1(cfg, "vr_eff_prob_final");
     c.vr_fut_prob_final = num1(cfg, "vr_fut_prob_final");
+    c.eff_interim = lgl1(cfg, "eff_interim");
+    c.vr_eff_prob_interim = num1(cfg, "vr_eff_prob_interim");
+    if (c.eff_interim && !R_FINITE(c.vr_eff_prob_interim)) {
+      Rcpp::stop("simulate_chunk_exact: interim efficacy is on but cfg$vr_eff_prob_interim is not a finite number");
+    }
     return c;
   }
   c.draws_interim = int1(cfg, "draws_interim");
@@ -288,6 +297,17 @@ Cfg unpack(const Rcpp::List& cfg) {
   c.futility_thr = numv(cfg, "futility_thr", c.n_arms);
   c.final_success_prob = num1(cfg, "final_success_prob");
   c.final_futility_prob = num1(cfg, "final_futility_prob");
+  c.eff_interim = lgl1(cfg, "eff_interim");
+  c.eff_prob_interim = num1(cfg, "eff_prob_interim");
+  c.success_thr_interim = numv(cfg, "success_thr_interim", c.n_arms);
+  if (c.eff_interim) {
+    if (!R_FINITE(c.eff_prob_interim)) {
+      Rcpp::stop("simulate_chunk_exact: interim efficacy is on but cfg$eff_prob_interim is not a finite number");
+    }
+    for (double v : c.success_thr_interim) {
+      if (ISNAN(v)) Rcpp::stop("simulate_chunk_exact: interim efficacy is on but cfg$success_thr_interim is NA");
+    }
+  }
   return c;
 }
 
@@ -653,6 +673,13 @@ struct McPost {
   void hc_interim_nostop(const Cfg& c, const Slice& s, const std::vector<double>& lens) {
     (void) medians(c, s, lens, c.draws_interim);
   }
+  // an interim look with interim efficacy on (P3-2, item 9): one set of draws, two tallies (IL:62-65), as phase 1
+  arma::vec imed;
+  void hc_interim_begin(const Cfg& c, const Slice& s, const std::vector<double>& lens) {
+    imed = medians(c, s, lens, c.draws_interim);
+  }
+  double hc_interim_above(double thr) { return tally_mean(tally(imed, thr, false)); }   // mean(med > thr)
+  double hc_interim_below(double thr) { return tally_mean(tally(imed, thr, true)); }    // mean(med < thr)
   void hc_final_begin(const Cfg& c, const Slice& s, const std::vector<double>& lens) {
     med = medians(c, s, lens, c.draws_final);
   }
@@ -734,6 +761,23 @@ struct ExactPost {
     return below(c, s, lens, thr, true);   // Pr(med < thr)
   }
   void hc_interim_nostop(const Cfg&, const Slice&, const std::vector<double>&) {}   // nothing to compute (P3-1)
+  // interim efficacy on (P3-2, item 9): both tails from the one exact posterior of the slice. Pr(med > s) is the gamma-sum
+  // tail the final uses (hc_final_above). The success value may be +-Inf (IL:60 resolves any number): Pr(med > Inf) = 0
+  // and Pr(med > -Inf) = 1, as the R body's tally gives, without a posterior call.
+  const Slice* is_ = nullptr;
+  const std::vector<double>* ilens = nullptr;
+  const Cfg* ic = nullptr;
+  void hc_interim_begin(const Cfg& c, const Slice& s, const std::vector<double>& lens) {
+    ic = &c;
+    is_ = &s;
+    ilens = &lens;
+  }
+  double hc_interim_above(double thr) {
+    if (thr == R_PosInf) return 0.0;
+    if (thr == R_NegInf) return 1.0;
+    return below(*ic, *is_, *ilens, thr, false);
+  }
+  double hc_interim_below(double thr) { return below(*ic, *is_, *ilens, thr, true); }
   void hc_final_begin(const Cfg& c, const Slice& s, const std::vector<double>& lens) {
     fc = &c;
     fs = &s;
@@ -800,7 +844,8 @@ struct TraceRng {
 };
 
 struct PostRec {
-  int trial, kind, n;   // kind: 1 hc_interim, 2 hc_final_above, 3 hc_final_below, 4 ph_ge, 5 ph_lt; n: PH draw count
+  int trial, kind, n;   // kind: 1 hc_interim (below), 2 hc_final_above, 3 hc_final_below, 4 ph_ge, 5 ph_lt,
+                        // 6 hc_interim_above (P3-2); n: PH draw count
   double thr, prob, bmean, bsd;
   std::vector<int> ev1, ev2;
   std::vector<double> pt1, pt2, lens;
@@ -841,6 +886,13 @@ struct TracePost {
     in.hc_final_begin(c, s, l);
   }
   void hc_interim_nostop(const Cfg& c, const Slice& s, const std::vector<double>& l) { in.hc_interim_nostop(c, s, l); }
+  void hc_interim_begin(const Cfg& c, const Slice& s, const std::vector<double>& l) {
+    keep1(s, l);
+    n_draws = c.draws_interim;
+    in.hc_interim_begin(c, s, l);
+  }
+  double hc_interim_above(double thr) { const double p = in.hc_interim_above(thr); push(6, thr, p); return p; }
+  double hc_interim_below(double thr) { const double p = in.hc_interim_below(thr); push(1, thr, p); return p; }
   double hc_final_above(double thr) { const double p = in.hc_final_above(thr); push(2, thr, p); return p; }
   double hc_final_below(double thr) { const double p = in.hc_final_below(thr); push(3, thr, p); return p; }
   void ph(const Cfg& c, const Slice& sC, const Slice& sT, const std::vector<double>& l, int n) {
@@ -871,6 +923,29 @@ void interim_hc(const Cfg& c, TrialState& st, double cal, const std::vector<doub
     const double pt_frac = (max_pt > 0) ? pt_total / max_pt : 0.0;
     if (n_pat < c.min_pat[a] || events_total < c.min_events[a] || median_fu < c.min_median_fu[a] ||
         pt_frac < c.min_pt_frac[a]) {
+      continue;
+    }
+    if (c.eff_interim) {
+      // P3-2, item 9: IL:62-65 both tails from one posterior, efficacy first (IL:240-249), then futility (IL:251-258)
+      post.hc_interim_begin(c, sl, lens);
+      const double pr_eff = post.hc_interim_above(c.success_thr_interim[a]);
+      if (ISNAN(pr_eff)) Rcpp::stop("missing value where TRUE/FALSE needed (interim efficacy probability is NA)");
+      if (pr_eff >= c.eff_prob_interim) {
+        st.status[a] = STOPPED_EFFICACY;
+        st.stop_eff[a] = 1;
+        st.final_n_cur[a] = st.enrolled[a];
+        st.stop_time[a] = cal;
+        continue;
+      }
+      if (!c.futility_interim) continue;   // item 13c NULL with efficacy on: the efficacy check above still ran
+      const double pr_fut_e = post.hc_interim_below(c.futility_thr_interim[a]);
+      if (ISNAN(pr_fut_e)) Rcpp::stop("missing value where TRUE/FALSE needed (interim futility probability is NA)");
+      if (pr_fut_e >= c.futility_prob_interim) {
+        st.status[a] = STOPPED_FUTILITY;
+        st.stop_fut[a] = 1;
+        st.final_n_cur[a] = st.enrolled[a];
+        st.stop_time[a] = cal;
+      }
       continue;
     }
     if (!c.futility_interim) {   // item 13c NULL: no interim futility stop (IL:251); McPost still draws (P3-1)
@@ -905,6 +980,19 @@ void interim_vsref(const Cfg& c, TrialState& st, double cal, const std::vector<d
   slice_pt(cut, c.K, sT);
   if (!gates_pass_vsref(c, sC, sT)) return;
   post.ph(c, sC, sT, lens, c.draws_vsref_interim);
+  if (c.eff_interim) {
+    // P3-2, V5: Pr(logHR < log_eff) from the same posterior (McPost: the stored draws; ExactPost: the stored normal), IL:30,
+    // checked first (IL:147-155)
+    const double pr_eff = post.ph_lt(c.log_eff_interim);
+    if (ISNAN(pr_eff)) Rcpp::stop("missing value where TRUE/FALSE needed (interim vs-ref efficacy probability is NA)");
+    if (pr_eff >= c.vr_eff_prob_interim) {
+      st.status[t] = STOPPED_EFFICACY;
+      st.stop_eff[t] = 1;
+      st.final_n_cur[t] = st.enrolled[t];
+      st.stop_time[t] = cal;
+      return;
+    }
+  }
   const double pr_fut = post.ph_ge(c.log_margin_interim);
   if (ISNAN(pr_fut)) Rcpp::stop("missing value where TRUE/FALSE needed (interim vs-ref futility probability is NA)");
   if (pr_fut >= c.vr_fut_prob_interim) {

@@ -125,7 +125,16 @@ test_that("each violated predicate item sends the dispatcher to the R body and m
     "7a"  = function(e) set_both(e, "max_trial_time", -Inf),
     "7b"  = function(e) { set_both(e, "max_trial_time", Inf); set_both(e, "max_total_patients_per_arm", c(Experimental = 0)) },
     "8"   = function(e) set_both(e, "rebalance_after_events", c(50, 60)),
-    "9"   = function(e) set_both(e, "efficacy_stopping_rule_hc", TRUE),
+    # P3-2: the rule TRUE is admitted; still refused are a threshold of length > 1 (the R body errors in `&&`), a
+    # non-numeric threshold and a rule that differs between the frame and args
+    "9a"  = function(e) { set_both(e, "efficacy_stopping_rule_hc", TRUE); set_both(e, "efficacy_threshold_hc_prob", c(0.9, 0.95)) },
+    "9b"  = function(e) { set_both(e, "efficacy_stopping_rule_hc", TRUE); set_both(e, "efficacy_threshold_hc_prob", "0.9") },
+    "9c"  = function(e) set_args(e, "efficacy_stopping_rule_hc", TRUE),
+    # P3-2: interim efficacy on with an interim success value that is NULL (both vectors NULL) or NA: the R body errors
+    "10e" = function(e) { set_both(e, "efficacy_stopping_rule_hc", TRUE); set_args(e, "median_pfs_success_threshold_arms", NULL)
+                          set_args(e, "null_median_arms", NULL); set_args(e, "futility_median_arms", c(Experimental = 4.5)) },
+    "10f" = function(e) { set_both(e, "efficacy_stopping_rule_hc", TRUE)
+                          set_both(e, "median_pfs_success_threshold_arms", c(Experimental = NA_real_)) },
     # an interim success vector that is not NULL and does not name the arm: IL:59 `[[` errors in the R body
     "10a" = function(e) set_args(e, "median_pfs_success_threshold_arms", 3.8),
     # interim futility vector NULL while the interim futility rule is on: the R body errors at the first look
@@ -179,8 +188,9 @@ test_that("each violated predicate item sends the dispatcher to the R body and m
 })
 
 # Step 4: between-arm frames are now checked against the vs-ref items. This frame leaves compare_arms_hr_margin at its
-# NULL default, so it fails item V6 (it failed item 1 in step 3) and must still fall back.
-test_that("an unsupported between-arm frame (no HR margin) packs without error and falls back", {
+# NULL default. Until P3-2 that failed item V6; P3-2 admits it (log margin 0), so the frame now runs on the C++ engine and
+# gives the R body's result. The same frame without the PH model (item V2) still packs without error and falls back.
+test_that("a between-arm frame without an HR margin runs on C++ (P3-2); without the PH model it falls back", {
   rsp <- ns("run_simulation_pure")
   old <- options(evolveTrial.chunk_probe = function(env) env, evolveTrial.looks_stop_at_final = TRUE)
   on.exit(options(old), add = TRUE)
@@ -192,11 +202,26 @@ test_that("an unsupported between-arm frame (no HR margin) packs without error a
              max_total_patients_per_arm = c(Doublet = 20, Triplet = 20), overall_accrual_rate = 2,
              randomization_probs = c(Doublet = 0.5, Triplet = 0.5), max_trial_time = 72, use_ph_model_vs_ref = TRUE,
              efficacy_threshold_vs_ref_prob = 0.95, futility_threshold_vs_ref_prob = 0.4, rebalance_after_events = 50)
-  expect_false(isTRUE(env$cfg$supported))
-  expect_true(any(grepl("^V6 ", env$cfg$violations)))
-  expect_error(env$simulate_chunk_cpp(1:2, seed = 3L), "outside the supported set")
-  a <- env$simulate_chunk(1:4, seed = 3L); ra <- rng_now()
+  expect_true(isTRUE(env$cfg$supported))
+  expect_identical(env$cfg$log_margin_interim, 0)
+  expect_identical(env$cfg$log_margin_final, 0)
+  a <- env$simulate_chunk_cpp(1:4, seed = 3L); ra <- rng_now()
   b <- env$simulate_chunk_r(1:4, seed = 3L); rb <- rng_now()
+  expect_identical(a, b)
+  expect_identical(ra, rb)
+  env2 <- rsp(num_simulations = 10L, arm_names = c("Doublet", "Triplet"), reference_arm_name = "Doublet",
+              compare_arms_option = TRUE, weibull_shape_true_arms = c(Doublet = 1.3, Triplet = 1.3),
+              weibull_median_true_arms = c(Doublet = 6, Triplet = 9), interval_cutpoints_sim = seq(0, 24, by = 6),
+              max_follow_up_sim = 120, censor_max_time_sim = 120, prior_alpha_params_model = rep(0.3, 4),
+              prior_beta_params_model = rep(0.3, 4), num_posterior_draws = 50, cohort_size_per_arm = 1L,
+              max_total_patients_per_arm = c(Doublet = 20, Triplet = 20), overall_accrual_rate = 2,
+              randomization_probs = c(Doublet = 0.5, Triplet = 0.5), max_trial_time = 72, use_ph_model_vs_ref = FALSE,
+              efficacy_threshold_vs_ref_prob = 0.95, futility_threshold_vs_ref_prob = 0.4, rebalance_after_events = 50)
+  expect_false(isTRUE(env2$cfg$supported))
+  expect_true(any(grepl("^V2 ", env2$cfg$violations)))
+  expect_error(env2$simulate_chunk_cpp(1:2, seed = 3L), "outside the supported set")
+  a <- env2$simulate_chunk(1:4, seed = 3L); ra <- rng_now()
+  b <- env2$simulate_chunk_r(1:4, seed = 3L); rb <- rng_now()
   expect_identical(a, b)
   expect_identical(ra, rb)
 })
