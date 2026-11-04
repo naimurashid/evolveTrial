@@ -37,7 +37,26 @@ symmetric rule variant used to run the R body and now run the exact engine.
 `options(evolveTrial.engine = "cpp")` gives the draw-based engine, which is
 bit-identical to the R body on every frame it admits, and
 `options(evolveTrial.use_cpp_engine = FALSE)` runs the R body itself. Frames
-admitted in 0.0.0.9004 give the same results as before.
+admitted in 0.0.0.9004 give the same results as before, apart from the last
+bit of `Pr_Reach_Max_N` (below).
+
+How large the change is. The R body estimates the interim efficacy probability
+from `num_posterior_draws` draws, and that noise at repeated looks adds false
+efficacy stops. On the between-arm R23 design (efficacy threshold 0.95, 800
+draws) the R body's type I error was about 0.004 above the exact engine's and
+its expected sample size under the null about 0.2 patients (0.7 to 1%) lower.
+The gap shrinks as the draw count grows (at 12,800 draws it is within Monte
+Carlo error of 0), so the exact engine gives the value the R body tends to. The
+single-arm bidirectional designs tested matched within the phase 2 margins.
+Calibrations with a tight type I error constraint can move when rerun.
+
+## Summary fix
+
+`Pr_Reach_Max_N` is computed from the counts, `(n - early efficacy stops -
+early futility stops) / n`, instead of `1 - PET_Efficacy - PET_Futility`, and
+the `Var_` proportion variances clamp p to [0, 1]. The old form gave -1.1e-16
+at 7 + 93 early stops in 100 trials, so `Var_Pr_Reach_Max_N` was negative.
+Every engine shares this summary. Values move by at most about 1e-16.
 
 # evolveTrial 0.0.0.9004
 
