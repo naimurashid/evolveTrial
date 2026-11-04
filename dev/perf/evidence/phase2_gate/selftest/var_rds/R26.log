@@ -1,0 +1,4 @@
+<environment: namespace:evolveTrial>
+[layer2] R26 doublet_triplet_admissible_EN_fut multi_arm rws task U13 cert_seed 910001 R 2000 K 13 cutpoints 13 power 0.8305 type1 0.0805 E0N 61.5580 E1N 86.4605 wall 20.1 s
+[layer2] engine echo: p6[calls=1 F=6 opt=TRUE workers=38 frameF=6 frameOpt=TRUE build=7565a17] dropout[calls=1 switch=off passed=FALSE workers=38 seen=FALSE] cpp[lines=0 pids=0 trials=0 expect=4000 rd= F= lsf= mode=] force_r=FALSE engine_ok TRUE 
+[layer2] checks: cutpoints_eq_n_intervals=TRUE random_dropout_FALSE=TRUE min_follow_up_at_final_6=TRUE looks_stop_at_final_option=TRUE num_workers_19=TRUE num_simulations_R=TRUE n_rep_R=TRUE counts_integral=TRUE 

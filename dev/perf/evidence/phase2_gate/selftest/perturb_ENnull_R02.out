@@ -1,0 +1,5 @@
+[p2_compare] FAIL: 9 of 10 designs pass; report in /home/naimrashid/research/evolveTrial-perf/dev/perf/evidence/phase2_gate/selftest/perturb_ENnull_R02
+ design complete rows_ok power_ok type1_ok ENnull_ok ENalt_ok power_class_ok
+    R02     TRUE    TRUE     TRUE     TRUE     FALSE     TRUE           TRUE
+ type1_class_ok
+           TRUE
