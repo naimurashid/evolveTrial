@@ -134,6 +134,15 @@ one frame. PI ruling: rerun B16 alone, sized in advance for test power at least 
 200,000, exact 1,600,000, se about 0.013, test power about 0.97, seeds 3150xxx and 3151xxx, library built from 325c664).
 Reinstall 0.0.0.9004 only if it passes.
 
+### 3b. B16 powered confirmation (p31d)
+
+`p31d_gateS_B16.sh`, sized before running: R body 200,000, exact 1,600,000, seeds 3150xxx and 3151xxx, library built
+from 325c664. PASS on every statistic. EN under the alternative: R body 4.932, exact 4.946, diff +0.014 against a margin
+of 0.049, se 0.0129 (as sized), z 4.9 and 2.7, test power 0.97. Power 0.0335 vs 0.0337, type I 0.0010 vs 0.0010, EN0
+4.123 vs 4.124. The three B16 readouts on this statistic gave +0.049, -0.028 and +0.014, so no systematic difference.
+Gate S closed: B02, B07, B15 and B20 from the pre-set confirmation (3a), B16 from this run. 0.0.0.9004 reinstalled into
+`~/R/library` 2026-11-04 (backup of 0.0.0.9003 kept).
+
 ## 4. Mismatches with the brief or plan
 
 1. The stale comments P3-0 placed at merged lines 579 and 588 are at lines 584 and 593 of c936bde. Both
