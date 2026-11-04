@@ -1,6 +1,6 @@
 Package: evolveTrial
 Title: Adaptive Clinical Trial Utilities
-Version: 0.0.0.9002
+Version: 0.0.0.9003
 Author: Naim Rashid [aut, cre]
 Maintainer: Naim Rashid <naim@unc.edu>
 Authors@R:
@@ -12,7 +12,6 @@ License: file LICENSE
 Depends: R (>= 4.2)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Suggests:
     testthat (>= 3.0.0),
     knitr,
@@ -36,6 +35,8 @@ Imports:
     stats,
     tidyselect,
     utils
-LinkingTo: 
+LinkingTo:
     Rcpp,
     RcppArmadillo
+SystemRequirements: C++17, LAPACK, BLAS
+Config/roxygen2/version: 8.0.0

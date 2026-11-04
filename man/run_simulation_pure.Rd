@@ -35,6 +35,7 @@ run_simulation_pure(
   futility_threshold_vs_ref_prob = NULL,
   compare_arms_futility_margin = 0,
   compare_arms_hr_margin = NULL,
+  compare_arms_hr_eff_margin = NULL,
   use_ph_model_vs_ref = FALSE,
   ph_loghr_prior_mean = 0,
   ph_loghr_prior_sd = 1,
@@ -159,8 +160,15 @@ vs-reference decisions.}
 \item{compare_arms_futility_margin}{Absolute median difference used when
 defining vs-reference futility.}
 
-\item{compare_arms_hr_margin}{Optional hazard-ratio margin used when
-\code{use_ph_model_vs_ref = TRUE}.}
+\item{compare_arms_hr_margin}{Optional hazard-ratio futility margin used when
+\code{use_ph_model_vs_ref = TRUE}. Buffers the futility comparator toward
+benefit: futility uses \code{Pr(HR >= 1 - delta_HR)}.}
+
+\item{compare_arms_hr_eff_margin}{Optional hazard-ratio efficacy margin used
+when \code{use_ph_model_vs_ref = TRUE}. When set (rule_variant = "symmetric")
+buffers the efficacy comparator toward benefit: efficacy uses
+\code{Pr(HR < 1 - delta_HR)}. \code{NULL} (rule_variant = "current"/"no_margin")
+leaves the comparator at the unbuffered \code{HR < 1}.}
 
 \item{use_ph_model_vs_ref}{Logical; use the proportional-hazards joint model
 for vs-reference comparisons.}
@@ -187,17 +195,27 @@ threshold for final futility declarations.}
 
 \item{randomization_probs}{Named numeric vector of randomisation probabilities.}
 
-\item{min_follow_up_at_final}{Additional follow-up (months) required after
-last enrolment before the final analysis.}
+\item{min_follow_up_at_final}{Additional follow-up (months) after the last
+enrolment before the final analysis. For a trial not stopped early the
+final analysis is at \verb{min(last enrolment + min_follow_up_at_final, max_trial_time)} (\code{T_final}). Every interim look (calendar, person-time,
+backstop, the look when enrolment ends, post-enrolment looks) runs only
+strictly before \code{T_final}; with the default \code{0} the look at the moment
+enrolment ends therefore no longer runs (changed in 0.0.0.9002). This is
+the schedule for \code{looks_stop_at_final = FALSE}; see that argument for \code{TRUE}.}
 
-\item{max_trial_time}{Maximum calendar time (months) for the entire trial.
-After this cutoff from trial start, the trial terminates regardless of
-other stopping rules. Default is \code{Inf} (no time limit).}
+\item{max_trial_time}{Maximum calendar time (months) from trial start.
+Since 0.0.0.9002 this cutoff closes accrual (an arrival at or after it
+enrols nobody), interim analyses and the final analysis: no enrolment,
+interim, stop time or final analysis lies at or after it (the final
+analysis may lie at it). Default is \code{Inf} (no time limit).}
 
-\item{looks_stop_at_final}{Logical. \code{FALSE} (default) reproduces 422eb40:
-after enrolment completes, one interim check at the accrual-exit time and
-then checks every \code{interim_calendar_beat} until \code{max_trial_time}, while
-the final analysis is cut at
+\item{looks_stop_at_final}{Logical. \code{FALSE} (default) uses the 0.0.0.9002
+chronology described under \code{min_follow_up_at_final} and \code{max_trial_time}
+(BATON-C freeze Amendment 8): one interim check at the moment enrolment
+ends if that is strictly before \code{T_final}, then checks every
+\code{interim_calendar_beat} after it strictly before \code{T_final}. (Before
+0.0.0.9003 \code{FALSE} reproduced 422eb40, with checks until \code{max_trial_time}.)
+With either value the final analysis is at
 \code{T* = min(last enrolment + min_follow_up_at_final, max_trial_time)}.
 \code{TRUE} runs post-enrolment checks only at last enrolment plus each
 positive multiple of \code{interim_calendar_beat} strictly before \code{T*} (no

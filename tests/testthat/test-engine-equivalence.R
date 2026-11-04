@@ -297,3 +297,29 @@ test_that("the L2 notice fires only for an explicit option, never for the defaul
   expect_message(note("hybrid path"), "hybrid path")
   expect_true(en$noted)
 })
+
+# ---- P3-0: amd8 chronology frames (looks_stop_at_final FALSE) never reach a C++ engine -----------------------------
+# After the merge of main (0.0.0.9003) the looks_stop_at_final = FALSE path of the R body follows the amd8 chronology,
+# which neither C++ engine implements. The supported set admits only looks_stop_at_final = TRUE frames, so a P6-off
+# frame with a binding cutoff must fall back under the default and give exactly the R body's output.
+test_that("P6-off frame with a binding max_trial_time falls back and equals the R body (default, single-arm and vs-ref)", {
+  en <- ns(".exact_note_env"); en$noted <- NULL
+  on.exit(en$noted <- NULL, add = TRUE)
+  # R01: 32 patients at 2 per month (about 16 months of accrual); R23 at its own rate, cut well before accrual ends
+  for (spec in list(list(D = "R01", n = 20L, cut = 10), list(D = "R23", n = 6L, cut = NULL))) {
+    d <- fx(spec$D)
+    cut <- if (is.null(spec$cut)) {
+      0.5 * sum(d$base_args$max_total_patients_per_arm) / d$base_args$overall_accrual_rate
+    } else spec$cut
+    mod <- list(max_trial_time = cut)
+    expect_no_message(a <- run_design(d, spec$n, seed = 13, looks_stop = FALSE, base_mod = mod))
+    b <- run_design(d, spec$n, seed = 13, use_cpp = FALSE, looks_stop = FALSE, base_mod = mod)
+    expect_identical(a, b, info = spec$D)
+    # the cutoff binds: expected enrolment per arm stays below the arm's maximum
+    expect_true(all(a$tab$Exp_N < d$base_args$max_total_patients_per_arm[a$tab$Arm_Name]), info = spec$D)
+    # the predicate refuses the frame: an explicit exact engine errors instead of running it
+    expect_error(run_design(d, spec$n, seed = 13, engine = "exact", looks_stop = FALSE, base_mod = mod),
+                 "outside the supported set", info = spec$D)
+  }
+  expect_null(en$noted)
+})

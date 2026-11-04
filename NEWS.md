@@ -1,4 +1,31 @@
-# evolveTrial 0.0.0.9002
+# evolveTrial 0.0.0.9003
+
+## Merge of main (amd8 chronology) into the engine branch
+
+Both lines of development called themselves 0.0.0.9002. This release merges
+them. The two 0.0.0.9002 sections below are kept as written and labeled by
+branch.
+
+* **amd8 chronology on the `looks_stop_at_final = FALSE` path.** With
+  `looks_stop_at_final = FALSE` (the default, also the default of
+  `options(evolveTrial.looks_stop_at_final)`) the R body follows main's
+  0.0.0.9002 chronology (BATON-C freeze Amendment 8): accrual closes at
+  `max_trial_time`, interims run only strictly before
+  `T_final = min(last enrolment + min_follow_up_at_final, max_trial_time)`,
+  and the per-trial chronology invariants are asserted. This replaces the
+  422eb40 schedule that `FALSE` reproduced on the engine branch, so results on
+  the default path change exactly as main's 0.0.0.9002 section describes.
+* **`looks_stop_at_final = TRUE` is unchanged.** The P6 chronology (ADAPT
+  Amendment 2, the schedule both C++ engines implement) is textually the code of
+  the engine branch at 37bb518. The amd8 rules and invariants do not apply on
+  it, and results on these frames do not change.
+* **Exact engine stays the default.** The supported set still admits only
+  `looks_stop_at_final = TRUE` frames, so no amd8 frame reaches either C++
+  engine. Default calls run the R body with the amd8 chronology.
+* `random_dropout` keeps its default `TRUE`, the uniform dropout censoring that
+  main's chronology tests assume.
+
+# evolveTrial 0.0.0.9002 (engine branch: exact engine as default)
 
 ## Changes to defaults
 
@@ -29,6 +56,46 @@
   exact against R-body operating characteristics within Monte Carlo
   tolerances, golden-value snapshots of both engines, and default selection.
   Larger versions run when `EVOLVETRIAL_LONG_TESTS` is set.
+
+# evolveTrial 0.0.0.9002 (main: amd8 chronology, BATON-C freeze Amendment 8)
+
+## Chronology change (Amendment 8, item 1): calendar cutoff
+
+`run_simulation_pure()` now enforces `max_trial_time` as a hard calendar
+cutoff and fixes the final-analysis time. Results from 0.0.0.9001 and earlier
+are not comparable for trials whose chronology reaches `max_trial_time` or
+that ran interim looks at or after the final-analysis time.
+
+* **Accrual closes at `max_trial_time`.** An arrival at or after the cutoff
+  enrols nobody and triggers no interim; enrolment ends there. Previously the
+  enrolment loop had no time condition, patients were enrolled after the
+  cutoff, counted in N and dropped from the analysis, and interim looks ran
+  after the cutoff on post-cutoff data.
+* **Final-analysis time.** For a trial not stopped early the final analysis
+  is at `T_final = min(last enrolment + min_follow_up_at_final,
+  max_trial_time)` (unchanged formula; the last enrolment is now always
+  before the cutoff).
+* **Interims only before `T_final`.** Every interim look (calendar,
+  person-time, backstop, the look at the moment enrolment ends, post-enrolment
+  looks) runs only strictly before `T_final`. Previously post-enrolment looks
+  ran until `max_trial_time` even when `T_final` was earlier, so a trial could
+  stop after its own final analysis. With `min_follow_up_at_final = 0` (the
+  default) the look at the moment enrolment ends coincides with `T_final` and
+  no longer runs; this also changes results for `max_trial_time = Inf`
+  callers that use the default.
+* **Invariants asserted.** Each simulated trial stops with an error if any
+  enrolment, stop or final-analysis time exceeds a finite `max_trial_time`,
+  or any enrolment lies after the final-analysis time.
+* RNG stream: an arrival at or after the cutoff consumes only the arrival
+  draw. Trials whose chronology never reaches the cutoff and that ran no look
+  at or after `T_final` reproduce 0.0.0.9001 draw for draw.
+* Known limitation: with `min_follow_up_at_final = 0` and a finite cutoff, the
+  look at the last arrival before the cutoff can coincide with `T_final`
+  (whether that arrival is the last is only known when the next arrival lands
+  at or after the cutoff); the same holds for some multi-arm partial-stop
+  exits. With `min_follow_up_at_final > 0` in single-arm mode no look can
+  reach `T_final`.
+* The C++ hybrid path (`src/hybrid_trial_sim.cpp`) is unchanged.
 
 # evolveTrial 0.0.0.9001
 
