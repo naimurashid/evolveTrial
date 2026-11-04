@@ -18,8 +18,9 @@ need only trial-loop logic, and the phase 2 exact posterior applies to them unch
 model) needs new posterior math. The rest are two path selectors, three draw-count checks that matter only to
 phase 1, and nine error, degenerate, dead or deliberate-R items that should stay on the R body.
 
-A call with every evolveTrial option unset never reaches a fast engine today. Item 4 (`looks_stop_at_final`
-defaults to FALSE) and item 6 (`random_dropout` defaults to TRUE) fail it. The paper's own wrappers fail only those
+A call with every evolveTrial option unset never reaches a fast engine today. On the single-arm path it fails
+items 4 (`looks_stop_at_final` defaults to FALSE), 6 (`random_dropout` defaults to TRUE), 7, 8, 10 and 13c, and on
+the between-arm path also V2, V6 and V7 (Section 5). The paper's own wrappers fail only those
 two items on futility-only designs, because they already set `max_trial_time = 72`, `rebalance_after_events = 50`,
 named thresholds and the PH model. The atbo-longleaf certify and search pipelines reach the fast engines only
 because their shims set both values (`verify_m4_install("off")`, `p6r_install("p6")`).
@@ -138,12 +139,12 @@ and within 4 Monte Carlo standard errors against 10^7 draws).
 
 ## 4. Ordered phase 3 plan (caller impact per effort)
 
-1. **Items 4 and 6** (small, small). These make a call with all options unset run fast, and with it every paper
-   wrapper on futility-only designs (14 of 39 single-arm and 7 of 35 multi-arm production rows), without the
+1. **Items 4 and 6** (small, small). These make every paper wrapper run fast on futility-only designs (14 of 39 single-arm and 7 of 35 multi-arm production rows), without the
    atbo shims. The phase 1 layer reproduces the 422eb40 look schedule and the 7565a17 dropout model bit for bit.
    This step does not decide which model is scientifically right. It only makes both fast.
-2. **Items 7 and 8** (small). These complete the bare package defaults, so a bare `run_simulation_pure()` call
-   with infinite trial time and no rebalancing is covered.
+2. **Items 7 and 8** (small). Infinite trial time and no rebalancing. With steps 1, 2 and items 10 and 13c from
+   step 4, a bare single-arm `run_simulation_pure()` call is covered. A bare between-arm call also needs V2 and V6,
+   and V7 errors in the R body.
 3. **Items 9, V5 and V6** (small each). These cover the bidirectional designs (25 of 39 single-arm and 28 of 35
    multi-arm production rows) and the symmetric rule variant. The exact tails already exist.
 4. **Items 10, 13c, 3, V4, 13a, V9** (small each). Defaults and input-shape cleanup. No known production caller,
