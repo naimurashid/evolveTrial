@@ -1218,7 +1218,10 @@ run_simulation_pure <- function(
     results_data$Type_I_Error_or_Power[j]   <- early_eff + final_eff
     results_data$PET_Efficacy[j]            <- early_eff
     results_data$PET_Futility[j]            <- early_fut
-    results_data$Pr_Reach_Max_N[j]          <- 1 - early_eff - early_fut
+    # From the counts, not 1 - early_eff - early_fut: with 7 + 93 early stops in 100 trials that difference is
+    # -1.1e-16 in floating point, which made Var_Pr_Reach_Max_N negative (P3-2 gate T, PI ruling 2026-11-04).
+    results_data$Pr_Reach_Max_N[j]          <- (num_simulations - sum_stop_efficacy[arm] - sum_stop_futility[arm]) *
+      inv_num_sims
     results_data$Pr_Final_Efficacy[j]       <- final_eff
     results_data$Pr_Final_Futility[j]       <- final_fut
     results_data$Pr_Final_Inconclusive[j]   <- final_inc
@@ -1245,7 +1248,8 @@ run_simulation_pure <- function(
     results_data$Var_Exp_Time <- stats::var(all_final_time_raw) / num_simulations
 
     # Proportion metrics: analytical Bernoulli variance of the mean = p(1-p)/n
-    prop_var <- function(p) p * (1 - p) / num_simulations
+    # p is clamped to [0, 1] so a sum of proportions that rounds past a bound cannot give a negative variance.
+    prop_var <- function(p) { p <- pmin(pmax(p, 0), 1); p * (1 - p) / num_simulations }
     results_data$Var_Type_I_Error_or_Power <- prop_var(results_data$Type_I_Error_or_Power)
     results_data$Var_PET_Efficacy          <- prop_var(results_data$PET_Efficacy)
     results_data$Var_PET_Futility          <- prop_var(results_data$PET_Futility)

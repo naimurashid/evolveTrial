@@ -144,3 +144,17 @@ and every type I error is above 0.10, all well away from the cut points by many 
    R and compare as 1; it is refused as non-numeric.
 4. Gate R (Codex review) and the commit are the coordinator's. Scratch libraries `dev/perf/lib/p32_*` and builds
    `dev/perf/build/p32_*` can be deleted after gate S.
+
+## 5. Summary fix (PI ruling 2026-11-04, commit after a46d34f)
+
+Gate T's one failure (`test-return-variance.R:242`) was a defect in the shared R summary, not the port.
+`Pr_Reach_Max_N = 1 - early_eff - early_fut` gives -1.1e-16 at 7 + 93 early stops in 100 trials, so
+`Var_Pr_Reach_Max_N` was -1.1e-18. The R body gives the same value at those counts. The phase 1 engine landed on
+8 + 92, which cancels exactly. Codex flagged it independently on a46d34f (P2). PI chose the summary fix.
+
+- `R/simulation_driver.R`: `Pr_Reach_Max_N` from the counts, `(n - stop_eff - stop_fut) / n`, and `prop_var` clamps
+  p to [0, 1]. The same summary serves every engine, so gate B (engine vs R body) is unaffected.
+- Goldens regenerated. Per entry only `Pr_Reach_Max_N` and `Var_Pr_Reach_Max_N` moved, max |diff| 1.11e-16
+  (16 of 18 entries; `exact_R03_p31`, `cpp_R03_p31` unchanged). `.Random.seed` identical 18/18. After
+  regeneration `p32_golden_identical.R` gives 18/18 table and RNG identical.
+- Gate T on build `p32_fix`: 1,793 passed, 0 failed, 37 skipped.
