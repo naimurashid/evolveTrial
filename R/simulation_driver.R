@@ -1453,6 +1453,11 @@ run_scenarios <- function(base_args, scens, parallel = FALSE, seed = NULL,
       cl <- parallel::makeCluster(cores)
       on.exit(parallel::stopCluster(cl), add = TRUE)
       parallel::clusterEvalQ(cl, library(evolveTrial))
+      # PSOCK workers start with default options and an unseeded stream, unlike forked workers. Copy every
+      # evolveTrial.* option (engine, chronology, dropout) and seed the workers from `seed` when given.
+      et_opts <- options()[grep("^evolveTrial\\.", names(options()))]
+      if (length(et_opts)) parallel::clusterCall(cl, function(o) { options(o); invisible(NULL) }, et_opts)
+      if (!is.null(seed)) parallel::clusterSetRNGStream(cl, seed)
       parallel::clusterExport(cl,
                               c("scens", "base_args", "rs_formals",
                                 "return_percentiles", "percentile_probs",
