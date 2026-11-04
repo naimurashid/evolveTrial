@@ -158,3 +158,28 @@ Gate T's one failure (`test-return-variance.R:242`) was a defect in the shared R
   (16 of 18 entries; `exact_R03_p31`, `cpp_R03_p31` unchanged). `.Random.seed` identical 18/18. After
   regeneration `p32_golden_identical.R` gives 18/18 table and RNG identical.
 - Gate T on build `p32_fix`: 1,793 passed, 0 failed, 37 skipped.
+
+## 6. Gate S readout and draw-count follow-up (2026-11-04)
+
+Gate S (pre-set, 154 runs): 2 of 4 frames pass. C01 and C02 (single-arm) pass every statistic. D01 (`current`) fails
+type I error (R body 0.2450, exact 0.2403) and null EN (24.309 vs 24.534, +0.92%, margin 1%). D03 (`symmetric`) fails
+type I error (0.1506 vs 0.1453). Test power was 0.98 or more per statistic. 0.0.0.9005 is not installed.
+
+Follow-up, designed after the readout (evidence, not a gate): the phase 1 engine (bit-identical to the R body, gate B)
+on the null scenario at 1, 4 and 16 times the 800 posterior draws, 200,000 trials each, fresh seeds 3240101-3240106
+(`p32_draws_check.R`, `p32_draws/`). Gap = R body minus exact engine (exact values from gate S, 1.7M and 1.2M trials).
+
+| Frame | Draws | Type I gap | Null EN gap (exact minus R) |
+|---|---|---|---|
+| D01 | 800 | 0.0043 | 0.245 |
+| D01 | 3,200 | 0.0016 | 0.075 |
+| D01 | 12,800 | 0.0017 | 0.024 |
+| D03 | 800 | 0.0040 | 0.180 |
+| D03 | 3,200 | 0.0027 | 0.050 |
+| D03 | 12,800 | 0.0000 | 0.004 |
+
+Standard errors per cell: type I about 0.001, null EN about 0.02. Both gaps shrink toward 0 as draws grow and keep
+the sign predicted by noise at repeated looks (R body stops more under the null). The null EN gap falls by a factor
+of about 3 per fourfold increase (log-log slope -0.84 and -1.38), closer to 1/D than the 1/sqrt(D) predicted
+beforehand. At 12,800 draws both statistics are inside the phase 2 margins and within 2 standard errors of 0. No
+sign of bias in the exact engine. Three points per frame give only a rough rate.

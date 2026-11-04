@@ -1,0 +1,6 @@
+D01_R23_off_current x1 draws 800/NULL n 200000: type I 0.2446 EN 24.289, 41 s
+D01_R23_off_current x4 draws 3200/NULL n 200000: type I 0.2419 EN 24.459, 164 s
+D01_R23_off_current x16 draws 12800/NULL n 200000: type I 0.2420 EN 24.510, 711 s
+D03_R23_off_symmetric x1 draws 800/NULL n 200000: type I 0.1493 EN 24.304, 86 s
+D03_R23_off_symmetric x4 draws 3200/NULL n 200000: type I 0.1480 EN 24.434, 322 s
+D03_R23_off_symmetric x16 draws 12800/NULL n 200000: type I 0.1453 EN 24.480, 1245 s
