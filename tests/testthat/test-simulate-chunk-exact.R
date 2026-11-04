@@ -59,6 +59,68 @@ test_that("the replay instantiation reproduces the phase 1 engine exactly (R01, 
   }
 })
 
+# P3-1 (Codex review P3): the replay instantiation runs the exact file's own copy of the trial loop with R's stream and the
+# Monte Carlo posteriors, so comparing it with the R body itself checks the exact engine's amd8 chronology (j = 0 look,
+# cutoff, last-slot rule, phantom vs-ref arrival, post-enrolment looks), dropout and Inf trial time directly. Frames from
+# tests/testthat/fixtures (always available), looks_stop_at_final passed explicitly.
+build_frame_p31 <- function(D, scenario, R, lsaf, mod = list()) {
+  d <- readRDS(testthat::test_path("fixtures", paste0("args_", D, ".rds")))
+  rsp <- ns("run_simulation_pure")
+  args_i <- utils::modifyList(utils::modifyList(d$base_args, mod, keep.null = TRUE), d$scens[[scenario]], keep.null = TRUE)
+  args_i$return_variance <- TRUE
+  args_i$looks_stop_at_final <- lsaf
+  args_i <- args_i[intersect(names(args_i), names(formals(rsp)))]
+  args_i$num_simulations <- as.integer(R)
+  old <- options(evolveTrial.chunk_probe = function(env) env)
+  on.exit(options(old), add = TRUE)
+  do.call(rsp, args_i)
+}
+
+test_that("P3-1: the replay instantiation equals the R body on looks_stop_at_final FALSE frames (exact file's loop)", {
+  half23 <- 0.5 * (52 + 51) / 2
+  frames <- list(
+    list(D = "R01", lsaf = FALSE, mod = list(), R = 60L),
+    list(D = "R01", lsaf = FALSE, mod = list(max_trial_time = 10), R = 60L),
+    list(D = "R01", lsaf = FALSE, mod = list(min_follow_up_at_final = 0), R = 60L),
+    list(D = "R01", lsaf = FALSE, mod = list(max_trial_time = Inf, random_dropout = TRUE, censor_max_time_sim = 30,
+                                             rebalance_after_events = NULL), R = 60L),
+    list(D = "R01", lsaf = TRUE, mod = list(max_trial_time = Inf, futility_threshold_hc_prob = NULL,
+                                            median_pfs_success_threshold_arms = NULL), R = 40L),
+    list(D = "R23", lsaf = FALSE, mod = list(), R = 15L),
+    list(D = "R23", lsaf = FALSE, mod = list(max_trial_time = half23), R = 15L),
+    list(D = "R23", lsaf = FALSE, mod = list(min_follow_up_at_final = 0, random_dropout = TRUE), R = 15L)
+  )
+  for (f in frames) for (s in 1:2) {
+    env <- build_frame_p31(f$D, s, f$R, f$lsaf, f$mod)
+    info <- paste(f$D, s, f$lsaf, paste(names(f$mod), unlist(f$mod), collapse = " "))
+    expect_true(isTRUE(env$cfg$supported), info = info)
+    a <- env$simulate_chunk_r(seq_len(f$R), seed = 5150L); ra <- .Random.seed
+    set.seed(5150L); b <- ns(".simulate_chunk_exact_replay")(seq_len(f$R), env$cfg); rb <- .Random.seed
+    expect_identical(b, a, info = info)
+    expect_identical(rb, ra, info = info)
+  }
+})
+
+test_that("P3-1 (Codex P2): an arrival time that overflows to Inf errors in the R body, cpp and the exact engine", {
+  d <- readRDS(testthat::test_path("fixtures", "args_R01.rds"))
+  ba <- utils::modifyList(d$base_args, list(max_trial_time = Inf, overall_accrual_rate = 1e-308,
+                                            min_follow_up_at_final = 0, max_total_patients_per_arm = c(Experimental = 1L),
+                                            rebalance_after_events = NULL, futility_threshold_hc_prob = NULL,
+                                            random_dropout = FALSE), keep.null = TRUE)
+  # one arrival per trial; it overflows with probability Pr(Exp(1) > 1.798) = 0.17, so 60 trials overflow in every engine
+  # (the exact engine has its own streams and errors on its own overflowing trial)
+  ba$num_simulations <- 60L; ba$parallel_replicates <- FALSE
+  run <- function(engine, use_cpp) {
+    old <- options(evolveTrial.engine = engine, evolveTrial.use_cpp_engine = use_cpp, evolveTrial.looks_stop_at_final = FALSE)
+    on.exit(options(old), add = TRUE)
+    run_scenarios(ba, d$scens[1], seed = 1, return_variance = TRUE)
+  }
+  expect_error(run("cpp", FALSE), "missing value where TRUE/FALSE needed")   # the R body
+  expect_error(run("cpp", TRUE), "missing value where TRUE/FALSE needed")
+  expect_error(run("exact", TRUE), "missing value where TRUE/FALSE needed")
+  expect_error(run(NULL, TRUE), "missing value where TRUE/FALSE needed")     # the default (exact)
+})
+
 # ---- exact engine --------------------------------------------------------------------------------------------------------
 test_that("the exact engine depends only on the seed and the trial index, and draws nothing from R", {
   for (D in c("R01", "R23")) {
@@ -89,8 +151,8 @@ test_that("the exact engine refuses configurations outside the supported set", {
   skip_if_not(file.exists(cap_path("R01")), "capture R01 not available")
   d <- readRDS(cap_path("R01"))
   env <- build_frame_x(d, 1, 20)
-  bad <- env$cfg; bad$random_dropout <- TRUE
-  expect_error(ns(".simulate_chunk_exact")(1:5, bad, c(1L, 2L)), "outside the supported set")
+  bad <- env$cfg; bad$random_dropout <- NA   # P3-1: TRUE is supported; a non-logical value is still refused
+  expect_error(ns(".simulate_chunk_exact")(1:5, bad, c(1L, 2L)), "must be TRUE or FALSE")
   bad <- env$cfg; bad$supported <- FALSE
   expect_error(ns(".simulate_chunk_exact")(1:5, bad, c(1L, 2L)), "outside the supported set")
   expect_error(ns(".simulate_chunk_exact")(1:5, env$cfg, 1L), "two non-NA integers")

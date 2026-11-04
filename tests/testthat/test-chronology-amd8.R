@@ -44,6 +44,10 @@ test_that("amd8: slow accrual under H0 respects the 72-month chronology (stop ti
 })
 
 test_that("amd8: the run_scenarios path enforces the cutoff on aggregate OCs", {
+  # P3-1: the pinned values are the R body's; both C++ engines now admit this frame, so pin the R body (gate B checks
+  # engine "cpp" against it bit for bit)
+  old_opt <- options(evolveTrial.use_cpp_engine = FALSE)
+  on.exit(options(old_opt), add = TRUE)
   a <- amd8_args(lambda = 0.92, true_median = 9, fu_final = FU, num_simulations = 100L)
   res <- as.data.frame(run_scenarios(a, list(list()), parallel = FALSE, seed = 7,
                                      return_variance = TRUE))
@@ -64,6 +68,10 @@ test_that("amd8: min_follow_up_at_final = 0 drops the look at the moment enrolme
 })
 
 test_that("amd8: max_trial_time = Inf with min_follow_up_at_final > 0 is unchanged from 0.0.0.9001", {
+  # P3-1: the pinned values are the R body's; both C++ engines now admit this frame, so pin the R body (gate B checks
+  # engine "cpp" against it bit for bit)
+  old_opt <- options(evolveTrial.use_cpp_engine = FALSE)
+  on.exit(options(old_opt), add = TRUE)
   # Breakage inventory item 2: seeded multi-replicate run, identical to b6797fe.
   bc <- amd8_args(lambda = 1.59, max_trial_time = Inf, fu_final = FU, num_simulations = 200L)
   res <- as.data.frame(run_scenarios(
@@ -80,6 +88,14 @@ test_that("amd8: max_trial_time = Inf with min_follow_up_at_final > 0 is unchang
 77.069586523199746), c(3.6480752512562815, 1.6003466080402009
 ), c(1.6692293179666797, 1.0462310149938689)), cols)
   for (cc in cols) expect_identical(res[[cc]], old[[cc]], label = cc)
+  # P3-1: the draw-based C++ engine gives the same table
+  old_eng <- options(evolveTrial.use_cpp_engine = TRUE, evolveTrial.engine = "cpp")
+  on.exit(options(old_eng), add = TRUE, after = FALSE)
+  res_cpp <- as.data.frame(run_scenarios(
+    bc, list(list(weibull_median_true_arms = c(Experimental = 6)),
+             list(weibull_median_true_arms = c(Experimental = 9))),
+    parallel = FALSE, seed = 20261004, return_variance = TRUE))
+  expect_identical(res_cpp, res)
 })
 
 test_that("amd8: fast accrual where 72 never binds matches 0.0.0.9001 up to T_final", {

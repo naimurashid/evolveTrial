@@ -1,3 +1,52 @@
+# evolveTrial 0.0.0.9004
+
+## Fast engines cover the default single-arm call (phase 3, step P3-1)
+
+Both C++ engines (the draw-based `"cpp"` engine and the default exact engine)
+now run six configurations that used to fall back to the R body. A call to
+`run_simulation_pure()` with these options left at their defaults now runs on
+the exact engine.
+
+* **`looks_stop_at_final = FALSE` (the amd8 chronology).** Accrual closes at a
+  finite `max_trial_time`, the look at the end of enrolment and the
+  post-enrolment looks run only strictly before `T_final`, the last-slot and
+  vs-reference phantom-arrival rules apply, and the chronology invariants stop
+  the run with the R body's messages (for example with
+  `min_follow_up_at_final < 0`).
+* **`random_dropout = TRUE`** (the default). The uniform dropout time is kept as
+  the censoring time. In the exact engine it is one extra draw per patient from
+  the trial's own generator.
+* **`max_trial_time = Inf`** (the default) under both chronologies. It needs
+  every arm's `max_total_patients_per_arm` above 0 (otherwise the person-time
+  gate denominator is `0 * Inf` and the R body errors, so such frames still run
+  the R body).
+* **`rebalance_after_events = NULL`** (the default): no interval rebalancing.
+* **Median-threshold fallbacks.** `median_pfs_success_threshold_arms` and
+  `median_pfs_futility_threshold_arms` may be `NULL` or lack the arm, giving the
+  R body's `Inf` / `-Inf` fallbacks (final probability 0). At the interim the
+  thresholds fall back to `null_median_arms` and `futility_median_arms` as
+  before. An interim threshold vector that is not `NULL` must name the arm,
+  because the R body errors otherwise.
+* **`futility_threshold_hc_prob = NULL`** (the default): no interim futility
+  stop.
+
+Everything else in the supported set is unchanged (multi-arm vs historical
+control, interim efficacy stopping, person-time milestones, unnamed caps, non-PH
+between-arm models and the other excluded items still run the R body).
+
+**Results change by design on these frames under the default engine.** Calls
+that used to fall back now run the exact engine, whose posterior probabilities
+are exact rather than Monte Carlo and whose patient-level draws come from
+per-trial streams. This includes the paper wrappers on futility-only designs,
+which leave `looks_stop_at_final` unset. `options(evolveTrial.engine = "cpp")`
+gives the draw-based engine, which is bit-identical to the R body on every
+frame it admits, and `options(evolveTrial.use_cpp_engine = FALSE)` runs the R
+body itself. Frames the supported set already admitted in 0.0.0.9003 (for
+example the atbo certify shims, `looks_stop_at_final = TRUE` with dropout off)
+give the same results as before. A `looks_stop_at_final = TRUE` frame with
+dropout on, `max_trial_time = Inf`, no rebalancing, a threshold fallback or no
+interim futility rule used to run the R body and now runs the exact engine.
+
 # evolveTrial 0.0.0.9003
 
 ## Merge of main (amd8 chronology) into the engine branch

@@ -207,9 +207,9 @@
 #'   so results are identical for any \code{num_workers} and block size. On
 #'   configurations outside the supported set of the C++ engines (and when
 #'   \code{options(evolveTrial.use_cpp_engine = FALSE)}), the default falls back
-#'   silently to the draw-based engine. The supported set requires
-#'   \code{options(evolveTrial.looks_stop_at_final = TRUE)}, whose own default is
-#'   \code{FALSE}. \code{options(evolveTrial.engine = "cpp")}
+#'   silently to the draw-based engine. The supported set covers both
+#'   \code{looks_stop_at_final} chronologies (0.0.0.9004).
+#'   \code{options(evolveTrial.engine = "cpp")}
 #'   selects the draw-based C++ engine, which is bit-identical to the R body
 #'   (\code{options(evolveTrial.use_cpp_engine = FALSE)}). Setting
 #'   \code{options(evolveTrial.engine = "exact")} explicitly makes an
@@ -265,7 +265,7 @@ run_simulation_pure <- function(
     # Max calendar time for the entire trial (absolute cutoff from trial start).
     # 0.0.0.9002: closes accrual, interims and the final analysis; see roxygen.
     max_trial_time = Inf,
-    # D1 option: FALSE = frozen 422eb40 (looks to max_trial_time); TRUE = looks only before the final time T*
+    # D1 option: FALSE = amd8 chronology (0.0.0.9003); TRUE = P6, ADAPT Amendment 2 (no look at the end of enrollment)
     looks_stop_at_final = getOption("evolveTrial.looks_stop_at_final", FALSE),
     # legacy info gates + calendar-beat interims
     min_events_for_analysis = NULL,
@@ -581,7 +581,7 @@ run_simulation_pure <- function(
         # accrual-phase look, so no patient joins the enrollment count after the analysis dataset closes (T* <=
         # max_trial_time). Accrual stops; arms still recruiting keep their enrolled counts and go to the
         # post-enrollment schedule and final analysis below with T* = min(last_enroll_time + min_follow_up_at_final,
-        # max_trial_time), the same formula as after complete enrollment. FALSE keeps 422eb40 (no time cap on accrual).
+        # max_trial_time), the same formula as after complete enrollment. FALSE: the amd8 rules below.
         if (looks_stop_at_final && current_time >= max_trial_time) {
           current_time <- last_enroll_time  # the arrival never happened (previous event = last enrollment)
           break
@@ -590,7 +590,7 @@ run_simulation_pure <- function(
         # looks_stop_at_final = TRUE (P6): an arrival that would end the loop through the vs-reference break below
         # (no experimental arm can enroll) enrolls nobody, so it gets no rebalancing and no accrual-phase look.
         # Without this, that phantom arrival could fire a look after the last enrollment, out of calendar order with
-        # the post-enrollment grid, or at or after T*. FALSE keeps the 422eb40 behavior (look first, then break).
+        # the post-enrollment grid, or at or after T*. FALSE: the amd8 rules below.
         if (looks_stop_at_final && isTRUE(compare_arms_option)) {
           exp_idx0 <- which(arm_names != reference_arm_name)
           exp_active0 <- exp_idx0[state$arm_status[arm_names[exp_idx0]] == "recruiting"]

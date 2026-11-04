@@ -71,6 +71,9 @@ amd8_filter <- function(args) {
 }
 
 amd8_chronology <- function(args, seeds) {
+  # P3-1: the traces below see only the R body; since P3-1 both C++ engines admit these frames, so pin the R body here
+  old_opt <- options(evolveTrial.use_cpp_engine = FALSE)
+  on.exit(options(old_opt), add = TRUE)
   ns <- asNamespace("evolveTrial")
   args <- amd8_filter(args)
   rec <- new.env()

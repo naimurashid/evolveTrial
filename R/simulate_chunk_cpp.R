@@ -11,9 +11,10 @@
 #   Section 3).
 # A frame is checked against the common items plus the HC items when compare_arms_option is not TRUE in the frame, and
 # against the common items plus the vs-ref items when it is (inventory dev/perf/evidence/chunk_body_inventory.md,
-# Section 2). The HC list is exactly the step 3 list (same labels, same checks, same order).
+# Section 2). The HC list is the step 3 list in the step 3 order. P3-1 (dev/plans/2026-11-04-p3-1-plan.md) relaxed items 4,
+# 6, 7, 8, 10 and 13c and renamed their labels to say what each now requires.
 
-# Items shared by both paths (step 3 items 4 to 8, 12, 13b and 13g). Item 11 (EVOLVETRIAL_USE_CPP) is read at dispatch
+# Items shared by both paths (step 3 items 4 to 8, 12, 13b and 13g; items 4, 6, 7 and 8 relaxed in P3-1). Item 11 (EVOLVETRIAL_USE_CPP) is read at dispatch
 # by .chunk_cpp_env_ok(). Item 13e has a path-specific form, see the two lists below.
 .chunk_cpp_common_checks <- function(env) {
   g <- function(name) get(name, envir = env, inherits = FALSE)
@@ -22,16 +23,30 @@
   args <- g("base_args_for_interim")
   arm_names <- g("arm_names")
   list(
-    # 4. looks_stop_at_final (2.5, 2.13, I7)
-    "4 looks_stop_at_final TRUE" = function() isTRUE(g("looks_stop_at_final")),
+    # 4. looks_stop_at_final one TRUE or FALSE (2.5, 2.13, I7). P3-1: FALSE (the amd8 chronology of the R body, SD:605-637,
+    #    SD:750-779, invariants SD:815-831) is ported to both C++ engines.
+    "4 looks_stop_at_final TRUE or FALSE" = function() {
+      x <- g("looks_stop_at_final"); is.logical(x) && length(x) == 1L && !is.na(x)
+    },
     # 5. no person-time milestones (2.7)
     "5 pt_targets_abs NULL" = function() is.null(g("pt_targets_abs")),
-    # 6. dropout off (2.11, P3)
-    "6 random_dropout FALSE" = function() identical(g("random_dropout"), FALSE),
-    # 7. finite max_trial_time (2.14, 2.18)
-    "7 max_trial_time finite" = function() is_fin1(g("max_trial_time")) && identical(args$max_trial_time, g("max_trial_time")),
-    # 8. rebalancing threshold non-NULL (2.4)
-    "8 rebalance_after_events non-NULL" = function() is_num1(g("rebalance_after_events")),
+    # 6. dropout one TRUE or FALSE (2.11, P3). P3-1: TRUE keeps the uniform as the censoring time (SD:726-727).
+    "6 random_dropout TRUE or FALSE" = function() {
+      x <- g("random_dropout"); is.logical(x) && length(x) == 1L && !is.na(x)
+    },
+    # 7. max_trial_time finite, or Inf (P3-1, both chronologies). With Inf the person-time gate denominators are
+    #    cap * Inf (IL:202, SM:226-230); a zero cap would give 0 * Inf = NaN, where the R body errors at the first look,
+    #    so Inf needs every arm's cap > 0.
+    "7 max_trial_time finite, or Inf with every cap > 0" = function() {
+      x <- g("max_trial_time"); m <- g("max_total_patients_per_arm")
+      is_num1(x) && identical(args$max_trial_time, x) &&
+        (is.finite(x) || (x == Inf && is.numeric(m) && all(m[arm_names] > 0)))
+    },
+    # 8. rebalancing threshold NULL or one number (2.4). P3-1: NULL means no rebalancing (rebalance_done TRUE from the
+    #    start, SD:562); packed as cfg$rebalance = FALSE, never as a threshold value.
+    "8 rebalance_after_events NULL or one number" = function() {
+      x <- g("rebalance_after_events"); is.null(x) || is_num1(x)
+    },
     # 12. no progress bar (P13)
     "12 show_progress FALSE" = function() identical(g("show_progress"), FALSE),
     "13b diagnostics FALSE (3.5)" = function() isFALSE(g("diagnostics")),
@@ -61,7 +76,7 @@
   )
 }
 
-# The single-arm (HC) items of step 3: 1 to 3, 9, 10, 13a, 13c to 13f.
+# The single-arm (HC) items of step 3: 1 to 3, 9, 10, 13a, 13c to 13f (items 10 and 13c relaxed in P3-1).
 .chunk_cpp_hc_checks <- function(env) {
   g <- function(name) get(name, envir = env, inherits = FALSE)
   is_num1 <- function(x) is.numeric(x) && length(x) == 1L && !is.na(x)
@@ -86,23 +101,31 @@
     # 9. no interim efficacy stopping (2.53)
     "9 efficacy_stopping_rule_hc not TRUE" = function() !isTRUE(args$efficacy_stopping_rule_hc) &&
       !isTRUE(g("efficacy_stopping_rule_hc")),
-    # 10. median thresholds named, containing the arm, finite: at the final from the frame (2.23, 2.24, 2.26), and at the
-    #     interim as IL:57-61 resolves them from args (2.55). args (SD:377-428) has no median_pfs_futility_threshold_arms
-    #     element, so the interim futility threshold resolves to args$futility_median_arms (or the success vector).
-    "10 success and futility median thresholds named and finite" = function() {
+    # 10. median thresholds (P3-1: the fallbacks are admitted).
+    #     Final (SD:868-891): the frame's vector, NULL or numeric; an arm not in its names falls back to Inf (success) or
+    #     -Inf (futility), and a non-finite value gives p = 0 (SD:876, 887). Any numeric value resolves.
+    #     Interim (IL:57-61, from args; args has no median_pfs_futility_threshold_arms element): `vec[[arm]] %||% vec[1]`
+    #     resolves only for a NULL vector or a numeric one whose names contain the arm (any other vector errors in
+    #     `[[`). The success value is never read (item 9). The futility value is read only when item 13c's probability
+    #     is set, and must then be finite.
+    "10 median thresholds resolve as in the R body" = function() {
       s <- g("median_pfs_success_threshold_arms"); f <- g("median_pfs_futility_threshold_arms")
       iv <- .chunk_cpp_interim_thresholds(args)
-      named_finite_has_arm(s) && named_finite_has_arm(f) &&
-        named_finite_has_arm(iv$success) && named_finite_has_arm(iv$futility)
+      null_or_num <- function(x) is.null(x) || is.numeric(x)
+      resolves <- function(x) is.null(x) || (is.numeric(x) && !is.null(names(x)) && all(arm_names %in% names(x)))
+      fut_used <- !is.null(args$futility_threshold_hc_prob)
+      null_or_num(s) && null_or_num(f) && resolves(iv$success) && resolves(iv$futility) &&
+        (!fut_used || named_finite_has_arm(iv$futility))
     },
     # 13. other single-arm branches the packed configuration can reach, pinned to the frozen branch or value
     "13a min_person_time_frac_per_arm is the frozen unnamed 0 (2.49)" = function() {
       x <- args$min_person_time_frac_per_arm
       is.numeric(x) && length(x) == 1L && is.null(names(x)) && identical(as.numeric(x), 0)
     },
-    "13c interim futility_threshold_hc_prob one finite number (2.54)" = function() {
+    # 13c. P3-1: NULL means no interim futility stop (IL:251-253); the interim draws are still made (phase 1).
+    "13c interim futility_threshold_hc_prob NULL or one finite number (2.54)" = function() {
       x <- args$futility_threshold_hc_prob
-      is.numeric(x) && length(x) == 1L && is.finite(x)
+      is.null(x) || (is.numeric(x) && length(x) == 1L && is.finite(x))
     },
     "13d final posterior probability thresholds finite (2.25, 2.27)" = function() {
       is_fin1(g("final_success_posterior_prob_threshold")) && is_fin1(g("final_futility_posterior_prob_threshold"))
@@ -278,7 +301,9 @@
     K = as.integer(g("num_intervals")),
     cut_base = as.numeric(cuts),
     len_base = as.numeric(g("interval_lengths_base")),
-    rebalance_threshold = as.numeric(g("rebalance_after_events")),
+    # item 8: an explicit flag; the threshold is read by the C++ only when the flag is TRUE (NA otherwise)
+    rebalance = !is.null(g("rebalance_after_events")),
+    rebalance_threshold = if (is.null(g("rebalance_after_events"))) NA_real_ else as.numeric(g("rebalance_after_events")),
     prior_alpha = as.numeric(g("prior_alpha_params_model")),
     prior_beta = as.numeric(g("prior_beta_params_model")),
     draws_final = as.integer(g("num_posterior_draws")),
@@ -323,15 +348,27 @@
     min_median_fu = pa("min_median_fu"),
     min_pt_frac = pa("min_pt_frac"),
     max_pt_arm = pa("max_pt_arm"),
-    futility_prob_interim = as.numeric(args$futility_threshold_hc_prob),
-    # interim futility threshold, IL:60-61: futility_thr_vec[[arm_name]] %||% futility_thr_vec[1]
+    # item 13c: an explicit flag; NULL means no interim futility stop (IL:251-253), the threshold is then NA and not read
+    futility_interim = !is.null(args$futility_threshold_hc_prob),
+    futility_prob_interim = if (is.null(args$futility_threshold_hc_prob)) NA_real_ else
+      as.numeric(args$futility_threshold_hc_prob),
+    # interim futility threshold, IL:60-61: futility_thr_vec[[arm_name]] %||% futility_thr_vec[1]. A NULL vector (only
+    # admitted with futility_interim FALSE) gives NULL, packed as NA and not read.
     futility_thr_interim = vapply(arm_names, function(arm) {
       fv <- .chunk_cpp_interim_thresholds(args)$futility
-      as.numeric(fv[[arm]] %||% fv[1])
+      x <- fv[[arm]] %||% fv[1]
+      if (is.null(x)) NA_real_ else as.numeric(x)
     }, numeric(1), USE.NAMES = FALSE),
-    # final thresholds, SD:770-772 and SD:781-783 (finite in the supported set, so the Inf / -Inf fallbacks are not taken)
-    success_thr = as.numeric(g("median_pfs_success_threshold_arms")[arm_names]),
-    futility_thr = as.numeric(g("median_pfs_futility_threshold_arms")[arm_names]),
+    # final thresholds, resolved per arm exactly as SD:868-876 and SD:879-887 do (Inf / -Inf when the vector is NULL or
+    # lacks the arm). The C++ gives p = 0 for a non-finite value, as the R body's is.finite() test does.
+    success_thr = vapply(arm_names, function(arm) {
+      x <- g("median_pfs_success_threshold_arms")
+      as.numeric(if (!is.null(x) && arm %in% names(x)) x[arm] else Inf)
+    }, numeric(1), USE.NAMES = FALSE),
+    futility_thr = vapply(arm_names, function(arm) {
+      x <- g("median_pfs_futility_threshold_arms")
+      as.numeric(if (!is.null(x) && arm %in% names(x)) x[arm] else -Inf)
+    }, numeric(1), USE.NAMES = FALSE),
     final_success_prob = as.numeric(g("final_success_posterior_prob_threshold")),
     final_futility_prob = as.numeric(g("final_futility_posterior_prob_threshold"))
   )

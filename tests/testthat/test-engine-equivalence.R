@@ -218,9 +218,27 @@ golden_specs <- list(
   exact_R23 = list(D = "R23", engine = "exact", n = 300L, seed = 123, rv = TRUE),
   cpp_R01 = list(D = "R01", engine = "cpp", n = 200L, seed = 201, rv = TRUE),
   cpp_R03 = list(D = "R03", engine = "cpp", n = 200L, seed = 203, rv = FALSE),
-  cpp_R23 = list(D = "R23", engine = "cpp", n = 100L, seed = 223, rv = TRUE)
+  cpp_R23 = list(D = "R23", engine = "cpp", n = 100L, seed = 223, rv = TRUE),
+  # P3-1 frames (looks_stop_at_final FALSE unless stated, the amd8 chronology); the six entries above are unchanged
+  exact_R01_p31 = list(D = "R01", engine = "exact", n = 500L, seed = 311, rv = TRUE, lsaf = FALSE,
+                       mod = list(max_trial_time = Inf, random_dropout = TRUE, censor_max_time_sim = 30,
+                                  rebalance_after_events = NULL, min_follow_up_at_final = 0)),
+  exact_R03_p31 = list(D = "R03", engine = "exact", n = 500L, seed = 313, rv = TRUE, lsaf = FALSE,
+                       mod = list(median_pfs_success_threshold_arms = NULL, futility_threshold_hc_prob = NULL,
+                                  max_trial_time = 12)),
+  exact_R23_p31 = list(D = "R23", engine = "exact", n = 300L, seed = 323, rv = TRUE, lsaf = FALSE,
+                       mod = list(random_dropout = TRUE, censor_max_time_sim = 30, rebalance_after_events = NULL,
+                                  max_trial_time = 26)),
+  cpp_R01_p31 = list(D = "R01", engine = "cpp", n = 200L, seed = 411, rv = TRUE, lsaf = FALSE,
+                     mod = list(random_dropout = TRUE, censor_max_time_sim = 30, max_trial_time = 10)),
+  cpp_R03_p31 = list(D = "R03", engine = "cpp", n = 200L, seed = 413, rv = TRUE, lsaf = TRUE,
+                     mod = list(max_trial_time = Inf, median_pfs_futility_threshold_arms = NULL, futility_threshold_hc_prob = NULL)),
+  cpp_R23_p31 = list(D = "R23", engine = "cpp", n = 100L, seed = 423, rv = TRUE, lsaf = FALSE,
+                     mod = list(min_follow_up_at_final = 0, max_trial_time = Inf))
 )
-golden_run <- function(g) run_design(fx(g$D), g$n, seed = g$seed, engine = g$engine, rv = g$rv)
+golden_run <- function(g) run_design(fx(g$D), g$n, seed = g$seed, engine = g$engine, rv = g$rv,
+                                     looks_stop = if (is.null(g$lsaf)) TRUE else g$lsaf,
+                                     base_mod = if (is.null(g$mod)) list() else g$mod)
 
 if (nzchar(Sys.getenv("EVOLVETRIAL_UPDATE_GOLDEN"))) {
   saveRDS(lapply(golden_specs, golden_run), golden_path(), version = 2)
@@ -260,11 +278,14 @@ test_that("default falls back silently to the phase 1 dispatcher on unsupported 
   en <- ns(".exact_note_env"); en$noted <- NULL
   on.exit(en$noted <- NULL, add = TRUE)
   d <- fx("R01"); d23 <- fx("R23")
-  # (a) looks_stop_at_final FALSE (the package default of that option): single-arm and between-arm
-  expect_no_message(a <- run_design(d, 15L, seed = 9, looks_stop = FALSE))
-  expect_identical(a, run_design(d, 15L, seed = 9, engine = "cpp", looks_stop = FALSE))
-  expect_no_message(a <- run_design(d23, 6L, seed = 9, looks_stop = FALSE))
-  expect_identical(a, run_design(d23, 6L, seed = 9, engine = "cpp", looks_stop = FALSE))
+  # (a) interim efficacy stopping (item 9, single-arm) and person-time milestones (item 5, between-arm). Before P3-1 this
+  #     case used looks_stop_at_final FALSE, which both engines now run.
+  eff <- list(efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = 0.99)
+  expect_no_message(a <- run_design(d, 15L, seed = 9, looks_stop = FALSE, base_mod = eff))
+  expect_identical(a, run_design(d, 15L, seed = 9, engine = "cpp", looks_stop = FALSE, base_mod = eff))
+  ptm <- list(person_time_milestones = c(0.3, 0.6))
+  expect_no_message(a <- run_design(d23, 6L, seed = 9, looks_stop = FALSE, base_mod = ptm))
+  expect_identical(a, run_design(d23, 6L, seed = 9, engine = "cpp", looks_stop = FALSE, base_mod = ptm))
   # (b) a between-arm frame without the HR margin (vs-ref item V6)
   nomargin <- list(compare_arms_hr_margin = NULL)
   expect_no_message(a <- run_design(d23, 6L, seed = 10, base_mod = nomargin))
@@ -281,7 +302,7 @@ test_that("default falls back silently to the phase 1 dispatcher on unsupported 
   if (is.na(old_env)) Sys.unsetenv("EVOLVETRIAL_USE_CPP") else Sys.setenv(EVOLVETRIAL_USE_CPP = old_env)
   expect_null(en$noted)
   # an explicit "exact" still refuses the unsupported frame (the distinction the default relies on)
-  expect_error(run_design(d, 30L, seed = 9, engine = "exact", looks_stop = FALSE), "outside the supported set")
+  expect_error(run_design(d, 30L, seed = 9, engine = "exact", looks_stop = FALSE, base_mod = eff), "outside the supported set")
 })
 
 test_that("the L2 notice fires only for an explicit option, never for the default", {
@@ -298,11 +319,10 @@ test_that("the L2 notice fires only for an explicit option, never for the defaul
   expect_true(en$noted)
 })
 
-# ---- P3-0: amd8 chronology frames (looks_stop_at_final FALSE) never reach a C++ engine -----------------------------
-# After the merge of main (0.0.0.9003) the looks_stop_at_final = FALSE path of the R body follows the amd8 chronology,
-# which neither C++ engine implements. The supported set admits only looks_stop_at_final = TRUE frames, so a P6-off
-# frame with a binding cutoff must fall back under the default and give exactly the R body's output.
-test_that("P6-off frame with a binding max_trial_time falls back and equals the R body (default, single-arm and vs-ref)", {
+# ---- P3-0, revised in P3-1: amd8 chronology frames with a binding cutoff -----------------------------------------------
+# P3-0 kept every looks_stop_at_final = FALSE frame on the R body. P3-1 ported the amd8 chronology to both engines, so the
+# same frames now run phase 1 (identical to the R body) and, under the default, the exact engine.
+test_that("P6-off frame with a binding max_trial_time: cpp equals the R body, the default runs the exact engine", {
   en <- ns(".exact_note_env"); en$noted <- NULL
   on.exit(en$noted <- NULL, add = TRUE)
   # R01: 32 patients at 2 per month (about 16 months of accrual); R23 at its own rate, cut well before accrual ends
@@ -312,15 +332,177 @@ test_that("P6-off frame with a binding max_trial_time falls back and equals the 
       0.5 * sum(d$base_args$max_total_patients_per_arm) / d$base_args$overall_accrual_rate
     } else spec$cut
     mod <- list(max_trial_time = cut)
-    expect_no_message(a <- run_design(d, spec$n, seed = 13, looks_stop = FALSE, base_mod = mod))
+    a <- run_design(d, spec$n, seed = 13, engine = "cpp", looks_stop = FALSE, base_mod = mod)
     b <- run_design(d, spec$n, seed = 13, use_cpp = FALSE, looks_stop = FALSE, base_mod = mod)
     expect_identical(a, b, info = spec$D)
     # the cutoff binds: expected enrolment per arm stays below the arm's maximum
     expect_true(all(a$tab$Exp_N < d$base_args$max_total_patients_per_arm[a$tab$Arm_Name]), info = spec$D)
-    # the predicate refuses the frame: an explicit exact engine errors instead of running it
-    expect_error(run_design(d, spec$n, seed = 13, engine = "exact", looks_stop = FALSE, base_mod = mod),
-                 "outside the supported set", info = spec$D)
+    expect_no_message(def <- run_design(d, spec$n, seed = 13, looks_stop = FALSE, base_mod = mod))
+    expect_identical(def, run_design(d, spec$n, seed = 13, engine = "exact", looks_stop = FALSE, base_mod = mod), info = spec$D)
+    expect_true(all(def$tab$Exp_N < d$base_args$max_total_patients_per_arm[def$tab$Arm_Name]), info = spec$D)
   }
+  expect_null(en$noted)
+})
+
+# ---- P3-1: the first slice of the general loop ----------------------------------------------------------------------------
+# Items 4 (amd8 chronology), 6 (dropout on), 7 (max_trial_time Inf), 8 (no rebalancing), 10 (median-threshold fallbacks)
+# and 13c (no interim futility rule) run on both engines. Gate B (dev/perf/phase3/P3-1_REPORT.md) is the full check with
+# branch counts; these frames are its routine-size subset.
+p31_frames <- function(D) {
+  if (D == "R23") {
+    half <- 0.5 * sum(fx("R23")$base_args$max_total_patients_per_arm) / fx("R23")$base_args$overall_accrual_rate
+    return(list(
+      off = list(lsaf = FALSE, mod = list()),
+      off_cut = list(lsaf = FALSE, mod = list(max_trial_time = half)),
+      off_F0 = list(lsaf = FALSE, mod = list(min_follow_up_at_final = 0)),
+      off_inf = list(lsaf = FALSE, mod = list(max_trial_time = Inf)),
+      on_inf = list(lsaf = TRUE, mod = list(max_trial_time = Inf)),
+      off_drop = list(lsaf = FALSE, mod = list(random_dropout = TRUE, censor_max_time_sim = 30)),
+      on_drop = list(lsaf = TRUE, mod = list(random_dropout = TRUE, censor_max_time_sim = 30)),
+      off_norebal = list(lsaf = FALSE, mod = list(rebalance_after_events = NULL))))
+  }
+  list(
+    off = list(lsaf = FALSE, mod = list()),
+    off_cut = list(lsaf = FALSE, mod = list(max_trial_time = 10)),
+    off_F0 = list(lsaf = FALSE, mod = list(min_follow_up_at_final = 0)),
+    off_inf = list(lsaf = FALSE, mod = list(max_trial_time = Inf)),
+    on_inf = list(lsaf = TRUE, mod = list(max_trial_time = Inf)),
+    off_drop = list(lsaf = FALSE, mod = list(random_dropout = TRUE, censor_max_time_sim = 30)),
+    on_drop = list(lsaf = TRUE, mod = list(random_dropout = TRUE, censor_max_time_sim = 30)),
+    off_norebal = list(lsaf = FALSE, mod = list(rebalance_after_events = NULL)),
+    off_succ_null = list(lsaf = FALSE, mod = list(median_pfs_success_threshold_arms = NULL)),
+    off_fut_null = list(lsaf = FALSE, mod = list(median_pfs_futility_threshold_arms = NULL)),
+    off_chain = list(lsaf = FALSE, mod = list(median_pfs_success_threshold_arms = NULL, median_pfs_futility_threshold_arms = NULL,
+                                              futility_median_arms = NULL)),
+    off_futprob_null = list(lsaf = FALSE, mod = list(futility_threshold_hc_prob = NULL)),
+    on_futprob_null = list(lsaf = TRUE, mod = list(futility_threshold_hc_prob = NULL)))
+}
+# every option of run_simulation_pure left at its default except the required arguments (return_variance aside)
+p31_unset <- function(d, keep = character(0)) {
+  req <- c("arm_names", "reference_arm_name", "compare_arms_option", "weibull_shape_true_arms", "weibull_median_true_arms",
+           "interval_cutpoints_sim", "max_follow_up_sim", "censor_max_time_sim", "prior_alpha_params_model",
+           "prior_beta_params_model", "num_posterior_draws", "cohort_size_per_arm", "max_total_patients_per_arm",
+           "overall_accrual_rate", "randomization_probs", keep)
+  d$base_args <- d$base_args[intersect(names(d$base_args), req)]
+  d$scens <- lapply(d$scens, function(s) s[intersect(names(s), req)])
+  d
+}
+run_unset <- function(d, n, seed, engine = NULL, use_cpp = TRUE) {
+  old <- options(evolveTrial.engine = engine, evolveTrial.use_cpp_engine = use_cpp, evolveTrial.looks_stop_at_final = NULL,
+                 evolveTrial.exact_block_size = NULL)
+  on.exit(options(old), add = TRUE)
+  ba <- d$base_args; ba$num_simulations <- as.integer(n); ba$parallel_replicates <- FALSE
+  tab <- run_scenarios(ba, d$scens, seed = seed, return_variance = TRUE)
+  list(tab = as.data.frame(tab), rng = .Random.seed)
+}
+p31_check <- function(D, n, seed) {
+  d <- fx(D)
+  for (nm in names(p31_frames(D))) {
+    f <- p31_frames(D)[[nm]]
+    info <- paste(D, nm)
+    a <- run_design(d, n, seed = seed, engine = "cpp", looks_stop = f$lsaf, base_mod = f$mod)
+    b <- run_design(d, n, seed = seed, use_cpp = FALSE, looks_stop = f$lsaf, base_mod = f$mod)
+    expect_identical(a, b, info = info)
+    ex <- run_design(d, n, seed = seed, looks_stop = f$lsaf, base_mod = f$mod)   # default: the exact engine
+    expect_identical(ex, run_design(d, n, seed = seed, engine = "exact", looks_stop = f$lsaf, base_mod = f$mod), info = info)
+    expect_false(anyNA(a$tab), info = info)
+    expect_false(anyNA(ex$tab), info = info)
+  }
+}
+
+test_that("P3-1 frames: cpp is identical to the R body, the default runs the exact engine, no NA reaches the table", {
+  p31_check("R01", 15L, 3101)
+  p31_check("R23", 5L, 3123)
+})
+
+test_that("P3-1 frames, long tier: larger sizes and R03 (EVOLVETRIAL_LONG_TESTS)", {
+  skip_if_not(long_tests(), "set EVOLVETRIAL_LONG_TESTS to run")
+  p31_check("R01", 150L, 3201)
+  p31_check("R03", 150L, 3203)
+  p31_check("R23", 40L, 3223)
+  for (D in c("R01", "R23")) {
+    du <- p31_unset(fx(D), keep = if (D == "R23") c("use_ph_model_vs_ref", "compare_arms_hr_margin",
+                                                     "efficacy_threshold_vs_ref_prob", "futility_threshold_vs_ref_prob"))
+    expect_identical(run_unset(du, 60L, 3211, engine = "cpp"), run_unset(du, 60L, 3211, use_cpp = FALSE), info = D)
+  }
+})
+
+test_that("P3-1: a call with every option unset runs the exact engine; cpp equals the R body", {
+  en <- ns(".exact_note_env"); en$noted <- NULL
+  on.exit(en$noted <- NULL, add = TRUE)
+  d <- p31_unset(fx("R01"))
+  rsp <- ns("run_simulation_pure")
+  # the frame is admitted: looks_stop_at_final FALSE, dropout on, max_trial_time Inf, no rebalancing, NULL thresholds
+  old <- options(evolveTrial.chunk_probe = function(env) env, evolveTrial.looks_stop_at_final = NULL)
+  args_i <- utils::modifyList(d$base_args, d$scens[[1]]); args_i$num_simulations <- 5L; args_i$return_variance <- TRUE
+  env <- do.call(rsp, args_i[intersect(names(args_i), c(names(formals(rsp)), "num_simulations"))])
+  options(old)
+  expect_identical(ns(".chunk_cpp_violations")(env), character(0))
+  expect_true(isTRUE(env$cfg$supported))
+  expect_false(env$cfg$looks_stop_at_final)
+  expect_true(env$cfg$random_dropout)
+  expect_identical(env$cfg$max_trial_time, Inf)
+  expect_false(env$cfg$rebalance)
+  expect_identical(env$cfg$rebalance_threshold, NA_real_)   # explicit flag; the threshold is never read
+  expect_false(env$cfg$futility_interim)
+  expect_identical(env$cfg$success_thr, Inf)
+  expect_identical(env$cfg$futility_thr, -Inf)
+  expect_identical(run_unset(d, 20L, 3301, engine = "cpp"), run_unset(d, 20L, 3301, use_cpp = FALSE))
+  expect_no_message(def <- run_unset(d, 200L, 3302))
+  expect_identical(def, run_unset(d, 200L, 3302, engine = "exact"))
+  expect_false(anyNA(def$tab))
+  # no thresholds: every trial ends inconclusive at the final analysis and none stops early
+  expect_true(all(def$tab$Pr_Final_Inconclusive == 1))
+  expect_null(en$noted)
+})
+
+test_that("P3-1: min_follow_up_at_final < 0 trips the amd8 invariant with the R body's message in every engine", {
+  for (D in c("R01", "R23")) {
+    d <- fx(D)
+    mod <- list(min_follow_up_at_final = -1)
+    msg <- "Chronology violation: enrollment at"
+    for (eng in list(list(engine = "cpp", use_cpp = FALSE), list(engine = "cpp", use_cpp = TRUE),
+                     list(engine = "exact", use_cpp = TRUE))) {
+      expect_error(run_design(d, 4L, seed = 3401, engine = eng$engine, use_cpp = eng$use_cpp, looks_stop = FALSE,
+                              base_mod = mod), msg, info = paste(D, eng$engine, eng$use_cpp))
+    }
+    # the same message text, number for number, from the R body and from phase 1
+    m_r <- tryCatch(run_design(d, 4L, seed = 3401, use_cpp = FALSE, looks_stop = FALSE, base_mod = mod),
+                    error = conditionMessage)
+    m_c <- tryCatch(run_design(d, 4L, seed = 3401, engine = "cpp", looks_stop = FALSE, base_mod = mod),
+                    error = conditionMessage)
+    expect_identical(m_c, m_r, info = D)
+  }
+})
+
+test_that("P3-1: one frame of each still-excluded item falls back to the R body (2, 5, 9, V2, V5, V6, V9)", {
+  en <- ns(".exact_note_env"); en$noted <- NULL
+  on.exit(en$noted <- NULL, add = TRUE)
+  d <- fx("R01"); d23 <- fx("R23")
+  hc <- list(
+    "5" = list(person_time_milestones = c(0.4)),
+    "9" = list(efficacy_stopping_rule_hc = TRUE, efficacy_threshold_hc_prob = 0.99)
+  )
+  vs <- list(
+    "V2" = list(use_ph_model_vs_ref = FALSE),
+    "V5" = list(efficacy_stopping_rule_vs_ref = TRUE),
+    "V6" = list(compare_arms_hr_margin = NULL),
+    "V9" = list(min_events_per_arm = c(Doublet = 11, Triplet = 11))
+  )
+  chk <- function(dd, mods, n) for (k in names(mods)) {
+    expect_no_message(a <- run_design(dd, n, seed = 3501, looks_stop = FALSE, base_mod = mods[[k]]))
+    expect_identical(a, run_design(dd, n, seed = 3501, use_cpp = FALSE, looks_stop = FALSE, base_mod = mods[[k]]), info = k)
+    expect_error(run_design(dd, n, seed = 3501, engine = "exact", looks_stop = FALSE, base_mod = mods[[k]]),
+                 "outside the supported set", info = k)
+  }
+  chk(d, hc, 6L)
+  chk(d23, vs, 3L)
+  # item 2: two arms, each against a historical control (compare_arms_option FALSE)
+  two <- list(compare_arms_option = FALSE)
+  expect_identical(run_design(d23, 3L, seed = 3502, looks_stop = FALSE, base_mod = two),
+                   run_design(d23, 3L, seed = 3502, use_cpp = FALSE, looks_stop = FALSE, base_mod = two))
+  # items 3 and V4 (unnamed caps) make the R body itself error in make_state() end to end, so they are checked at the
+  # frame level (test-simulate-chunk-cpp.R, test-simulate-chunk-cpp-vsref.R), as are V3 and item 12 (progress bar)
   expect_null(en$noted)
 })
 

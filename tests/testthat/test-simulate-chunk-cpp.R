@@ -118,20 +118,26 @@ test_that("each violated predicate item sends the dispatcher to the R body and m
     "1"   = function(e) set_both(e, "compare_arms_option", TRUE),
     "2"   = function(e) set_both(e, "arm_names", c("Experimental", "Other")),
     "3"   = function(e) set_both(e, "max_total_patients_per_arm", unname(e$max_total_patients_per_arm)),
-    "4"   = function(e) assign("looks_stop_at_final", FALSE, envir = e),
+    # P3-1: items 4, 6, 7, 8, 10 and 13c admit FALSE / TRUE / Inf / NULL / the threshold fallbacks; what they still refuse
+    "4"   = function(e) assign("looks_stop_at_final", NA, envir = e),
     "5"   = function(e) assign("pt_targets_abs", 100, envir = e),
-    "6"   = function(e) assign("random_dropout", TRUE, envir = e),
-    "7"   = function(e) set_both(e, "max_trial_time", Inf),
-    "8"   = function(e) set_both(e, "rebalance_after_events", NULL),
+    "6"   = function(e) assign("random_dropout", NA, envir = e),
+    "7a"  = function(e) set_both(e, "max_trial_time", -Inf),
+    "7b"  = function(e) { set_both(e, "max_trial_time", Inf); set_both(e, "max_total_patients_per_arm", c(Experimental = 0)) },
+    "8"   = function(e) set_both(e, "rebalance_after_events", c(50, 60)),
     "9"   = function(e) set_both(e, "efficacy_stopping_rule_hc", TRUE),
-    "10a" = function(e) set_both(e, "median_pfs_success_threshold_arms", NULL),
-    "10b" = function(e) assign("median_pfs_futility_threshold_arms", c(Other = 4), envir = e),
+    # an interim success vector that is not NULL and does not name the arm: IL:59 `[[` errors in the R body
+    "10a" = function(e) set_args(e, "median_pfs_success_threshold_arms", 3.8),
+    # interim futility vector NULL while the interim futility rule is on: the R body errors at the first look
+    "10b" = function(e) { set_args(e, "futility_median_arms", NULL); set_args(e, "median_pfs_success_threshold_arms", NULL)
+                          set_args(e, "null_median_arms", NULL) },
+    "10d" = function(e) assign("median_pfs_success_threshold_arms", c(Experimental = "4"), envir = e),
     "10c" = function(e) { set_args(e, "futility_median_arms", NULL); set_args(e, "median_pfs_success_threshold_arms", NULL);
                           set_args(e, "null_median_arms", 3.8) },
     "12"  = function(e) assign("show_progress", TRUE, envir = e),
     "13a" = function(e) set_both(e, "min_person_time_frac_per_arm", 0.1),
     "13b" = function(e) assign("diagnostics", TRUE, envir = e),
-    "13c" = function(e) set_both(e, "futility_threshold_hc_prob", NULL),
+    "13c" = function(e) set_both(e, "futility_threshold_hc_prob", c(0.3, 0.4)),
     "13d" = function(e) assign("final_success_posterior_prob_threshold", NA_real_, envir = e),
     "13e" = function(e) set_both(e, "num_posterior_draws", 0),
     "13f" = function(e) set_both(e, "min_events_hc", c(3L, 4L)),

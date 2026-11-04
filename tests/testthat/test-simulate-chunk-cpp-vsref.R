@@ -140,11 +140,12 @@ test_that("C++ chunk is identical to the R body with the reference arm listed se
 test_that("the HC frame is checked against exactly the step 3 items and the vs-ref frame against common plus V items", {
   skip_if_not(file.exists(cap_path("R01")) && file.exists(cap_path("R23")), "step 2a captures not available")
   step3 <- c("1 compare_arms_option not TRUE", "2 one arm", "3 max_total_patients_per_arm named by arm_names",
-             "4 looks_stop_at_final TRUE", "5 pt_targets_abs NULL", "6 random_dropout FALSE", "7 max_trial_time finite",
-             "8 rebalance_after_events non-NULL", "9 efficacy_stopping_rule_hc not TRUE",
-             "10 success and futility median thresholds named and finite", "12 show_progress FALSE",
+             "4 looks_stop_at_final TRUE or FALSE", "5 pt_targets_abs NULL", "6 random_dropout TRUE or FALSE",
+             "7 max_trial_time finite, or Inf with every cap > 0",
+             "8 rebalance_after_events NULL or one number", "9 efficacy_stopping_rule_hc not TRUE",
+             "10 median thresholds resolve as in the R body", "12 show_progress FALSE",
              "13a min_person_time_frac_per_arm is the frozen unnamed 0 (2.49)", "13b diagnostics FALSE (3.5)",
-             "13c interim futility_threshold_hc_prob one finite number (2.54)",
+             "13c interim futility_threshold_hc_prob NULL or one finite number (2.54)",
              "13d final posterior probability thresholds finite (2.25, 2.27)",
              "13e posterior draw counts at least 1 (2.56, 6.8)", "13f HC gate values are scalars (2.48)",
              "13g well-formed design inputs")
@@ -193,11 +194,14 @@ test_that("each violated vs-ref predicate item sends the dispatcher to the R bod
     "V10"  = function(e) set_args(e, "ph_loghr_prior_sd", c(1, 2)),
     "13e"  = function(e) set_both(e, "num_posterior_draws", 0),
     "V11a" = function(e) set_both(e, "num_posterior_draws", 800.5),
-    "4"    = function(e) assign("looks_stop_at_final", FALSE, envir = e),
+    # P3-1: items 4, 6, 7 and 8 admit FALSE / TRUE / Inf / NULL; what they still refuse
+    "4"    = function(e) assign("looks_stop_at_final", NA, envir = e),
     "5"    = function(e) assign("pt_targets_abs", 100, envir = e),
-    "6"    = function(e) assign("random_dropout", TRUE, envir = e),
-    "7"    = function(e) set_both(e, "max_trial_time", Inf),
-    "8"    = function(e) set_both(e, "rebalance_after_events", NULL),
+    "6"    = function(e) assign("random_dropout", NA, envir = e),
+    "7"    = function(e) set_both(e, "max_trial_time", -Inf),
+    "7"    = function(e) { set_both(e, "max_trial_time", Inf)
+                            set_both(e, "max_total_patients_per_arm", c(Doublet = 52, Triplet = 0)) },
+    "8"    = function(e) set_both(e, "rebalance_after_events", c(50, 60)),
     "12"   = function(e) assign("show_progress", TRUE, envir = e),
     "13b"  = function(e) assign("diagnostics", TRUE, envir = e),
     "13g"  = function(e) set_both(e, "prior_alpha_params_model", e$prior_alpha_params_model[-1]),

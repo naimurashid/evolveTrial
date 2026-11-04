@@ -217,17 +217,17 @@ ends if that is strictly before \code{T_final}, then checks every
 \code{interim_calendar_beat} after it strictly before \code{T_final}. (Before
 0.0.0.9003 \code{FALSE} reproduced 422eb40, with checks until \code{max_trial_time}.)
 With either value the final analysis is at
-\code{T* = min(last enrolment + min_follow_up_at_final, max_trial_time)}.
+\verb{T* = min(last enrolment + min_follow_up_at_final, max_trial_time)}.
 \code{TRUE} runs post-enrolment checks only at last enrolment plus each
-positive multiple of \code{interim_calendar_beat} strictly before \code{T*} (no
-check at the accrual-exit time), so the final analysis at \code{T*} is the
+positive multiple of \code{interim_calendar_beat} strictly before \verb{T*} (no
+check at the accrual-exit time), so the final analysis at \verb{T*} is the
 next decision after the last such look. In vs-reference runs, \code{TRUE} also
 skips the accrual-phase check at an arrival that would end enrolment
 because no experimental arm can enrol (that arrival enrols nobody), and
 skips grid points at or before a later accrual-phase look that stopped
 the experimental arms, so look times are strictly increasing; and no
 patient enrolls at or after \code{max_trial_time} (accrual stops, remaining
-arms go to the same post-enrolment schedule and \code{T*}). With \code{min_follow_up_at_final = 0}
+arms go to the same post-enrolment schedule and \verb{T*}). With \code{min_follow_up_at_final = 0}
 there is no post-enrolment look at all. The default is read from
 \code{getOption("evolveTrial.looks_stop_at_final", FALSE)} so that callers that
 do not pass the argument can set it globally.}
@@ -309,7 +309,7 @@ sample sizes) and return their variances as additional \verb{*_var} columns in
 the summary. Default \code{FALSE}.}
 
 \item{random_dropout}{Logical. \code{TRUE} (default) gives each patient a random
-dropout (censoring) time drawn uniformly on \code{(0, censor_max_time_sim)}.
+dropout (censoring) time drawn uniformly on \verb{(0, censor_max_time_sim)}.
 \code{FALSE} draws the same uniform and discards it, so the random-number
 stream is unchanged, and leaves only administrative censoring. The C++
 chunk engines support only \code{FALSE}; with \code{TRUE} the R body runs.}
@@ -352,9 +352,9 @@ each trial's result depends only on the scenario seed and the trial index,
 so results are identical for any \code{num_workers} and block size. On
 configurations outside the supported set of the C++ engines (and when
 \code{options(evolveTrial.use_cpp_engine = FALSE)}), the default falls back
-silently to the draw-based engine. The supported set requires
-\code{options(evolveTrial.looks_stop_at_final = TRUE)}, whose own default is
-\code{FALSE}. \code{options(evolveTrial.engine = "cpp")}
+silently to the draw-based engine. The supported set covers both
+\code{looks_stop_at_final} chronologies (0.0.0.9004).
+\code{options(evolveTrial.engine = "cpp")}
 selects the draw-based C++ engine, which is bit-identical to the R body
 (\code{options(evolveTrial.use_cpp_engine = FALSE)}). Setting
 \code{options(evolveTrial.engine = "exact")} explicitly makes an

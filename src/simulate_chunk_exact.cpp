@@ -30,8 +30,14 @@
 //   arrival gap      -log(U) / accrual_rate                (rexp(1, rate), inversion)
 //   event time       scale * (-log(U))^(1 / shape)         (R's rweibull(shape, scale) formula)
 //   arm assignment   phase 1's ProbSampleNoReplace port with rT = U, same probabilities; no draw when one arm is eligible
-//   dropout          nothing drawn (random_dropout is FALSE in the supported set; censoring time Inf as in phase 1)
-// Per arrival the order is: gap, (look), arm, event time.
+//   dropout          random_dropout TRUE: censor_max_time_sim * U (R's runif(1, 0, censor_max_time_sim) formula), drawn
+//                    after the event time (P3-1, item 6); random_dropout FALSE: nothing drawn, censoring time Inf
+// Per arrival the order is: gap, (look), arm, event time, (dropout).
+//
+// P3-1 (dev/plans/2026-11-04-p3-1-plan.md): the trial loop also runs the amd8 chronology (looks_stop_at_final FALSE), an
+// infinite max_trial_time, no rebalancing, the median-threshold fallbacks (a non-finite final threshold gives p = 0 without
+// a posterior call) and a NULL interim futility threshold (no interim futility stop, no posterior call), as the phase 1
+// engine does (src/simulate_chunk.cpp).
 //
 // [[Rcpp::depends(RcppArmadillo)]]
 #include <RcppArmadillo.h>
@@ -40,6 +46,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 #include "r_semantics.h"
@@ -129,6 +136,20 @@ int prob_sample(std::vector<double> p, Draw&& draw, bool draw_single) {
 inline double r_pmax2(double a, double b) { return (b > a) ? b : a; }
 inline double r_pmin2(double a, double b) { return (b < a) ? b : a; }
 
+// Codex review of P3-1 (P2): with max_trial_time = Inf a calendar time can overflow to Inf (an arrival gap near DBL_MAX).
+// Then calendar time minus enrolment time is Inf - Inf = NaN, R's pmax(0, NaN) keeps the NaN, and the R body stops in
+// the slice (calculate_interval_metrics_fast) or in the rebalancing count (if (!any(active)) / if (total >= thr)), with
+// "missing value where TRUE/FALSE needed". r_pmax2(0, NaN) would return 0 and carry on, so stop here instead. The
+// difference of two finite doubles is never NaN, so this cannot fire on a finite path.
+inline double follow_up_since(double cal, double enroll) {
+  const double d = cal - enroll;
+  if (ISNAN(d)) {
+    Rcpp::stop("missing value where TRUE/FALSE needed (follow-up time is NaN: calendar time %g, enrolment time %g)", cal,
+               enroll);
+  }
+  return d;
+}
+
 // ---- configuration (copy of src/simulate_chunk.cpp:84-221; same packed list, same checks) --------------------------------
 struct Cfg {
   int n_arms;
@@ -140,12 +161,15 @@ struct Cfg {
   double accrual_rate, beat, max_trial_time, min_follow_up_at_final;
   double max_follow_up_sim, censor_max_time_sim;
   bool random_dropout;
+  bool looks_stop_at_final;
   int K;
   std::vector<double> cut_base, len_base;
+  bool rebalance;
   double rebalance_threshold;
   std::vector<double> prior_alpha, prior_beta;
   int draws_interim, draws_final;
   std::vector<double> min_pat, min_events, min_median_fu, min_pt_frac, max_pt_arm;
+  bool futility_interim;
   double futility_prob_interim;
   std::vector<double> futility_thr_interim, success_thr, futility_thr;
   double final_success_prob, final_futility_prob;
@@ -211,12 +235,14 @@ Cfg unpack(const Rcpp::List& cfg) {
   c.max_follow_up_sim = num1(cfg, "max_follow_up_sim");
   c.censor_max_time_sim = num1(cfg, "censor_max_time_sim");
   c.random_dropout = lgl1(cfg, "random_dropout");
-  if (c.random_dropout) Rcpp::stop("simulate_chunk_exact: random_dropout = TRUE is outside the supported set");
-  if (!lgl1(cfg, "looks_stop_at_final")) Rcpp::stop("simulate_chunk_exact: looks_stop_at_final = FALSE is outside the supported set");
-  if (!R_FINITE(c.max_trial_time)) Rcpp::stop("simulate_chunk_exact: infinite max_trial_time is outside the supported set");
+  c.looks_stop_at_final = lgl1(cfg, "looks_stop_at_final");
+  if (ISNAN(c.max_trial_time) || c.max_trial_time == R_NegInf) {
+    Rcpp::stop("simulate_chunk_exact: max_trial_time must be a number or Inf");
+  }
   c.K = int1(cfg, "K");
   c.cut_base = numv(cfg, "cut_base", c.K + 1);
   c.len_base = numv(cfg, "len_base", c.K);
+  c.rebalance = lgl1(cfg, "rebalance");
   c.rebalance_threshold = num1(cfg, "rebalance_threshold");
   c.prior_alpha = numv(cfg, "prior_alpha", c.K);
   c.prior_beta = numv(cfg, "prior_beta", c.K);
@@ -255,6 +281,7 @@ Cfg unpack(const Rcpp::List& cfg) {
   c.min_median_fu = numv(cfg, "min_median_fu", c.n_arms);
   c.min_pt_frac = numv(cfg, "min_pt_frac", c.n_arms);
   c.max_pt_arm = numv(cfg, "max_pt_arm", c.n_arms);
+  c.futility_interim = lgl1(cfg, "futility_interim");
   c.futility_prob_interim = num1(cfg, "futility_prob_interim");
   c.futility_thr_interim = numv(cfg, "futility_thr_interim", c.n_arms);
   c.success_thr = numv(cfg, "success_thr", c.n_arms);
@@ -323,7 +350,7 @@ void slice_arm_ref(const Registry& r, double cal, double max_fu, const std::vect
   s.median_fu = 0.0;
   if (r.n == 0) return;
   for (int i = 0; i < r.n; i++) {
-    const double ts = r_pmax2(0.0, cal - r.enroll[i]);
+    const double ts = r_pmax2(0.0, follow_up_since(cal, r.enroll[i]));
     const double ta = r_pmin2(ts, max_fu);
     const double ob = r_pmin2(r_pmin2(r.te[i], r.rc[i]), ta);
     const int es = (r.te[i] <= r_pmin2(r.rc[i], ta)) ? 1 : 0;
@@ -419,7 +446,7 @@ void slice_counts(const Registry& r, double cal, double max_fu, const std::vecto
   const int nb = K + 1;
   bool na_event = false;
   for (int i = 0; i < r.n; i++) {
-    const double ts = r_pmax2(0.0, cal - r.enroll[i]);
+    const double ts = r_pmax2(0.0, follow_up_since(cal, r.enroll[i]));
     const double ta = r_pmin2(ts, max_fu);
     if (!(ta > 0)) continue;
     const double ob = r_pmin2(r_pmin2(r.te[i], r.rc[i]), ta);
@@ -505,6 +532,36 @@ bool trt_can_enroll(const Cfg& c, const TrialState& st) {
   return st.status[t] == RECRUITING && (double) st.enrolled[t] < c.mtpa[t];
 }
 
+// copy of src/simulate_chunk.cpp chronology_invariants (R body SD:815-831, P3-1)
+void chronology_invariants(const Cfg& c, const TrialState& st, double final_time) {
+  bool any_enroll = false;
+  double max_enroll = R_NegInf;
+  bool enroll_over = false;
+  for (int a = 0; a < c.n_arms; a++) {
+    for (int i = 0; i < st.reg[a].n; i++) {
+      const double e = st.reg[a].enroll[i];
+      any_enroll = true;
+      if (e > max_enroll) max_enroll = e;
+      if (e > c.max_trial_time) enroll_over = true;
+    }
+  }
+  char buf[256];
+  if (R_FINITE(c.max_trial_time)) {
+    bool stop_over = false;
+    for (int a = 0; a < c.n_arms; a++) if (!ISNAN(st.stop_time[a]) && st.stop_time[a] > c.max_trial_time) stop_over = true;
+    if (enroll_over || stop_over || final_time > c.max_trial_time) {
+      std::snprintf(buf, sizeof(buf),
+                    "Chronology violation: enroll/stop/final time exceeds max_trial_time = %g (final_time = %g).",
+                    c.max_trial_time, final_time);
+      Rcpp::stop(std::string(buf));
+    }
+  }
+  if (any_enroll && max_enroll > final_time) {
+    std::snprintf(buf, sizeof(buf), "Chronology violation: enrollment at %g after final_time = %g.", max_enroll, final_time);
+    Rcpp::stop(std::string(buf));
+  }
+}
+
 // ---- Rng policies ------------------------------------------------------------------------------------------------------
 // RStreamRng: R's stream in the phase 1 order (src/simulate_chunk.cpp:613, 677, 680-682). Replay only.
 struct RStreamRng {
@@ -518,14 +575,17 @@ struct RStreamRng {
   }
 };
 
-// CounterRng: per-trial xoshiro256++ (header comment). The supported set has random_dropout FALSE (unpack stops
-// otherwise), so dropout draws nothing and the censoring time is Inf, as phase 1 stores it.
+// CounterRng: per-trial xoshiro256++ (header comment). With random_dropout FALSE dropout draws nothing and the censoring
+// time is Inf, as phase 1 stores it; with random_dropout TRUE (P3-1) it is censor_max_time_sim * U, one draw.
 struct CounterRng {
   Xoshiro256pp g;
   double arrival(double scale) { return -std::log(g.unif()) * scale; }
   int arm(const std::vector<double>& probs) { return prob_sample(probs, [this]() { return g.unif(); }, false); }
   double event_time(double shape, double scale) { return scale * std::pow(-std::log(g.unif()), 1. / shape); }
-  double dropout_time(const Cfg&) { return R_PosInf; }
+  double dropout_time(const Cfg& c) {
+    if (!c.random_dropout) return R_PosInf;
+    return 0.0 + (c.censor_max_time_sim - 0.0) * g.unif();
+  }
 };
 
 // ---- Post policies -----------------------------------------------------------------------------------------------------
@@ -588,6 +648,10 @@ struct McPost {
   double hc_interim(const Cfg& c, const Slice& s, const std::vector<double>& lens, double thr) {
     arma::vec m = medians(c, s, lens, c.draws_interim);
     return tally_mean(tally(m, thr, true));
+  }
+  // an interim look with no futility rule (item 13c NULL): phase 1 still draws (P3-1)
+  void hc_interim_nostop(const Cfg& c, const Slice& s, const std::vector<double>& lens) {
+    (void) medians(c, s, lens, c.draws_interim);
   }
   void hc_final_begin(const Cfg& c, const Slice& s, const std::vector<double>& lens) {
     med = medians(c, s, lens, c.draws_final);
@@ -669,6 +733,7 @@ struct ExactPost {
   double hc_interim(const Cfg& c, const Slice& s, const std::vector<double>& lens, double thr) {
     return below(c, s, lens, thr, true);   // Pr(med < thr)
   }
+  void hc_interim_nostop(const Cfg&, const Slice&, const std::vector<double>&) {}   // nothing to compute (P3-1)
   void hc_final_begin(const Cfg& c, const Slice& s, const std::vector<double>& lens) {
     fc = &c;
     fs = &s;
@@ -775,6 +840,7 @@ struct TracePost {
     n_draws = c.draws_final;
     in.hc_final_begin(c, s, l);
   }
+  void hc_interim_nostop(const Cfg& c, const Slice& s, const std::vector<double>& l) { in.hc_interim_nostop(c, s, l); }
   double hc_final_above(double thr) { const double p = in.hc_final_above(thr); push(2, thr, p); return p; }
   double hc_final_below(double thr) { const double p = in.hc_final_below(thr); push(3, thr, p); return p; }
   void ph(const Cfg& c, const Slice& sC, const Slice& sT, const std::vector<double>& l, int n) {
@@ -805,6 +871,10 @@ void interim_hc(const Cfg& c, TrialState& st, double cal, const std::vector<doub
     const double pt_frac = (max_pt > 0) ? pt_total / max_pt : 0.0;
     if (n_pat < c.min_pat[a] || events_total < c.min_events[a] || median_fu < c.min_median_fu[a] ||
         pt_frac < c.min_pt_frac[a]) {
+      continue;
+    }
+    if (!c.futility_interim) {   // item 13c NULL: no interim futility stop (IL:251); McPost still draws (P3-1)
+      post.hc_interim_nostop(c, sl, lens);
       continue;
     }
     const double pr_fut = post.hc_interim(c, sl, lens, c.futility_thr_interim[a]);
@@ -849,7 +919,7 @@ void interim_vsref(const Cfg& c, TrialState& st, double cal, const std::vector<d
 struct Work {
   TrialState st;
   Slice sl, sl_ref, sl_trt;
-  std::vector<double> cut, lens, ev_times, probs;
+  std::vector<double> cut, lens, ev_times, probs, rem;
   std::vector<int> elig;
 };
 
@@ -870,7 +940,7 @@ void run_trial(const Cfg& c, Rng& rng, Post& post, Work& w, TrialOut& out) {
 
   cut = c.cut_base;
   lens = c.len_base;
-  bool rebalance_done = false;
+  bool rebalance_done = !c.rebalance;
   double last_enroll_time = 0;
   st.reset(c);
   double current_time = 0.0;
@@ -882,18 +952,44 @@ void run_trial(const Cfg& c, Rng& rng, Post& post, Work& w, TrialOut& out) {
     return false;
   };
 
+  auto look = [&](double cal) {
+    if (c.vsref) interim_vsref(c, st, cal, cut, lens, w.sl_ref, w.sl_trt, post);
+    else interim_hc(c, st, cal, cut, lens, w.sl, post);
+  };
+
   // ---- accrual loop ----
   while (eligible_any()) {
     const double interarrival = rng.arrival(rexp_scale);
     current_time = current_time + interarrival;
 
-    if (current_time >= c.max_trial_time) {
-      current_time = last_enroll_time;
-      break;
+    if (c.looks_stop_at_final) {
+      if (current_time >= c.max_trial_time) {
+        current_time = last_enroll_time;
+        break;
+      }
+      if (c.vsref && !trt_can_enroll(c, st)) {
+        current_time = last_enroll_time;
+        break;
+      }
     }
-    if (c.vsref && !trt_can_enroll(c, st)) {
-      current_time = last_enroll_time;
-      break;
+
+    // amd8 chronology (looks_stop_at_final FALSE, P3-1; phase 1 src/simulate_chunk.cpp, R body SD:605-637)
+    bool interim_ok_here = true;
+    if (!c.looks_stop_at_final) {
+      if (R_FINITE(c.max_trial_time) && current_time >= c.max_trial_time) {
+        current_time = c.max_trial_time;
+        break;
+      }
+      if (c.min_follow_up_at_final <= 0) {
+        w.rem.clear();
+        for (int a = 0; a < A; a++)
+          if (st.status[a] == RECRUITING && (double) st.enrolled[a] < c.mtpa[a]) w.rem.push_back(c.mtpa[a] - (double) st.enrolled[a]);
+        if (evt_rsem::sum_ld(w.rem.data(), (R_xlen_t) w.rem.size()) == 1) interim_ok_here = false;
+      }
+      if (c.vsref && !trt_can_enroll(c, st)) {
+        const double t_final_fixed = std::min(last_enroll_time + c.min_follow_up_at_final, c.max_trial_time);
+        if (current_time >= t_final_fixed) interim_ok_here = false;
+      }
     }
 
     if (!rebalance_done) {
@@ -903,7 +999,7 @@ void run_trial(const Cfg& c, Rng& rng, Post& post, Work& w, TrialOut& out) {
         const Registry& r = st.reg[a];
         int count = 0;
         for (int i = 0; i < r.n; i++) {
-          const double ts = r_pmax2(0.0, current_time - r.enroll[i]);
+          const double ts = r_pmax2(0.0, follow_up_since(current_time, r.enroll[i]));
           const double ta = r_pmin2(ts, c.max_follow_up_sim);
           if (!(ta > 0)) continue;
           const double ob = r_pmin2(r_pmin2(r.te[i], r.rc[i]), ta);
@@ -924,9 +1020,8 @@ void run_trial(const Cfg& c, Rng& rng, Post& post, Work& w, TrialOut& out) {
       }
     }
 
-    if (current_time >= next_calendar_look) {
-      if (c.vsref) interim_vsref(c, st, current_time, cut, lens, w.sl_ref, w.sl_trt, post);
-      else interim_hc(c, st, current_time, cut, lens, w.sl, post);
+    if (interim_ok_here && current_time >= next_calendar_look) {
+      look(current_time);
       next_calendar_look = next_calendar_look + c.beat;
     }
 
@@ -960,15 +1055,30 @@ void run_trial(const Cfg& c, Rng& rng, Post& post, Work& w, TrialOut& out) {
     last_enroll_time = current_time;
   }
 
-  // ---- post-enrollment looks, looks_stop_at_final = TRUE ----
-  const double t_star = std::min(last_enroll_time + c.min_follow_up_at_final, c.max_trial_time);
-  double post_enroll_time = last_enroll_time;
-  while (R_FINITE(t_star) && any_recruiting(st)) {
-    post_enroll_time = post_enroll_time + c.beat;
-    if (post_enroll_time >= t_star) break;
-    if (post_enroll_time <= current_time) continue;
-    if (c.vsref) interim_vsref(c, st, post_enroll_time, cut, lens, w.sl_ref, w.sl_trt, post);
-    else interim_hc(c, st, post_enroll_time, cut, lens, w.sl, post);
+  if (!c.looks_stop_at_final) {
+    // ---- post-enrollment looks, amd8 chronology (P3-1) ----
+    const double t_final_planned = R_FINITE(c.max_trial_time)
+                                       ? std::min(last_enroll_time + c.min_follow_up_at_final, c.max_trial_time)
+                                       : last_enroll_time + c.min_follow_up_at_final;
+    if (current_time < t_final_planned) look(current_time);
+    if (R_FINITE(c.max_trial_time) && any_recruiting(st)) {
+      double post_enroll_time = current_time;
+      while (any_recruiting(st)) {
+        post_enroll_time = post_enroll_time + c.beat;
+        if (post_enroll_time >= t_final_planned) break;
+        look(post_enroll_time);
+      }
+    }
+  } else {
+    // ---- post-enrollment looks, looks_stop_at_final = TRUE ----
+    const double t_star = std::min(last_enroll_time + c.min_follow_up_at_final, c.max_trial_time);
+    double post_enroll_time = last_enroll_time;
+    while (R_FINITE(t_star) && any_recruiting(st)) {
+      post_enroll_time = post_enroll_time + c.beat;
+      if (post_enroll_time >= t_star) break;
+      if (post_enroll_time <= current_time) continue;
+      look(post_enroll_time);
+    }
   }
 
   // ---- final analysis time ----
@@ -987,6 +1097,7 @@ void run_trial(const Cfg& c, Rng& rng, Post& post, Work& w, TrialOut& out) {
   } else {
     final_time = std::min(last_enroll_time + c.min_follow_up_at_final, c.max_trial_time);
   }
+  if (!c.looks_stop_at_final) chronology_invariants(c, st, final_time);   // amd8 chronology only (P3-1)
 
   out.final_n.assign(A, 0.0);
   out.final_ev.assign(A, 0.0);
@@ -1030,11 +1141,12 @@ void run_trial(const Cfg& c, Rng& rng, Post& post, Work& w, TrialOut& out) {
     slice_arm(st.reg[a], final_time, c.max_follow_up_sim, cut, K, sl);
     out.final_ev[a] = (double) sl.events_total;
     post.hc_final_begin(c, sl, lens);
-    const double p_eff = post.hc_final_above(c.success_thr[a]);
+    // a non-finite threshold (the Inf / -Inf fallbacks, P3-1 item 10) gives p = 0 without a posterior call
+    const double p_eff = R_FINITE(c.success_thr[a]) ? post.hc_final_above(c.success_thr[a]) : 0.0;
     if (!ISNAN(p_eff) && p_eff >= c.final_success_prob) {
       out.final_eff[a] = 1;
     } else {
-      const double p_fut = post.hc_final_below(c.futility_thr[a]);
+      const double p_fut = R_FINITE(c.futility_thr[a]) ? post.hc_final_below(c.futility_thr[a]) : 0.0;
       if (!ISNAN(p_fut) && p_fut >= c.final_futility_prob) {
         out.final_fut[a] = 1;
       } else {
