@@ -49,11 +49,12 @@ evaluations.
 
 ## 3. What stays open (carried from handoffs 03e to 03g)
 
-1. P6 build field states lineage (step 5 record Section 1).
-2. Review items L2, L3 and L7.
+1. Closed 2026-11-03. P6 build field states lineage (step 5 record Section 1), accepted by the PI.
+2. Closed 2026-11-03. Review items L2, L3 and L7, won't-fix by PI ruling (step 5 record Section 5).
 3. Codex review of the branch, after 2026-11-04 06:36.
-4. Step 6 record Section 7 (review) is unfilled.
-5. Questions 2 and 5 of handoff 2026-11-03e.
+4. Closed 2026-11-03. Step 6 record Section 7 filled from `dev/perf/layer3/REVIEW_layer3.md` (0 critical, 0 high,
+   0 medium, 8 low, none applied).
+5. Closed 2026-11-03. Questions 2 and 5 of handoff 2026-11-03e are items 1 and 2 above.
 6. Phase 2 (statistically equivalent engine, draw count as fidelity) is the route to the R23 target. It needs the PI's
    decision and is outside phase 1.
 7. Branch not pushed, engine not installed outside `dev/perf/lib`.
