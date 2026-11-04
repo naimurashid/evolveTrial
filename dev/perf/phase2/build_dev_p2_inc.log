@@ -1,0 +1,18 @@
+* installing *source* package ‘evolveTrial’ ...
+** this is package ‘evolveTrial’ version ‘0.0.0.9001’
+** using staged installation
+** libs
+using C++ compiler: ‘x86_64-linux-gnu-g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0’
+x86_64-linux-gnu-g++ -std=gnu++20 -I"/usr/share/R/include" -DNDEBUG  -I'/home/naimrashid/R/library/Rcpp/include' -I'/home/naimrashid/R/library/RcppArmadillo/include'    -ffp-contract=off -fpic  -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/r-base-VFzPII/r-base-4.6.2=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/r-base-VFzPII/r-base-4.6.2=/usr/src/r-base-4.6.2-1.2404.0 -Wdate-time -D_FORTIFY_SOURCE=3   -c simulate_chunk_exact.cpp -o simulate_chunk_exact.o
+x86_64-linux-gnu-g++ -std=gnu++20 -shared -L/usr/lib/R/lib -Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro -o evolveTrial.so RcppExports.o hybrid_trial_sim.o posterior_exact.o posterior_sampling.o predictive_probability.o r_semantics_exports.o simulate_chunk.o simulate_chunk_exact.o test_rcpp.o -L/usr/lib/R/lib -lR
+installing to /home/naimrashid/research/evolveTrial-perf/dev/perf/lib/dev_p2_inc/00LOCK-evolveTrial-perf/00new/evolveTrial/libs
+** R
+** inst
+** byte-compile and prepare package for lazy loading
+** help
+*** installing help indices
+*** copying figures
+** building package indices
+** installing vignettes
+** checking absolute paths in shared objects and dynamic libraries
+* DONE (evolveTrial)

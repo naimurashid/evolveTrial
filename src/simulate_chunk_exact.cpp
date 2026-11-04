@@ -304,9 +304,14 @@ struct Slice {
   std::vector<double> obs;
   std::vector<int> st;
   std::vector<double> contrib;
+  std::vector<long double> acc;   // P2-4: per-interval long-double person-time accumulators
+  std::vector<char> touched;      // P2-4: interval received at least one contribution
+  std::vector<double> scratch;    // P2-4: selection buffer for the median
 };
 
-void slice_arm(const Registry& r, double cal, double max_fu, const std::vector<double>& cut, int K, Slice& s) {
+// The re-slicing code as of 3bb0694, kept unchanged as the reference for the P2-4 identity test
+// (.exact_slice_compare). Not called by the engine.
+void slice_arm_ref(const Registry& r, double cal, double max_fu, const std::vector<double>& cut, int K, Slice& s) {
   s.events.assign(K, 0);
   s.pt.assign(K, 0.0);
   s.obs.clear();
@@ -361,6 +366,121 @@ void slice_arm(const Registry& r, double cal, double max_fu, const std::vector<d
   s.events_total = (int) et;
   s.pt_total = evt_rsem::sum_ld(s.pt.data(), K);
   s.median_fu = evt_rsem::median_r(s.obs);
+}
+
+// sum_ld's finishing steps (r_semantics.h) applied to a long-double sum accumulated elsewhere in the same order.
+inline double finish_ld(long double s) {
+  double value;
+  if (s > DBL_MAX) value = R_PosInf;
+  else if (s < -DBL_MAX) value = R_NegInf;
+  else value = (double) s;
+  double zcum = 0.0;
+  zcum += value;
+  return zcum;
+}
+
+// median_r (r_semantics.h) by selection instead of a full sort, into a reused buffer. The selected order statistics
+// are the same values as in the sorted vector, so the result is the same double.
+inline double median_select(const std::vector<double>& x, std::vector<double>& buf) {
+  const R_xlen_t n = (R_xlen_t) x.size();
+  for (double v : x) if (std::isnan(v)) return NA_REAL;
+  if (n == 0) return NA_REAL;
+  buf.assign(x.begin(), x.end());
+  const R_xlen_t half = (n + 1) / 2;       // 1-based
+  std::nth_element(buf.begin(), buf.begin() + (half - 1), buf.end());
+  const double lo = buf[half - 1];
+  if (n % 2 == 1) return lo;
+  double hi = buf[half];
+  for (R_xlen_t i = half + 1; i < n; i++) if (buf[i] < hi) hi = buf[i];
+  double two[2] = { lo, hi };
+  return evt_rsem::mean_ld(two, 2);
+}
+
+// P2-4 slicer, in three stages so a look whose gates fail on event counts can skip the rest. Together the stages give
+// the same outputs as slice_arm_ref bit for bit: each interval's person time is the same long-double sum of the same
+// contributions in patient-index order (one pass over the observed patients, accumulated in parallel across intervals
+// rather than one interval at a time); event intervals come from the same findInterval routine; the median selects the
+// same order statistics. The early exit in the interval loop (obs <= cut[k] implies obs <= cut[k'] for k' > k) is used
+// only when the cutpoints are non-decreasing, otherwise every interval is tested as in the reference.
+//
+// Stage 1: observed patients, status, events by interval, n_pat, status_sum, events_total. pt and pt_total are left at
+// zero and median_fu at 0 until stages 2 and 3 run. Stops on an NA event time, as the reference does (after its scan).
+void slice_counts(const Registry& r, double cal, double max_fu, const std::vector<double>& cut, int K, Slice& s) {
+  s.events.assign(K, 0);
+  s.pt.assign(K, 0.0);
+  s.obs.clear();
+  s.st.clear();
+  s.n_pat = 0;
+  s.status_sum = 0;
+  s.events_total = 0;
+  s.pt_total = 0.0;
+  s.median_fu = 0.0;
+  if (r.n == 0) return;
+  const int nb = K + 1;
+  bool na_event = false;
+  for (int i = 0; i < r.n; i++) {
+    const double ts = r_pmax2(0.0, cal - r.enroll[i]);
+    const double ta = r_pmin2(ts, max_fu);
+    if (!(ta > 0)) continue;
+    const double ob = r_pmin2(r_pmin2(r.te[i], r.rc[i]), ta);
+    const int es = (r.te[i] <= r_pmin2(r.rc[i], ta)) ? 1 : 0;
+    s.obs.push_back(ob);
+    s.st.push_back(es);
+    s.status_sum += es;
+    if (es == 1) {
+      int idx = evt_rsem::find_interval(cut.data(), nb, ob, false, false, false);
+      if (idx == NA_INTEGER) {
+        na_event = true;
+      } else if (idx > 0) {
+        if (idx > K) idx = K;
+        s.events[idx - 1]++;
+      }
+    }
+  }
+  s.n_pat = (int) s.obs.size();
+  if (na_event) Rcpp::stop("simulate_chunk_exact: NA event time in the interval tabulation");
+  long long et = 0;
+  for (int k = 0; k < K; k++) et += s.events[k];
+  s.events_total = (int) et;
+}
+
+// Stage 2: person time by interval and pt_total (after slice_counts on the same registry, time and cutpoints).
+void slice_pt(const std::vector<double>& cut, int K, Slice& s) {
+  if (s.n_pat == 0) {
+    s.pt_total = evt_rsem::sum_ld(s.pt.data(), K);
+    return;
+  }
+  s.acc.assign(K, 0.0L);
+  s.touched.assign(K, 0);
+  bool sorted = true;
+  for (int k = 0; k < K; k++) if (!(cut[k] <= cut[k + 1])) { sorted = false; break; }
+  for (int i = 0; i < s.n_pat; i++) {
+    const double ob = s.obs[i];
+    for (int k = 0; k < K; k++) {
+      const double lo = cut[k];
+      if (ob > lo) {
+        double c = r_pmin2(ob, cut[k + 1]) - lo;
+        if (c < 0) c = 0;
+        s.acc[k] += c;
+        s.touched[k] = 1;
+      } else if (sorted) {
+        break;
+      }
+    }
+  }
+  for (int k = 0; k < K; k++) if (s.touched[k]) s.pt[k] = finish_ld(s.acc[k]);
+  s.pt_total = evt_rsem::sum_ld(s.pt.data(), K);
+}
+
+// Stage 3: median follow-up (0 when no patient is observed, as in the reference).
+void slice_median(Slice& s) {
+  if (s.n_pat > 0) s.median_fu = median_select(s.obs, s.scratch);
+}
+
+void slice_arm(const Registry& r, double cal, double max_fu, const std::vector<double>& cut, int K, Slice& s) {
+  slice_counts(r, cal, max_fu, cut, K, s);
+  slice_pt(cut, K, s);
+  slice_median(s);
 }
 
 bool any_recruiting(const TrialState& st) {
@@ -589,8 +709,16 @@ void interim_vsref(const Cfg& c, TrialState& st, double cal, const std::vector<d
                    const std::vector<double>& lens, Slice& sC, Slice& sT, Post& post) {
   const int r = c.ref_idx, t = c.trt_idx;
   if (st.status[t] != RECRUITING) return;
-  slice_arm(st.reg[r], cal, c.max_follow_up_sim, cut, c.K, sC);
-  slice_arm(st.reg[t], cal, c.max_follow_up_sim, cut, c.K, sT);
+  // P2-4: the gate is a conjunction of comparisons, so the event-count comparisons are checked first and the person
+  // time and medians are computed only when both arms pass them. Same decision as slicing both arms in full.
+  slice_counts(st.reg[r], cal, c.max_follow_up_sim, cut, c.K, sC);
+  slice_counts(st.reg[t], cal, c.max_follow_up_sim, cut, c.K, sT);
+  if (!((double) sC.events_total >= c.vr_min_ev[0] && (double) sT.events_total >= c.vr_min_ev[1])) return;
+  slice_median(sC);
+  slice_median(sT);
+  if (!(sC.median_fu >= c.vr_min_mfu[0] && sT.median_fu >= c.vr_min_mfu[1])) return;
+  slice_pt(cut, c.K, sC);
+  slice_pt(cut, c.K, sT);
   if (!gates_pass_vsref(c, sC, sT)) return;
   post.ph(c, sC, sT, lens, c.draws_vsref_interim);
   const double pr_fut = post.ph_ge(c.log_margin_interim);
@@ -755,8 +883,12 @@ void run_trial(const Cfg& c, Rng& rng, Post& post, Work& w, TrialOut& out) {
   if (c.vsref) {
     slice_arm(st.reg[c.ref_idx], final_time, c.max_follow_up_sim, cut, K, w.sl_ref);
     for (int a = 0; a < A; a++) {
-      slice_arm(st.reg[a], final_time, c.max_follow_up_sim, cut, K, sl);
-      out.final_ev[a] = (double) sl.events_total;
+      if (a == c.ref_idx) {   // P2-4: the reference arm's slice at final_time is w.sl_ref, sliced just above
+        out.final_ev[a] = (double) w.sl_ref.events_total;
+      } else {
+        slice_arm(st.reg[a], final_time, c.max_follow_up_sim, cut, K, sl);
+        out.final_ev[a] = (double) sl.events_total;
+      }
       if (st.status[a] != RECRUITING) continue;
       if (a == c.ref_idx) {
         out.final_inc[a] = 1;
@@ -1041,4 +1173,30 @@ Rcpp::NumericVector exact_rng_raw(Rcpp::NumericVector state, int n) {
     out[2 * i + 1] = (double) (x & 0xFFFFFFFFULL);
   }
   return out;
+}
+
+// [[Rcpp::export(name = ".exact_slice_compare", rng = false)]]
+Rcpp::List exact_slice_compare(Rcpp::NumericVector enroll, Rcpp::NumericVector te, Rcpp::NumericVector rc, double cal,
+                               double max_fu, Rcpp::NumericVector cut, int K) {
+  // Test hook (P2-4): slice one registry with the reference re-slicer (3bb0694) and with the engine's slicer.
+  if (cut.size() != K + 1) Rcpp::stop("cut must have K + 1 entries");
+  Registry r;
+  r.enroll.assign(enroll.begin(), enroll.end());
+  r.te.assign(te.begin(), te.end());
+  r.rc.assign(rc.begin(), rc.end());
+  r.n = (int) enroll.size();
+  std::vector<double> cv(cut.begin(), cut.end());
+  auto pack = [&](const Slice& s) {
+    return Rcpp::List::create(Rcpp::Named("n_pat") = s.n_pat, Rcpp::Named("status_sum") = s.status_sum,
+                              Rcpp::Named("events") = Rcpp::wrap(s.events), Rcpp::Named("pt") = Rcpp::wrap(s.pt),
+                              Rcpp::Named("events_total") = s.events_total, Rcpp::Named("pt_total") = s.pt_total,
+                              Rcpp::Named("median_fu") = s.median_fu, Rcpp::Named("obs") = Rcpp::wrap(s.obs),
+                              Rcpp::Named("st") = Rcpp::wrap(s.st));
+  };
+  Slice a, b;
+  slice_arm_ref(r, cal, max_fu, cv, K, a);
+  // Slice twice into the same object, so stale buffers from a previous call would show.
+  slice_arm(r, cal * 0.5, max_fu, cv, K, b);
+  slice_arm(r, cal, max_fu, cv, K, b);
+  return Rcpp::List::create(Rcpp::Named("ref") = pack(a), Rcpp::Named("new") = pack(b));
 }

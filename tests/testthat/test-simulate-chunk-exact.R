@@ -131,3 +131,35 @@ test_that("use_cpp_engine = FALSE selects the R body whatever the engine option"
   }
   expect_identical(go("exact"), go("cpp"))
 })
+
+# ---- step P2-4: the engine's slicer against the 3bb0694 re-slicer ------------------------------------------------------
+test_that("the P2-4 slicer reproduces the reference re-slicer exactly on random registries and looks", {
+  cmp <- ns(".exact_slice_compare")
+  set.seed(20261104)
+  n_case <- 0L
+  n_bad <- 0L
+  for (it in seq_len(3000)) {
+    n <- sample(c(0:3, sample.int(300, 1)), 1)
+    K <- sample(1:8, 1)
+    max_fu <- sample(c(24, 36, 60, Inf), 1)
+    enroll <- sort(cumsum(stats::rexp(n, 1)))
+    te <- stats::rweibull(n, shape = runif(1, 0.5, 2), scale = runif(1, 3, 40))
+    rc <- if (runif(1) < 0.7) rep(Inf, n) else stats::rexp(n, 1 / 30)
+    if (n > 3 && runif(1) < 0.2) te[sample.int(n, 2)] <- te[1]                        # tied times
+    cal <- if (n > 0) runif(1, -1, max(enroll) + 80) else runif(1, 0, 50)
+    if (n > 0 && runif(1) < 0.1) cal <- enroll[sample.int(n, 1)]                     # look at an enrollment time
+    cutmax <- if (is.finite(max_fu)) max_fu else 60
+    cut <- switch(sample(4, 1),
+                  seq(0, cutmax, length.out = K + 1),                                  # base cutpoints
+                  c(0, sort(runif(K - 1, 0, cutmax)), cutmax),                          # rebalanced-like
+                  c(0, sort(sample(c(1, 2, 3), K - 1, replace = TRUE)), cutmax),        # repeated cutpoints
+                  c(0, rev(sort(runif(K - 1, 0, cutmax))), cutmax))                     # not sorted (reference path)
+    if (n > 0 && runif(1) < 0.1) te[1] <- cut[min(2, K + 1)]                           # event exactly at a cutpoint
+    if (n > 0 && runif(1) < 0.02) te[sample.int(n, 1)] <- NaN                          # NaN time (NA median path)
+    out <- cmp(enroll, te, rc, cal, max_fu, cut, K)
+    if (!identical(out$new, out$ref)) n_bad <- n_bad + 1L
+    n_case <- n_case + 1L
+  }
+  expect_identical(n_case, 3000L)
+  expect_identical(n_bad, 0L)
+})

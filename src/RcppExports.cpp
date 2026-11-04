@@ -550,6 +550,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// exact_slice_compare
+Rcpp::List exact_slice_compare(Rcpp::NumericVector enroll, Rcpp::NumericVector te, Rcpp::NumericVector rc, double cal, double max_fu, Rcpp::NumericVector cut, int K);
+RcppExport SEXP _evolveTrial_exact_slice_compare(SEXP enrollSEXP, SEXP teSEXP, SEXP rcSEXP, SEXP calSEXP, SEXP max_fuSEXP, SEXP cutSEXP, SEXP KSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type enroll(enrollSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type te(teSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type rc(rcSEXP);
+    Rcpp::traits::input_parameter< double >::type cal(calSEXP);
+    Rcpp::traits::input_parameter< double >::type max_fu(max_fuSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type cut(cutSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_slice_compare(enroll, te, rc, cal, max_fu, cut, K));
+    return rcpp_result_gen;
+END_RCPP
+}
 // test_rcpp_sum
 double test_rcpp_sum(const arma::vec& x);
 RcppExport SEXP _evolveTrial_test_rcpp_sum(SEXP xSEXP) {
@@ -612,6 +628,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_evolveTrial_simulate_chunk_exact_replay", (DL_FUNC) &_evolveTrial_simulate_chunk_exact_replay, 2},
     {"_evolveTrial_exact_rng_uniforms", (DL_FUNC) &_evolveTrial_exact_rng_uniforms, 3},
     {"_evolveTrial_exact_rng_raw", (DL_FUNC) &_evolveTrial_exact_rng_raw, 2},
+    {"_evolveTrial_exact_slice_compare", (DL_FUNC) &_evolveTrial_exact_slice_compare, 7},
     {"_evolveTrial_test_rcpp_sum", (DL_FUNC) &_evolveTrial_test_rcpp_sum, 1},
     {"_evolveTrial_test_armadillo_random", (DL_FUNC) &_evolveTrial_test_armadillo_random, 1},
     {NULL, NULL, 0}
