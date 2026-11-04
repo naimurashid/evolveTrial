@@ -1,0 +1,25 @@
+== R01 w1 ref 21:27:46 load 1.25
+  design lib workers elapsed                           digest sha
+1    R01 ref       1  26.284 2e30c050d907cbdd27ca669763d7c29b  NA
+== R01 w1 dev_l2 21:28:13 load 2.91
+                                       sha
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9
+== R01 w16 ref 21:28:31 load 4.40
+  design lib workers elapsed                           digest sha
+1    R01 ref      16   5.241 eb794af006c575ca1b86e8e20b73240b  NA
+== R01 w16 dev_l2 21:28:37 load 6.29
+                                       sha
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9
+== R23 w1 ref 21:28:41 load 7.55
+  design lib workers elapsed                           digest sha
+1    R23 ref       1 235.839 c7ec3d0e42830f1d65e91770c5756d77  NA
+== R23 w1 dev_l2 21:32:38 load 13.74
+                                       sha
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9
+== R23 w16 ref 21:33:04 load 13.56
+  design lib workers elapsed                           digest sha
+1    R23 ref      16  32.189 a8f1c571aba6c94788364c65b0a3bfc3  NA
+== R23 w16 dev_l2 21:33:37 load 21.27
+                                       sha
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9
+ALLDONE
