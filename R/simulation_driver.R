@@ -311,6 +311,7 @@ run_simulation_pure <- function(
       is.na(looks_stop_at_final)) {
     stop("`looks_stop_at_final` must be TRUE or FALSE.", call. = FALSE)
   }
+  .warn_unset_final_success_threshold(arm_names, median_pfs_success_threshold_arms)
 
   # Auto-detect optimal cluster type: FORK on Unix (faster), PSOCK on Windows
   if (cluster_type == "auto") {
@@ -1628,4 +1629,24 @@ release_cluster <- function(cluster) {
     )
   }
   invisible(NULL)
+}
+
+# Once-per-session warning state (HANDOFF-2026-11-04d open item 3)
+.evolveTrial_warn_state <- new.env(parent = emptyenv())
+
+# An arm with no final success threshold (NULL vector, arm missing from its names, or NA) falls back to Inf at the
+# final analysis, so it can never be declared a final success. Warn once per R session, since BO calls this many times.
+# Reads arguments only and draws nothing, so the random stream is untouched.
+.warn_unset_final_success_threshold <- function(arm_names, median_pfs_success_threshold_arms) {
+  if (isTRUE(.evolveTrial_warn_state$final_success_unset)) return(invisible(FALSE))
+  thr <- median_pfs_success_threshold_arms
+  unset <- if (is.null(thr)) arm_names else
+    arm_names[!(arm_names %in% names(thr)) | is.na(thr[arm_names])]
+  if (length(unset) == 0L) return(invisible(FALSE))
+  .evolveTrial_warn_state$final_success_unset <- TRUE
+  warning(sprintf(paste0(
+    "`median_pfs_success_threshold_arms` is unset for arm(s) %s: the final success threshold falls back to Inf, ",
+    "so these arms can never be declared a final success. This warning is shown once per session."),
+    paste(unset, collapse = ", ")), call. = FALSE)
+  invisible(TRUE)
 }
