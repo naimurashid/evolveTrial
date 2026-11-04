@@ -12,3 +12,4 @@ dev/perf/lib/
 dev/perf/build/
 dev/perf/harness/cache/
 dev/perf/harness/out/
+dev/perf/layer3/out/
