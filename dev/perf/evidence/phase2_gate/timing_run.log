@@ -1,0 +1,78 @@
+== R01 w1 dev_l2 cpp rep1 01:24:30 load 6.42
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  6.55
+== R01 w1 dev_p2_final exact rep1 01:24:47 load 6.55
+  load1
+1   6.5
+== R01 w16 dev_l2 cpp rep1 01:24:48 load 6.50
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9   6.5
+== R01 w16 dev_p2_final exact rep1 01:24:51 load 6.50
+  load1
+1   6.5
+== R23 w1 dev_l2 cpp rep1 01:24:52 load 6.50
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  6.72
+== R23 w1 dev_p2_final exact rep1 01:25:12 load 6.72
+  load1
+1  6.72
+== R23 w16 dev_l2 cpp rep1 01:25:13 load 6.72
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  6.82
+== R23 w16 dev_p2_final exact rep1 01:25:16 load 6.82
+  load1
+1  6.82
+== R01 w1 dev_l2 cpp rep2 01:25:17 load 6.82
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  6.87
+== R01 w1 dev_p2_final exact rep2 01:25:35 load 6.87
+  load1
+1  6.87
+== R01 w16 dev_l2 cpp rep2 01:25:36 load 6.87
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9     8
+== R01 w16 dev_p2_final exact rep2 01:25:39 load 8.00
+  load1
+1     8
+== R23 w1 dev_l2 cpp rep2 01:25:40 load 8.00
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  7.72
+== R23 w1 dev_p2_final exact rep2 01:26:00 load 7.72
+  load1
+1  7.72
+== R23 w16 dev_l2 cpp rep2 01:26:02 load 7.72
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  9.02
+== R23 w16 dev_p2_final exact rep2 01:26:05 load 9.02
+  load1
+1  9.02
+== R01 w1 dev_l2 cpp rep3 01:26:05 load 9.02
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  8.81
+== R01 w1 dev_p2_final exact rep3 01:26:23 load 8.81
+  load1
+1  8.75
+== R01 w16 dev_l2 cpp rep3 01:26:24 load 8.75
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  8.75
+== R01 w16 dev_p2_final exact rep3 01:26:27 load 8.75
+  load1
+1  8.75
+== R23 w1 dev_l2 cpp rep3 01:26:28 load 8.75
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  8.33
+== R23 w1 dev_p2_final exact rep3 01:26:48 load 8.33
+  load1
+1  8.14
+== R23 w16 dev_l2 cpp rep3 01:26:49 load 8.14
+                                       sha load1
+1 1c918711f48c411fecd1c1dad7e1bdd799171fd9  8.14
+== R23 w16 dev_p2_final exact rep3 01:26:52 load 8.14
+  load1
+1  8.14
+ design          lib per_1000_s.1 per_1000_s.16 efficiency16
+    R01       dev_l2       16.856         2.337    0.4507916
+    R23       dev_l2       19.409         2.435    0.4981776
+    R01 dev_p2_final        0.774         0.200    0.2418750
+    R23 dev_p2_final        0.787         0.198    0.2484217
+(efficiency16 = T(1 worker) / (16 x T(16 workers)); G6 target: R23 < 8 s per 1,000 trials at one worker for dev_p2, and efficiency16 above dev_l2.)

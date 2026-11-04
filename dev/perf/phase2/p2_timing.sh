@@ -8,9 +8,9 @@
 set -uo pipefail
 unset CDPATH; H=$(cd "$(dirname "$0")" >/dev/null && pwd); WT=$(cd "$H/../../.." >/dev/null && pwd); P=$WT/dev/perf/lib
 O=$WT/dev/perf/evidence/phase2_gate/timing; mkdir -p "$O"; REPS=${1:-1}; MAXLOAD=${P2_MAX_LOAD:-1.0}
-[ -d "$P/dev_p2" ] || { echo "dev_p2 missing" >&2; exit 2; }
+PL=${P2_TIMING_LIB:-dev_p2}; [ -d "$P/$PL" ] || { echo "$PL missing" >&2; exit 2; }
 load=$(cut -d' ' -f1 /proc/loadavg); awk -v l="$load" -v m="$MAXLOAD" 'BEGIN{exit !(l>m)}' && { echo "load $load > $MAXLOAD; machine not quiet" >&2; exit 2; }
-for rep in $(seq 1 "$REPS"); do for D in R01 R23; do for w in 1 16; do for LE in dev_l2:cpp dev_p2:exact; do
+for rep in $(seq 1 "$REPS"); do for D in R01 R23; do for w in 1 16; do for LE in dev_l2:cpp $PL:exact; do
   L=${LE%:*}; E=${LE#*:}; f=$O/t_${D}_w${w}_${L}_rep${rep}.rds
   [ -f "$f" ] && continue
   echo "== $D w$w $L $E rep$rep $(date +%T) load $(cut -d' ' -f1 /proc/loadavg)"
