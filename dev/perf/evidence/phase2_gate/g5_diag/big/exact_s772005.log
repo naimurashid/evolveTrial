@@ -1,0 +1,9 @@
+      Arm_Name True_Median Type_I_Error_or_Power PET_Efficacy PET_Futility
+1 Experimental         3.8               0.01425            0      0.98535
+2 Experimental         9.0               0.81760            0      0.18220
+  Pr_Reach_Max_N Pr_Final_Efficacy Pr_Final_Futility Pr_Final_Inconclusive
+1        0.01465           0.01425             5e-05               0.00035
+2        0.81780           0.81760             0e+00               0.00020
+     Exp_N Exp_Events  Exp_Time   Var_Exp_N Var_Exp_Events
+1 11.24000     5.5701  6.199283 0.001528006    0.001110450
+2 28.16905    18.0046 19.083970 0.003404529    0.002538631
