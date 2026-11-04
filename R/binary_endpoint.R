@@ -528,6 +528,7 @@ run_simulation_binary <- function(
     diagnostics = FALSE,
     progress = interactive()
 ) {
+  .exact_note_unused("run_simulation_binary does not use the exact engine")
   if (is.null(p1)) p1 <- p0
 
   # Ensure named vectors

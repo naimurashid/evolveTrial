@@ -163,3 +163,220 @@ test_that("the P2-4 slicer reproduces the reference re-slicer exactly on random 
   expect_identical(n_case, 3000L)
   expect_identical(n_bad, 0L)
 })
+
+# ---- review M1: the ExactPost wiring against the phase 1 decision rule -------------------------------------------------------
+# .exact_trace runs the engine's trials with every exact probability recorded as (inputs, threshold, value). For each call
+# site of src/simulate_chunk_exact.cpp the test checks (a) the threshold is the one phase 1 uses at that site
+# (src/simulate_chunk.cpp:375 interim HC futility_thr_interim, below; :762 final HC success_thr, above, then futility_thr,
+# below; :514 interim PH log_margin_interim, ge; :741-742 final PH log_eff_final, lt, then log_margin_final, ge), (b) the
+# value equals the exact functions called directly on the recorded inputs, and (c) it agrees with the phase 1 Monte Carlo
+# posterior at 10^5 draws within 4 standard errors. A swap of thresholds or of tails fails (a) or (b); the mutations tried
+# are listed in dev/perf/phase2/REVIEW_FIXES.md. Fixed seeds, so the outcome is deterministic.
+mc_close <- function(mc, p, N) {
+  se <- max(sqrt(p * (1 - p) / N), 1 / N)
+  abs(mc - p) / se
+}
+
+test_that("M1 HC: thresholds, tails and values at every exact call site (interim, final success, final futility)", {
+  nrec <- c(`1` = 0L, `2` = 0L, `3` = 0L)
+  for (spec in list(list("R03", 2), list("R01", 2), list("R04", 2))) {
+    D <- spec[[1]]
+    skip_if_not(file.exists(cap_path(D)), paste("capture", D, "not available"))
+    d <- readRDS(cap_path(D))
+    env <- build_frame_x(d, spec[[2]], 150)
+    cfg <- env$cfg
+    # the thresholds that identify the call sites must differ, or a swap could not be seen
+    expect_false(any(cfg$success_thr %in% c(cfg$futility_thr, cfg$futility_thr_interim)))
+    tr <- ns(".exact_trace")(1:150, cfg, c(31L, 7L))
+    expect_identical(tr$result, ns(".simulate_chunk_exact")(1:150, cfg, c(31L, 7L)))   # tracing changes nothing
+    P <- tr$post
+    expect_true(all(P$kind %in% 1:3))
+    expect_true(all(P$thr[P$kind == 1] %in% cfg$futility_thr_interim))      # interim: futility_thr_interim
+    expect_true(all(P$thr[P$kind == 2] %in% cfg$success_thr))               # final efficacy: success_thr
+    expect_true(all(P$thr[P$kind == 3] %in% cfg$futility_thr))              # final futility: futility_thr
+    expect_true(all(P$n[P$kind == 1] == cfg$draws_interim))
+    expect_true(all(P$n[P$kind %in% 2:3] == cfg$draws_final))
+    # a final futility evaluation follows a final efficacy evaluation on the same inputs (phase 1 order)
+    i3 <- which(P$kind == 3)
+    expect_true(all(P$kind[i3 - 1L] == 2L))
+    expect_identical(P$ev1[i3], P$ev1[i3 - 1L])
+    expect_identical(P$pt1[i3], P$pt1[i3 - 1L])
+    below <- ns(".exact_pr_median_below"); above <- ns(".exact_pr_median_above")
+    direct <- vapply(seq_along(P$kind), function(i) {
+      f <- if (P$kind[i] == 2L) above else below
+      f(P$ev1[[i]], P$pt1[[i]], cfg$prior_alpha, cfg$prior_beta, P$lens[[i]], P$thr[i])
+    }, numeric(1))
+    expect_identical(P$prob, direct)
+    for (kd in 1:3) nrec[as.character(kd)] <- nrec[as.character(kd)] + sum(P$kind == kd)
+    # Monte Carlo: up to 6 records per kind, preferring probabilities away from 0 and 1
+    set.seed(9000 + match(D, c("R01", "R03", "R04")))
+    for (kd in 1:3) {
+      ix <- which(P$kind == kd)
+      if (!length(ix)) next
+      ix <- ix[order(abs(P$prob[ix] - 0.5))][seq_len(min(6L, length(ix)))]
+      for (i in ix) {
+        lam <- evolveTrial::draw_posterior_hazard_samples_cpp(cfg$K, P$ev1[[i]], P$pt1[[i]], cfg$prior_alpha,
+                                                              cfg$prior_beta, 100000L)
+        med <- evolveTrial::calculate_median_survival_matrix_cpp(lam, P$lens[[i]])
+        mc <- if (kd == 2L) mean(med > P$thr[i]) else mean(med < P$thr[i])
+        expect_lt(mc_close(mc, P$prob[i], 1e5), 4)
+      }
+    }
+  }
+  expect_true(all(nrec > 0))   # all three HC call sites were exercised
+})
+
+test_that("M1 PH: thresholds, tails and values at every exact call site (interim, final efficacy, final futility)", {
+  n_int <- 0L; n_fin <- 0L
+  for (spec in list(list("R23", 2), list("R26", 2), list("R25", 1))) {
+    D <- spec[[1]]
+    skip_if_not(file.exists(cap_path(D)), paste("capture", D, "not available"))
+    d <- readRDS(cap_path(D))
+    env <- build_frame_x(d, spec[[2]], 150)
+    cfg <- env$cfg
+    # the interim/final margins may coincide in a design, but the efficacy threshold must differ from the margins
+    expect_false(cfg$log_eff_final %in% c(cfg$log_margin_interim, cfg$log_margin_final))
+    tr <- ns(".exact_trace")(1:150, cfg, c(31L, 7L))
+    expect_identical(tr$result, ns(".simulate_chunk_exact")(1:150, cfg, c(31L, 7L)))
+    P <- tr$post
+    expect_true(all(P$kind %in% 4:5))
+    k <- P$kind
+    is_fin_eff <- which(k == 5L)                       # ph_lt is called only for the final efficacy probability
+    expect_true(all(P$thr[is_fin_eff] == cfg$log_eff_final))
+    # final order: ph_lt(log_eff_final) then ph_ge(log_margin_final) on the same inputs
+    fin_fut <- is_fin_eff + 1L
+    expect_true(all(k[fin_fut] == 4L))
+    expect_true(all(P$thr[fin_fut] == cfg$log_margin_final))
+    expect_true(all(P$bmean[fin_fut] == P$bmean[is_fin_eff]) && all(P$bsd[fin_fut] == P$bsd[is_fin_eff]))
+    interim <- setdiff(which(k == 4L), fin_fut)
+    expect_true(all(P$thr[interim] == cfg$log_margin_interim))      # interim futility: log_margin_interim, ge
+    expect_true(all(P$n[interim] == cfg$draws_vsref_interim))
+    expect_true(all(P$n[is_fin_eff] == cfg$draws_final))
+    n_int <- n_int + length(interim); n_fin <- n_fin + length(is_fin_eff)
+    # value: pnorm on the Laplace output computed here from the recorded inputs
+    direct <- vapply(seq_along(k), function(i) {
+      bp <- evolveTrial::ph_beta_mode_var_cpp(P$ev1[[i]], P$pt1[[i]], P$ev2[[i]], P$pt2[[i]], cfg$prior_alpha,
+                                               cfg$prior_beta, cfg$ph_mu, cfg$ph_sigma, cfg$ph_tol, cfg$ph_max_iter)
+      c(bp$mean, bp$sd, if (k[i] == 4L) pnorm(P$thr[i], bp$mean, bp$sd, lower.tail = FALSE) else pnorm(P$thr[i], bp$mean, bp$sd))
+    }, numeric(3))
+    expect_identical(rbind(P$bmean, P$bsd, P$prob), direct)
+    # Monte Carlo: the phase 1 sampler, up to 6 records per kind
+    set.seed(9100 + match(D, c("R23", "R25", "R26")))
+    for (kd in 4:5) {
+      ix <- which(k == kd)
+      ix <- ix[order(abs(P$prob[ix] - 0.5))][seq_len(min(6L, length(ix)))]
+      for (i in ix) {
+        o <- ns(".chunk_ph_sample")(P$ev1[[i]], P$pt1[[i]], P$ev2[[i]], P$pt2[[i]], cfg$prior_alpha, cfg$prior_beta,
+                                    P$lens[[i]], cfg$ph_mu, cfg$ph_sigma, cfg$ph_tol, cfg$ph_max_iter, 100000L)
+        mc <- if (kd == 4L) mean(o$logHR >= P$thr[i]) else mean(o$logHR < P$thr[i])
+        expect_lt(mc_close(mc, P$prob[i], 1e5), 4)
+      }
+    }
+  }
+  expect_gt(n_int, 0L); expect_gt(n_fin, 0L)
+})
+
+# ---- review M2: the patient-level samplers of CounterRng ---------------------------------------------------------------------
+# The trace returns every draw the trial loop made: arrival gap, arm assignment (position among the eligible arms and their
+# normalized probabilities) and event time with the shape and scale passed. The gap must be Exp(rate = accrual_rate), the
+# event time Weibull(shape, scale) as passed (and the pair must be one of the design's arms), and the arm frequencies must
+# follow the normalized probabilities. Kolmogorov-Smirnov and chi-square tests with fixed seeds, so deterministic; the pass
+# threshold is p > 1e-3 (a correct sampler fails an unlucky seed with probability 1e-3 per test, and these seeds pass; a
+# wrong parameterization gives p below 1e-100 at these sample sizes, see REVIEW_FIXES.md).
+test_that("M2: arrival gaps, event times and arm assignments follow pexp, pweibull and the randomization probabilities", {
+  skip_if_not(file.exists(cap_path("R23")), "capture R23 not available")
+  d <- readRDS(cap_path("R23"))
+  env <- build_frame_x(d, 2, 400)
+  cfg <- env$cfg
+  cfg$rand_probs <- c(0.25, 0.75)                      # unequal, so an arm mix-up or a flat draw is visible
+  expect_gt(abs(cfg$shape[1] - cfg$shape[2]) + abs(cfg$scale[1] - cfg$scale[2]), 0)
+  expect_false(isTRUE(all.equal(cfg$accrual_rate, 1)))   # rate used as scale would be invisible at rate 1
+  tr <- ns(".exact_trace")(1:400, cfg, c(2026L, 1104L))
+  D <- tr$draws
+  expect_gt(length(D$gap), 5000L)
+  # arrival gaps
+  expect_true(all(D$gap_scale == 1 / cfg$accrual_rate))
+  ks_gap <- stats::ks.test(stats::pexp(D$gap, rate = cfg$accrual_rate), "punif")
+  expect_gt(ks_gap$p.value, 1e-3)
+  # event times
+  pairs <- paste(cfg$shape, cfg$scale)
+  expect_true(all(paste(D$ev_shape, D$ev_scale) %in% pairs))
+  u_ev <- stats::pweibull(D$ev_t, shape = D$ev_shape, scale = D$ev_scale)
+  ks_ev <- stats::ks.test(u_ev, "punif")
+  expect_gt(ks_ev$p.value, 1e-3)
+  for (a in 1:2) {                                      # and per arm
+    sel <- D$ev_shape == cfg$shape[a] & D$ev_scale == cfg$scale[a]
+    if (sum(sel) > 200 && !identical(pairs[1], pairs[2])) expect_gt(stats::ks.test(u_ev[sel], "punif")$p.value, 1e-3)
+  }
+  # arm assignment: records with both arms eligible, chosen position against the normalized probabilities
+  n2 <- D$arm_n == 2L
+  expect_gt(sum(n2), 3000L)
+  off <- c(0L, cumsum(D$arm_n))[seq_along(D$arm_n)]
+  p1 <- D$arm_probs[off[n2] + 1L]; p2 <- D$arm_probs[off[n2] + 2L]
+  expect_true(all(abs(p1 - 0.25) < 1e-15) && all(abs(p2 - 0.75) < 1e-15))
+  cnt <- tabulate(D$arm_pick[n2], 2L)
+  ch <- stats::chisq.test(cnt, p = c(0.25, 0.75))
+  expect_gt(ch$p.value, 1e-3)
+  # one arm draw and one event time per enrolled patient; the last gap of a trial may end the accrual loop
+  expect_identical(length(D$arm_pick), length(D$ev_t))
+  expect_gte(length(D$gap), length(D$ev_t))
+})
+
+# ---- review L1: quadrature non-convergence stops the engine ----------------------------------------------------------------
+test_that("L1: an exact probability whose quadrature did not converge stops the run with an informative error", {
+  skip_if_not(file.exists(cap_path("R01")), "capture R01 not available")
+  d <- readRDS(cap_path("R01"))
+  env <- build_frame_x(d, 2, 30)
+  ok <- ns(".simulate_chunk_exact")(1:30, env$cfg, c(5L, 6L))
+  force <- ns(".exact_test_force_nonconverged")
+  expect_false(force(TRUE))
+  on.exit(force(FALSE), add = TRUE)
+  expect_error(ns(".simulate_chunk_exact")(1:30, env$cfg, c(5L, 6L)), "quadrature did not converge")
+  expect_error(ns(".exact_trace")(1:30, env$cfg, c(5L, 6L)), "quadrature did not converge")
+  expect_true(force(FALSE))
+  expect_identical(ns(".simulate_chunk_exact")(1:30, env$cfg, c(5L, 6L)), ok)   # the seam is off again
+})
+
+# ---- review L2: one notice when the exact engine is requested on a path that does not use it ------------------------------
+test_that("L2: engine 'exact' on a path without the exact engine gives one message and draws nothing", {
+  skip_if_not(file.exists(cap_path("R01")), "capture R01 not available")
+  d <- readRDS(cap_path("R01"))
+  note <- ns(".exact_note_unused"); en <- ns(".exact_note_env")
+  old <- options(evolveTrial.looks_stop_at_final = TRUE, evolveTrial.engine = "cpp", evolveTrial.use_cpp_engine = TRUE)
+  on.exit({ options(old); en$noted <- NULL }, add = TRUE)
+  en$noted <- NULL
+  run <- function() {
+    ba <- d$base_args; ba$num_simulations <- 20L; ba$parallel_replicates <- FALSE
+    run_scenarios(ba, d$scens, seed = 3, return_variance = TRUE)
+  }
+  # default "cpp" engine: silent, and the notice stays armed
+  expect_no_message(run())
+  expect_null(en$noted)
+  # exact engine in use: silent
+  options(evolveTrial.engine = "exact")
+  expect_no_message(run())
+  expect_null(en$noted)
+  # exact requested, R body selected: one message, then silence; results as the "cpp" engine with the R body
+  options(evolveTrial.use_cpp_engine = FALSE)
+  expect_message(a <- run(), "evolveTrial.engine.*exact.*use_cpp_engine is FALSE")
+  expect_no_message(b <- run())
+  options(evolveTrial.engine = "cpp")
+  expect_identical(run(), a)
+  expect_identical(a, b)
+  # the notice draws nothing from R's generator
+  en$noted <- NULL
+  options(evolveTrial.engine = "exact")
+  set.seed(77); r0 <- .Random.seed
+  expect_message(note("a test path"), "a test path")
+  expect_identical(.Random.seed, r0)
+  expect_no_message(note("a test path"))
+  # other simulators: the same notice, once
+  en$noted <- NULL
+  expect_message(try(run_simulation_binary(num_simulations = 5L, arm_names = "A", true_response_prob = 0.3, n1_per_arm = 10,
+                                           n_total_per_arm = 20, p0 = 0.2), silent = TRUE), "run_simulation_binary")
+  expect_true(en$noted)
+  # an invalid option value is not reported here (run_simulation_pure rejects it) and does not error
+  en$noted <- NULL
+  options(evolveTrial.engine = "bogus")
+  expect_no_message(note("x"))
+})

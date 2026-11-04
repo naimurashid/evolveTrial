@@ -969,6 +969,7 @@ run_simulation_pure <- function(
   # Phase 2 engine (options(evolveTrial.engine = "exact"); R/simulate_chunk_exact.R). Stops outside the supported set,
   # then draws the scenario seed (one sample.int call). In the default "cpp" mode nothing here draws or changes.
   exact_engine <- .exact_engine_selected()
+  if (!exact_engine) .exact_note_unused("evolveTrial.use_cpp_engine is FALSE (the R body runs)")
   if (exact_engine) {
     .chunk_cpp_assert_supported(environment(), cfg)
     exact_seed <- .exact_draw_scenario_seed()

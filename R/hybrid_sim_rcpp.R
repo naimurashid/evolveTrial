@@ -386,6 +386,8 @@ run_hybrid_simulations_rcpp <- function(hybrid_theta, base_args, scenario_params
                                          efficacy_method = "posterior",
                                          futility_method = "posterior") {
 
+  .exact_note_unused("run_hybrid_simulations_rcpp does not use the exact engine")
+
   # Validate trial_mode
   valid_modes <- c("hybrid", "single_arm", "between_arm", "dual_single_arm")
   if (!trial_mode %in% valid_modes) {

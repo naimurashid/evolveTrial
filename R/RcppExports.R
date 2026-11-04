@@ -344,6 +344,14 @@ rsem_rebalance_cutpoints <- function(event_times, max_follow_up, num_intervals) 
     .Call(`_evolveTrial_exact_slice_compare`, enroll, te, rc, cal, max_fu, cut, K)
 }
 
+.exact_test_force_nonconverged <- function(flag) {
+    .Call(`_evolveTrial_exact_test_force_nonconverged`, flag)
+}
+
+.exact_trace <- function(sim_indices, cfg, scenario_seed) {
+    .Call(`_evolveTrial_exact_trace`, sim_indices, cfg, scenario_seed)
+}
+
 #' Test Rcpp setup
 #'
 #' Simple test function to verify Rcpp and RcppArmadillo are working.

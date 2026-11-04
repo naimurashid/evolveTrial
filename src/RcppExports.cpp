@@ -566,6 +566,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// exact_test_force_nonconverged
+bool exact_test_force_nonconverged(bool flag);
+RcppExport SEXP _evolveTrial_exact_test_force_nonconverged(SEXP flagSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< bool >::type flag(flagSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_test_force_nonconverged(flag));
+    return rcpp_result_gen;
+END_RCPP
+}
+// exact_trace
+Rcpp::List exact_trace(Rcpp::IntegerVector sim_indices, Rcpp::List cfg, Rcpp::IntegerVector scenario_seed);
+RcppExport SEXP _evolveTrial_exact_trace(SEXP sim_indicesSEXP, SEXP cfgSEXP, SEXP scenario_seedSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type sim_indices(sim_indicesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type cfg(cfgSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type scenario_seed(scenario_seedSEXP);
+    rcpp_result_gen = Rcpp::wrap(exact_trace(sim_indices, cfg, scenario_seed));
+    return rcpp_result_gen;
+END_RCPP
+}
 // test_rcpp_sum
 double test_rcpp_sum(const arma::vec& x);
 RcppExport SEXP _evolveTrial_test_rcpp_sum(SEXP xSEXP) {
@@ -629,6 +651,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_evolveTrial_exact_rng_uniforms", (DL_FUNC) &_evolveTrial_exact_rng_uniforms, 3},
     {"_evolveTrial_exact_rng_raw", (DL_FUNC) &_evolveTrial_exact_rng_raw, 2},
     {"_evolveTrial_exact_slice_compare", (DL_FUNC) &_evolveTrial_exact_slice_compare, 7},
+    {"_evolveTrial_exact_test_force_nonconverged", (DL_FUNC) &_evolveTrial_exact_test_force_nonconverged, 1},
+    {"_evolveTrial_exact_trace", (DL_FUNC) &_evolveTrial_exact_trace, 3},
     {"_evolveTrial_test_rcpp_sum", (DL_FUNC) &_evolveTrial_test_rcpp_sum, 1},
     {"_evolveTrial_test_armadillo_random", (DL_FUNC) &_evolveTrial_test_armadillo_random, 1},
     {NULL, NULL, 0}

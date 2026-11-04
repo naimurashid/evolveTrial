@@ -24,6 +24,23 @@
   identical(eng, "exact") && isTRUE(getOption("evolveTrial.use_cpp_engine", TRUE))
 }
 
+# One-time notice (review L2) for a caller who set options(evolveTrial.engine = "exact") on a path that does not use the
+# exact engine: run_simulation_pure with use_cpp_engine = FALSE, and the other simulators (hybrid, binary). Reads options
+# and prints one message per R session; it draws nothing, so R's random stream is untouched. Silent in the default "cpp"
+# mode and whenever the exact engine is in use.
+.exact_note_env <- new.env(parent = emptyenv())
+.exact_requested <- function() {
+  eng <- getOption("evolveTrial.engine", "cpp")
+  is.character(eng) && length(eng) == 1L && !is.na(eng) && identical(eng, "exact")
+}
+.exact_note_unused <- function(reason) {
+  if (!.exact_requested() || isTRUE(.exact_note_env$noted)) return(invisible(FALSE))
+  .exact_note_env$noted <- TRUE
+  message("options(evolveTrial.engine = \"exact\") is set, but ", reason, ", so the phase 1 engine or R body runs here. ",
+          "This notice appears once per session.")
+  invisible(TRUE)
+}
+
 # The one draw from R's generator per scenario dispatch: two integers in 1..(2^31 - 1), 62 bits of seed.
 .exact_draw_scenario_seed <- function() sample.int(.Machine$integer.max, 2L, replace = TRUE)
 

@@ -631,6 +631,9 @@ struct McPost {
   double ph_lt(double m) { return logical_mean(logHR, m, true); }    // mean(logHR < m)
 };
 
+// Test seam for the non-convergence stop in ExactPost::below (.exact_test_force_nonconverged). Always false otherwise.
+bool g_test_force_nonconverged = false;
+
 // ExactPost: the P2-1 exact probabilities. Nothing is drawn.
 struct ExactPost {
   const Slice* fs = nullptr;
@@ -641,6 +644,13 @@ struct ExactPost {
   double below(const Cfg& c, const Slice& s, const std::vector<double>& lens, double thr, bool want_below) {
     evt_exact::MedianProbs p = evt_exact::median_probs(s.events.data(), s.pt.data(), c.prior_alpha.data(),
                                                        c.prior_beta.data(), lens.data(), c.K, thr);
+    // Review L1: contour_tail returns its best value when the panel budget runs out and flags it only in TailInfo. Stop
+    // here, as phase 1 stops on an NaN tally, so an input outside the tested region cannot pass silently. Never seen in
+    // the supported set (20,000-case stress run, all 10 G3 designs). g_test_force_nonconverged is a test seam only.
+    if (!p.info.converged || g_test_force_nonconverged) {
+      Rcpp::stop("simulate_chunk_exact: the exact posterior quadrature did not converge (threshold %g, %d panels, error "
+                 "estimate %g)", thr, p.info.n_panels, p.info.err_est);
+    }
     if (p.status == 1 && !warned) {   // phase 1 warns from draw_posterior_hazard_samples_cpp; unreachable in the set
       warned = true;
       Rcpp::warning("Posterior beta parameter is non-positive. Setting to 1e-6.");
@@ -674,6 +684,101 @@ struct ExactPost {
   }
   double ph_ge(double m) { return evt_exact::loghr_probs(bmean, bsd, m).ge; }   // Pr(logHR >= m)
   double ph_lt(double m) { return evt_exact::loghr_probs(bmean, bsd, m).lt; }   // Pr(logHR < m)
+};
+
+// ---- test traces (review M1, M2): wrappers that record what the trial loop passes to the policies ---------------------------
+// TraceRng wraps CounterRng and records every draw with the arguments the trial loop passed. TracePost wraps ExactPost and
+// records, for every probability the loop asks for, the inputs, the threshold and the returned value. Both forward
+// unchanged, so a traced trial is the same trial as the engine's (checked by the tests). Used only by .exact_trace.
+struct TraceRng {
+  CounterRng base;
+  int trial = 0;
+  std::vector<int> gap_trial;
+  std::vector<double> gap, gap_scale;
+  std::vector<int> arm_trial, arm_pick, arm_n;
+  std::vector<double> arm_probs;
+  std::vector<int> ev_trial;
+  std::vector<double> ev_t, ev_shape, ev_scale;
+  double arrival(double scale) {
+    const double x = base.arrival(scale);
+    gap_trial.push_back(trial);
+    gap.push_back(x);
+    gap_scale.push_back(scale);
+    return x;
+  }
+  int arm(const std::vector<double>& probs) {
+    const int k = base.arm(probs);
+    arm_trial.push_back(trial);
+    arm_pick.push_back(k + 1);
+    arm_n.push_back((int) probs.size());
+    arm_probs.insert(arm_probs.end(), probs.begin(), probs.end());
+    return k;
+  }
+  double event_time(double shape, double scale) {
+    const double x = base.event_time(shape, scale);
+    ev_trial.push_back(trial);
+    ev_t.push_back(x);
+    ev_shape.push_back(shape);
+    ev_scale.push_back(scale);
+    return x;
+  }
+  double dropout_time(const Cfg& c) { return base.dropout_time(c); }
+};
+
+struct PostRec {
+  int trial, kind, n;   // kind: 1 hc_interim, 2 hc_final_above, 3 hc_final_below, 4 ph_ge, 5 ph_lt; n: PH draw count
+  double thr, prob, bmean, bsd;
+  std::vector<int> ev1, ev2;
+  std::vector<double> pt1, pt2, lens;
+};
+
+struct TracePost {
+  ExactPost in;
+  int trial = 0;
+  std::vector<PostRec> recs;
+  // inputs of the current final HC analysis / PH analysis
+  std::vector<int> ev1, ev2;
+  std::vector<double> pt1, pt2, lens;
+  int n_draws = 0;
+  void keep1(const Slice& s, const std::vector<double>& l) {
+    ev1.assign(s.events.begin(), s.events.end());
+    pt1.assign(s.pt.begin(), s.pt.end());
+    ev2.clear();
+    pt2.clear();
+    lens = l;
+  }
+  void push(int kind, double thr, double prob) {
+    PostRec r;
+    r.trial = trial; r.kind = kind; r.n = n_draws; r.thr = thr; r.prob = prob;
+    r.bmean = in.bmean; r.bsd = in.bsd;
+    r.ev1 = ev1; r.ev2 = ev2; r.pt1 = pt1; r.pt2 = pt2; r.lens = lens;
+    recs.push_back(std::move(r));
+  }
+  double hc_interim(const Cfg& c, const Slice& s, const std::vector<double>& l, double thr) {
+    keep1(s, l);
+    n_draws = c.draws_interim;
+    const double p = in.hc_interim(c, s, l, thr);
+    push(1, thr, p);
+    return p;
+  }
+  void hc_final_begin(const Cfg& c, const Slice& s, const std::vector<double>& l) {
+    keep1(s, l);
+    n_draws = c.draws_final;
+    in.hc_final_begin(c, s, l);
+  }
+  double hc_final_above(double thr) { const double p = in.hc_final_above(thr); push(2, thr, p); return p; }
+  double hc_final_below(double thr) { const double p = in.hc_final_below(thr); push(3, thr, p); return p; }
+  void ph(const Cfg& c, const Slice& sC, const Slice& sT, const std::vector<double>& l, int n) {
+    in.ph(c, sC, sT, l, n);
+    ev1.assign(sC.events.begin(), sC.events.end());
+    pt1.assign(sC.pt.begin(), sC.pt.end());
+    ev2.assign(sT.events.begin(), sT.events.end());
+    pt2.assign(sT.pt.begin(), sT.pt.end());
+    lens = l;
+    n_draws = n;
+  }
+  double ph_ge(double m) { const double p = in.ph_ge(m); push(4, m, p); return p; }
+  double ph_lt(double m) { const double p = in.ph_lt(m); push(5, m, p); return p; }
 };
 
 // ---- interim looks (src/simulate_chunk.cpp:357-385, 505-522), posterior through the policy --------------------------------
@@ -1199,4 +1304,84 @@ Rcpp::List exact_slice_compare(Rcpp::NumericVector enroll, Rcpp::NumericVector t
   slice_arm(r, cal * 0.5, max_fu, cv, K, b);
   slice_arm(r, cal, max_fu, cv, K, b);
   return Rcpp::List::create(Rcpp::Named("ref") = pack(a), Rcpp::Named("new") = pack(b));
+}
+
+// [[Rcpp::export(name = ".exact_test_force_nonconverged", rng = false)]]
+bool exact_test_force_nonconverged(bool flag) {
+  // Test seam (review L1): while set, every exact probability evaluation raises the non-convergence error. Returns the
+  // previous value.
+  const bool old = g_test_force_nonconverged;
+  g_test_force_nonconverged = flag;
+  return old;
+}
+
+// [[Rcpp::export(name = ".exact_trace", rng = false)]]
+Rcpp::List exact_trace(Rcpp::IntegerVector sim_indices, Rcpp::List cfg, Rcpp::IntegerVector scenario_seed) {
+  // Test hook (review M1, M2): runs the engine's trials exactly as .simulate_chunk_exact does (same generator, same
+  // policies, forwarded unchanged) and also returns (a) post: one row per exact probability the trial loop evaluated, with
+  // the inputs (event counts and person time per interval, interval lengths, or the Laplace mean and sd), the threshold
+  // passed, the draw count that selects the call site, and the probability returned; (b) draws: every arrival gap, arm
+  // assignment (position among the eligible arms, with their normalized probabilities) and event time with the shape and
+  // scale used. `result` has the elements of .simulate_chunk_exact's return value.
+  const Cfg c = unpack(cfg);
+  const uint64_t seed64 = seed64_from(scenario_seed);
+  const int A = c.n_arms;
+  const R_xlen_t n = sim_indices.size();
+  Rcpp::NumericMatrix fn(n, A), fev(n, A);
+  Rcpp::IntegerMatrix se(n, A), sf(n, A), fe(n, A), ff(n, A), fi(n, A);
+  Rcpp::NumericVector ft(n);
+  Work w;
+  TrialOut out;
+  TraceRng rng;
+  TracePost post;
+  for (R_xlen_t t = 0; t < n; t++) {
+    const int idx = sim_indices[t];
+    if (idx == NA_INTEGER) Rcpp::stop("exact_trace: NA trial index");
+    rng.base.g.seed(seed64, (uint64_t) (int64_t) idx);
+    rng.trial = idx;
+    post.trial = idx;
+    run_trial(c, rng, post, w, out);
+    for (int a = 0; a < A; a++) {
+      fn(t, a) = out.final_n[a];
+      fev(t, a) = out.final_ev[a];
+      se(t, a) = out.stop_eff[a];
+      sf(t, a) = out.stop_fut[a];
+      fe(t, a) = out.final_eff[a];
+      ff(t, a) = out.final_fut[a];
+      fi(t, a) = out.final_inc[a];
+    }
+    ft[t] = out.final_time;
+  }
+  Rcpp::List dn = Rcpp::List::create(R_NilValue, c.arm_names);
+  for (SEXP m : {(SEXP) fn, (SEXP) fev, (SEXP) se, (SEXP) sf, (SEXP) fe, (SEXP) ff, (SEXP) fi}) Rf_setAttrib(m, R_DimNamesSymbol, dn);
+  Rcpp::List result = Rcpp::List::create(
+      Rcpp::Named("sim_indices") = Rcpp::IntegerVector(sim_indices.begin(), sim_indices.end()),
+      Rcpp::Named("final_n") = fn, Rcpp::Named("final_events") = fev, Rcpp::Named("stop_eff") = se,
+      Rcpp::Named("stop_fut") = sf, Rcpp::Named("final_eff") = fe, Rcpp::Named("final_fut") = ff,
+      Rcpp::Named("final_inc") = fi, Rcpp::Named("final_time") = ft);
+
+  const R_xlen_t m = (R_xlen_t) post.recs.size();
+  Rcpp::IntegerVector p_trial(m), p_kind(m), p_n(m);
+  Rcpp::NumericVector p_thr(m), p_prob(m), p_bmean(m), p_bsd(m);
+  Rcpp::List p_ev1(m), p_ev2(m), p_pt1(m), p_pt2(m), p_lens(m);
+  for (R_xlen_t i = 0; i < m; i++) {
+    const PostRec& r = post.recs[i];
+    p_trial[i] = r.trial; p_kind[i] = r.kind; p_n[i] = r.n;
+    p_thr[i] = r.thr; p_prob[i] = r.prob; p_bmean[i] = r.bmean; p_bsd[i] = r.bsd;
+    p_ev1[i] = Rcpp::wrap(r.ev1); p_ev2[i] = Rcpp::wrap(r.ev2);
+    p_pt1[i] = Rcpp::wrap(r.pt1); p_pt2[i] = Rcpp::wrap(r.pt2); p_lens[i] = Rcpp::wrap(r.lens);
+  }
+  Rcpp::List P = Rcpp::List::create(
+      Rcpp::Named("trial") = p_trial, Rcpp::Named("kind") = p_kind, Rcpp::Named("n") = p_n, Rcpp::Named("thr") = p_thr,
+      Rcpp::Named("prob") = p_prob, Rcpp::Named("bmean") = p_bmean, Rcpp::Named("bsd") = p_bsd,
+      Rcpp::Named("ev1") = p_ev1, Rcpp::Named("pt1") = p_pt1, Rcpp::Named("ev2") = p_ev2, Rcpp::Named("pt2") = p_pt2,
+      Rcpp::Named("lens") = p_lens);
+  Rcpp::List D = Rcpp::List::create(
+      Rcpp::Named("gap_trial") = Rcpp::wrap(rng.gap_trial), Rcpp::Named("gap") = Rcpp::wrap(rng.gap),
+      Rcpp::Named("gap_scale") = Rcpp::wrap(rng.gap_scale),
+      Rcpp::Named("arm_trial") = Rcpp::wrap(rng.arm_trial), Rcpp::Named("arm_pick") = Rcpp::wrap(rng.arm_pick),
+      Rcpp::Named("arm_n") = Rcpp::wrap(rng.arm_n), Rcpp::Named("arm_probs") = Rcpp::wrap(rng.arm_probs),
+      Rcpp::Named("ev_trial") = Rcpp::wrap(rng.ev_trial), Rcpp::Named("ev_t") = Rcpp::wrap(rng.ev_t),
+      Rcpp::Named("ev_shape") = Rcpp::wrap(rng.ev_shape), Rcpp::Named("ev_scale") = Rcpp::wrap(rng.ev_scale));
+  return Rcpp::List::create(Rcpp::Named("result") = result, Rcpp::Named("post") = P, Rcpp::Named("draws") = D);
 }
