@@ -109,7 +109,7 @@ runs the `-O0` build. The port measured `-O2` at 15% faster per candidate for BO
   (`crn_seed()`, `R/crn.R` line 63, `set.seed` at line 253), so results do not depend on worker count and common random
   numbers hold across candidates by design. Replacing R's generator would change every replayed record, the certify-block
   accounting in `docs/CERTIFY_BLOCKS.md` and the identity with frozen campaigns. The cost is real and the benefit is
-  only the 26% stream bucket, which the bit-identical C++ stream also removes.
+  only the 20 to 26% stream bucket (BOIN12 to U-BOIN), which the bit-identical C++ stream also removes.
 - **Worker start-up.** Production parallelism is one search per worker. `BATOND.cores` forks `mclapply` inside a candidate
   (`R/enumerate.R` line 741), but at 4.4 s per candidate start-up is not the bottleneck. It would become one after the
   loop port if `BATOND.cores` above 1 is used, so keep it at 1 and parallelise across searches.
