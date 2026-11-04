@@ -1,5 +1,6 @@
 # t7.R <lib> <design> <workers> <out.rds>: both scenarios, 1,000 trials, seed 900001, production path (internal)
 a <- commandArgs(TRUE); LIB <- normalizePath(a[1]); DES <- a[2]; W <- as.integer(a[3])
+if (!exists("%||%", mode = "function")) `%||%` <- function(x, y) if (is.null(x)) y else x
 suppressPackageStartupMessages(library(evolveTrial))
 stopifnot(startsWith(find.package("evolveTrial"), LIB))
 options(evolveTrial.looks_stop_at_final = TRUE)

@@ -22,8 +22,9 @@ differ from each other, as they should, because each worker count draws from dif
 and dev are identical.
 
 A baton-dosefinding job from another session (`n1t_search.R`, about 16 R processes) started on the desktop at about
-21:28, so every row after the first ran on a loaded 20-core machine. The R01 1-worker row is the only clean one. It
-matches step 3 (26.4 and 16.4 s, 1.59 times). The R23 1-worker ref time of 235.8 s is above step 4's best of 163.3 s
+21:28, during the R01 1-worker dev run, so only the R01 1-worker ref run (26.3 s) ran on an idle machine. That run
+matches step 3's 26.4 s. The dev run took 17.6 s against step 3's 16.4 s, so the clean single-arm ratio is step 3's 1.59
+times, and the 1.50 here is low because of the load. The R23 1-worker ref time of 235.8 s is above step 4's best of 163.3 s
 and inside its loaded range (163 to 230 s), so the R23 ratios are indicative. They agree with step 4's 8.7 times.
 
 What the table shows: single-arm designs gain about 1.5 times, because about 64% of the time is gamma draws that bit
