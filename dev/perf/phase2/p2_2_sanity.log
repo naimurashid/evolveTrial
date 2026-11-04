@@ -1,0 +1,42 @@
+   design scenario          arm                  metric     cpp   exact
+1     R01        1 Experimental   Type_I_Error_or_Power  0.0115  0.0135
+2     R01        1 Experimental            PET_Futility  0.9880  0.9860
+3     R01        1 Experimental                   Exp_N 11.3400 11.4015
+4     R01        2 Experimental   Type_I_Error_or_Power  0.8100  0.8230
+5     R01        2 Experimental            PET_Futility  0.1900  0.1770
+6     R01        2 Experimental                   Exp_N 27.9550 28.2475
+7     R01       NA          all seconds_per_1000_trials  8.2323  0.0785
+8     R23        1      Doublet   Type_I_Error_or_Power  0.0000  0.0000
+9     R23        1      Doublet            PET_Futility  0.0000  0.0000
+10    R23        1      Doublet                   Exp_N 29.1955 29.1015
+11    R23        1      Triplet   Type_I_Error_or_Power  0.0800  0.0820
+12    R23        1      Triplet            PET_Futility  0.7900  0.7900
+13    R23        1      Triplet                   Exp_N 29.8925 29.9100
+14    R23        2      Doublet   Type_I_Error_or_Power  0.0000  0.0000
+15    R23        2      Doublet            PET_Futility  0.0000  0.0000
+16    R23        2      Doublet                   Exp_N 43.9335 44.4170
+17    R23        2      Triplet   Type_I_Error_or_Power  0.8075  0.8230
+18    R23        2      Triplet            PET_Futility  0.1465  0.1290
+19    R23        2      Triplet                   Exp_N 46.9895 47.4150
+20    R23       NA          all seconds_per_1000_trials  9.6883  0.1077
+         se        z
+1  0.003513  0.56928
+2  0.003582 -0.55836
+3  0.174113  0.35322
+4  0.012239  1.06221
+5  0.012239 -1.06221
+6  0.264847  1.10441
+7        NA       NA
+8  0.000000       NA
+9  0.000000       NA
+10 0.379791 -0.24750
+11 0.008628  0.23181
+12 0.012880  0.00000
+13 0.418008  0.04187
+14 0.000000       NA
+15 0.000000       NA
+16 0.317645  1.52214
+17 0.012270  1.26322
+18 0.010895 -1.60626
+19 0.311414  1.36635
+20       NA       NA

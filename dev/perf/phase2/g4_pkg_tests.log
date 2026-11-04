@@ -1,0 +1,122 @@
+cpp_equivalence: ..................
+assumption-audit: ......................
+ba-futility-margin: ......
+ba-rule-variants: ........
+early-stopping: ..
+edge-cases: ................................
+estimate-vsref-gates: ..........
+hybrid-ba-margin: SSSSS
+hybrid-simulator: ............................................................
+model-mismatch: ..........................
+parallel-execution: SSSSS
+path-parity: ...........S....
+posterior-exact: ............................................................
+r-semantics: .................................
+rcpp-equivalence: ...............S..................S
+rcpp-r-equivalence: SSSSSSSSS
+return-variance: ...............................................
+simulate-chunk-cpp-vsref: ....................................................................................................................................................................................................................................
+simulate-chunk-cpp: ....................................................................................................................................................
+simulate-chunk-exact: ................................................
+single-arm-gates: ...........
+single-arm-regression: ...................
+trial-modes: SSSSSSSSSSS
+utils: ....
+vsref-gates: .
+
+══ Skipped ═════════════════════════════════════════════════════════════════════
+1. hybrid BA with PH delta_HR margin returns finite in-range OCs ('test-hybrid-ba-margin.R:84:3') - Reason: On CRAN
+
+2. raising hr_margin increases BA futility rate for a near-null arm ('test-hybrid-ba-margin.R:124:3') - Reason: On CRAN
+
+3. PH posterior tail Pr(HR >= 1 - delta) increases with delta ('test-hybrid-ba-margin.R:151:3') - Reason: On CRAN
+
+4. conversion-PP forecast runs and returns in-range PP for both margins ('test-hybrid-ba-margin.R:226:3') - Reason: On CRAN
+
+5. raising hr_eff_margin lowers the conversion-PP forecast ('test-hybrid-ba-margin.R:245:3') - Reason: On CRAN
+
+6. parallel execution produces valid results ('test-parallel-execution.R:37:3') - Reason: On CRAN
+
+7. parallel and sequential produce similar operating characteristics ('test-parallel-execution.R:119:3') - Reason: On CRAN
+
+8. parallel execution handles few simulations gracefully ('test-parallel-execution.R:186:3') - Reason: On CRAN
+
+9. parallel execution with vs-reference design works ('test-parallel-execution.R:235:3') - Reason: On CRAN
+
+10. parallel execution preserves interval rebalancing ('test-parallel-execution.R:289:3') - Reason: On CRAN
+
+11. both paths handle parallel execution ('test-path-parity.R:151:3') - Reason: On CRAN
+
+12. compute_pp_predictive_cpp is fast ('test-rcpp-equivalence.R:257:3') - Reason: On CRAN
+
+13. compute_hybrid_oc_cpp is fast ('test-rcpp-equivalence.R:471:3') - Reason: On CRAN
+
+14. Rcpp and R implementations produce similar power estimates ('test-rcpp-r-equivalence.R:6:3') - Reason: On CRAN
+
+15. null_between scenario is properly simulated ('test-rcpp-r-equivalence.R:74:3') - Reason: On CRAN
+
+16. antithetic MC draws produce correct sample counts ('test-rcpp-r-equivalence.R:127:3') - Reason: On CRAN
+
+17. conversion decision logic matches R implementation ('test-rcpp-r-equivalence.R:181:3') - Reason: On CRAN
+
+18. BA posterior probability matches between R and C++ for exponential ('test-rcpp-r-equivalence.R:255:3') - Reason: On CRAN
+
+19. BA posterior probability is consistent for PWE models ('test-rcpp-r-equivalence.R:280:3') - Reason: On CRAN
+
+20. PP efficacy SA handles multi-interval PWE correctly ('test-rcpp-r-equivalence.R:315:3') - Reason: On CRAN
+
+21. Median survival computation is consistent ('test-rcpp-r-equivalence.R:370:3') - Reason: On CRAN
+
+22. Edge cases are handled correctly in PWE functions ('test-rcpp-r-equivalence.R:404:3') - Reason: On CRAN
+
+23. single_arm mode runs correctly ('test-trial-modes.R:5:3') - Reason: On CRAN
+
+24. between_arm mode runs correctly ('test-trial-modes.R:72:3') - Reason: On CRAN
+
+25. dual_single_arm mode reports both arms ('test-trial-modes.R:135:3') - Reason: On CRAN
+
+26. hybrid mode still works correctly (regression test) ('test-trial-modes.R:213:3') - Reason: On CRAN
+
+27. efficacy_method and futility_method parameters are validated ('test-trial-modes.R:279:3') - Reason: On CRAN
+
+28. single_arm mode skips BA phase entirely ('test-trial-modes.R:343:3') - Reason: On CRAN
+
+29. between_arm mode skips SA phase entirely ('test-trial-modes.R:422:3') - Reason: On CRAN
+
+30. compute_oc_lambda works with direct hazard input ('test-trial-modes.R:476:3') - Reason: On CRAN
+
+31. compute_oc_lambda validates lambda lengths ('test-trial-modes.R:516:3') - Reason: On CRAN
+
+32. predictive probability methods work for efficacy ('test-trial-modes.R:546:3') - Reason: On CRAN
+
+33. futility_action parameter affects trial behavior ('test-trial-modes.R:587:3') - Reason: On CRAN
+
+══ DONE ════════════════════════════════════════════════════════════════════════
+PASSED 831 FAILED 0 SKIPPED 33 ERRORS 0 WARN 0 
+                              file passed failed skipped error
+1           test_cpp_equivalence.R     18      0       0     0
+2          test-assumption-audit.R     22      0       0     0
+3        test-ba-futility-margin.R      6      0       0     0
+4          test-ba-rule-variants.R      8      0       0     0
+5            test-early-stopping.R      2      0       0     0
+6                test-edge-cases.R     32      0       0     0
+7      test-estimate-vsref-gates.R     10      0       0     0
+8          test-hybrid-ba-margin.R      0      0       5     0
+9          test-hybrid-simulator.R     60      0       0     0
+10           test-model-mismatch.R     26      0       0     0
+11       test-parallel-execution.R      0      0       5     0
+12              test-path-parity.R     15      0       1     0
+13          test-posterior-exact.R     60      0       0     0
+14              test-r-semantics.R     33      0       0     0
+15         test-rcpp-equivalence.R     33      0       2     0
+16       test-rcpp-r-equivalence.R      0      0       9     0
+17          test-return-variance.R     47      0       0     0
+18 test-simulate-chunk-cpp-vsref.R    228      0       0     0
+19       test-simulate-chunk-cpp.R    148      0       0     0
+20     test-simulate-chunk-exact.R     48      0       0     0
+21         test-single-arm-gates.R     11      0       0     0
+22    test-single-arm-regression.R     19      0       0     0
+23              test-trial-modes.R      0      0      11     0
+24                    test-utils.R      4      0       0     0
+25              test-vsref-gates.R      1      0       0     0
+wall seconds 60 

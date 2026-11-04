@@ -320,6 +320,26 @@ rsem_rebalance_cutpoints <- function(event_times, max_follow_up, num_intervals) 
     .Call(`_evolveTrial_simulate_chunk_cpp`, sim_indices, cfg)
 }
 
+.simulate_chunk_exact <- function(sim_indices, cfg, scenario_seed) {
+    .Call(`_evolveTrial_simulate_chunk_exact`, sim_indices, cfg, scenario_seed)
+}
+
+.exact_reduce <- function(blocks, cfg, n_sims) {
+    .Call(`_evolveTrial_exact_reduce`, blocks, cfg, n_sims)
+}
+
+.simulate_chunk_exact_replay <- function(sim_indices, cfg) {
+    .Call(`_evolveTrial_simulate_chunk_exact_replay`, sim_indices, cfg)
+}
+
+.exact_rng_uniforms <- function(scenario_seed, trial, n) {
+    .Call(`_evolveTrial_exact_rng_uniforms`, scenario_seed, trial, n)
+}
+
+.exact_rng_raw <- function(state, n) {
+    .Call(`_evolveTrial_exact_rng_raw`, state, n)
+}
+
 #' Test Rcpp setup
 #'
 #' Simple test function to verify Rcpp and RcppArmadillo are working.

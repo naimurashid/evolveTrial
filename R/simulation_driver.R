@@ -966,6 +966,14 @@ run_simulation_pure <- function(
 
   chunk_results <- list()
 
+  # Phase 2 engine (options(evolveTrial.engine = "exact"); R/simulate_chunk_exact.R). Stops outside the supported set,
+  # then draws the scenario seed (one sample.int call). In the default "cpp" mode nothing here draws or changes.
+  exact_engine <- .exact_engine_selected()
+  if (exact_engine) {
+    .chunk_cpp_assert_supported(environment(), cfg)
+    exact_seed <- .exact_draw_scenario_seed()
+  }
+
   if (isTRUE(parallel_replicates) && num_simulations > 1) {
     # Determine number of workers
     # If external cluster is provided, use its size; otherwise use num_workers/detectCores
@@ -992,7 +1000,11 @@ run_simulation_pure <- function(
                 ") below threshold (", seq_threshold,
                 "); running sequentially for efficiency")
       }
-      chunk_results <- list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
+      chunk_results <- if (exact_engine) {
+        list(.exact_run_sequential(num_simulations, cfg, exact_seed))
+      } else {
+        list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
+      }
     } else {
       chunks <- parallel::splitIndices(num_simulations, workers)
       chunks <- chunks[lengths(chunks) > 0]
@@ -1054,6 +1066,9 @@ run_simulation_pure <- function(
         }
       }
 
+      if (exact_engine) {
+        chunk_results <- list(.exact_run_cluster(cl, num_simulations, cfg, exact_seed, workers))
+      } else {
       seed_list <- replicate(length(chunks), sample.int(.Machine$integer.max, 1L), simplify = TRUE)
 
       chunk_results <- tryCatch(
@@ -1070,9 +1085,14 @@ run_simulation_pure <- function(
           stop("Parallel simulation failed: ", e$message, call. = FALSE)
         }
       )
+      }
     }
   } else {
-    chunk_results <- list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
+    chunk_results <- if (exact_engine) {
+      list(.exact_run_sequential(num_simulations, cfg, exact_seed))
+    } else {
+      list(simulate_chunk(seq_len(num_simulations), seed = NULL, tick = tick_fun))
+    }
   }
 
   aggregate_results(chunk_results)
