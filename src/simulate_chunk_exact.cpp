@@ -647,6 +647,15 @@ struct ExactPost {
     // Review L1: contour_tail returns its best value when the panel budget runs out and flags it only in TailInfo. Stop
     // here, as phase 1 stops on an NaN tally, so an input outside the tested region cannot pass silently. Never seen in
     // the supported set (20,000-case stress run, all 10 G3 designs). g_test_force_nonconverged is a test seam only.
+    // Codex review (P2): a NaN probability (status 2 invalid input, status 3 unresolved tail) used to reach the callers,
+    // where the final analysis read it as inconclusive. Stop rather than decide on a NaN. Status 2 is not reachable in the
+    // supported set (prior shapes and rates finite and > 0, predicate item 13g); status 3 needs a posterior rate below
+    // about 1e-300 together with a posterior shape below about 0.04 (posterior_exact.cpp, huge_scale_tail).
+    if (p.status >= 2) {
+      Rcpp::stop("simulate_chunk_exact: the exact posterior probability is not finite (status %d, method %d, threshold %g, "
+                 "bound %g); the configuration is outside the range the exact engine resolves, use "
+                 "options(evolveTrial.engine = \"cpp\")", p.status, p.info.method, thr, p.info.err_est);
+    }
     if (!p.info.converged || g_test_force_nonconverged) {
       Rcpp::stop("simulate_chunk_exact: the exact posterior quadrature did not converge (threshold %g, %d panels, error "
                  "estimate %g)", thr, p.info.n_panels, p.info.err_est);
@@ -655,7 +664,7 @@ struct ExactPost {
       warned = true;
       Rcpp::warning("Posterior beta parameter is non-positive. Setting to 1e-6.");
     }
-    return want_below ? p.below : p.above;   // status 2: NaN, handled by the callers as phase 1 handles an NA tally
+    return want_below ? p.below : p.above;
   }
   double hc_interim(const Cfg& c, const Slice& s, const std::vector<double>& lens, double thr) {
     return below(c, s, lens, thr, true);   // Pr(med < thr)

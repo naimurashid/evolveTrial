@@ -23,14 +23,17 @@ namespace evt_exact {
 
 // Diagnostics of one tail evaluation (filled when a pointer is passed).
 struct TailInfo {
-  int method = 0;        // 0 closed by an edge rule, 1 pgamma (one distinct scale), 2 contour integral
+  int method = 0;        // 0 closed by an edge rule, 1 pgamma (one distinct scale), 2 contour integral, 3 huge-scale rule
+                         // (a term with scale / c above 1e300: closed form for one term, else the bound B, see
+                         // huge_scale_tail in posterior_exact.cpp; err_est holds B)
   int side = 0;          // contour only: +1 vertex right of the pole (computes the CDF), -1 left (computes the tail)
   int n_terms = 0;       // gamma terms after dropping zero terms and merging equal scales
   int n_eval = 0;        // integrand evaluations
   int n_panels = 0;      // quadrature panels at exit
   double err_est = 0.0;  // quadrature error estimate (sum over panels of |K21 - G10|, divided by pi)
   double round_est = 0.0;// rounding estimate: DBL_EPSILON * integral of |integrand| / pi
-  bool converged = true; // false if the panel budget ran out before err_est met the tolerance
+  bool converged = true; // false if the panel budget ran out before err_est met the tolerance, or (method 3) if the
+                         // bound B exceeded the tolerance (the tail is then NaN)
 };
 
 // Pr(sum_k scale_k * G_k > c), G_k ~ Gamma(shape_k, 1) independent, shape_k >= 0, scale_k >= 0, c > 0 finite.
@@ -39,9 +42,16 @@ struct TailInfo {
 double gamma_sum_upper_tail(const std::vector<double>& shape, const std::vector<double>& scale, double c,
                             TailInfo* info = nullptr);
 
+// The same tail with the scales given as logs (log_scale_k = -Inf for a zero scale; +Inf and NaN invalid), for scales that
+// overflow a double. Used by median_probs only when some w_k / rate_k overflows.
+double gamma_sum_upper_tail_log(const std::vector<double>& shape, const std::vector<double>& log_scale, double c,
+                                TailInfo* info = nullptr);
+
 // status: 0 ok; 1 ok but at least one posterior rate beta_k + PT_k was <= 0 and was replaced by 1e-6, as
 // draw_posterior_hazard_samples_cpp does (it also emits an R warning; the caller decides whether to warn);
-// 2 invalid input (any NaN, negative shape, NaN interval length): both probabilities NaN.
+// 2 invalid input (any NaN, negative shape, NaN interval length): both probabilities NaN;
+// 3 valid input but the tail is not finite (not resolved, see TailInfo method 3): both probabilities NaN. The chunk engine
+// stops on status 2 and 3 (src/simulate_chunk_exact.cpp, ExactPost::below), so a NaN never becomes a silent decision.
 struct MedianProbs {
   double below = 0.0;  // Pr(med < thr)
   double above = 0.0;  // Pr(med > thr)

@@ -35,7 +35,11 @@
     # 12. no progress bar (P13)
     "12 show_progress FALSE" = function() identical(g("show_progress"), FALSE),
     "13b diagnostics FALSE (3.5)" = function() isFALSE(g("diagnostics")),
-    # 13g. looked up by arm name for every arm in arm_names (one arm on the HC path, two on the vs-ref path)
+    # 13g. looked up by arm name for every arm in arm_names (one arm on the HC path, two on the vs-ref path). The prior
+    #     shapes and rates (prior_alpha_params_model, prior_beta_params_model) are the only prior parameters either C++
+    #     engine reads that are not clamped: they must be finite and > 0 (Codex review P2: negative shapes made the exact
+    #     engine report inconclusive where the R body and phase 1 report efficacy). The log-HR prior sd is clamped to
+    #     max(1e-6, sd) by the R body and by .pack_vsref() alike, and the prior mean is a location; V10 keeps both finite.
     "13g well-formed design inputs" = function() {
       cuts <- g("interval_cutpoints_sim"); K <- length(cuts) - 1L
       pa <- g("prior_alpha_params_model"); pb <- g("prior_beta_params_model")
@@ -43,6 +47,7 @@
       is.numeric(cuts) && K >= 1L && all(is.finite(cuts)) && !is.unsorted(cuts) &&
         identical(args$interval_cutpoints_sim, cuts) &&
         is.numeric(pa) && is.numeric(pb) && length(pa) == K && length(pb) == K && all(is.finite(pa)) && all(is.finite(pb)) &&
+        all(pa > 0) && all(pb > 0) &&
         identical(args$prior_alpha_params_model, pa) && identical(args$prior_beta_params_model, pb) &&
         is.numeric(rp) && all(is.finite(rp[arm_names])) && all(rp[arm_names] > 0) && identical(args$randomization_probs, rp) &&
         all(is.finite(sh[arm_names])) && all(sh[arm_names] > 0) && all(is.finite(sc[arm_names])) && all(sc[arm_names] > 0) &&

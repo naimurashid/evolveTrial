@@ -173,6 +173,11 @@
 #'   for key operating characteristics (final events, final time, per-arm
 #'   sample sizes) and return their variances as additional `*_var` columns in
 #'   the summary. Default `FALSE`.
+#' @param random_dropout Logical. `TRUE` (default) gives each patient a random
+#'   dropout (censoring) time drawn uniformly on `(0, censor_max_time_sim)`.
+#'   `FALSE` draws the same uniform and discards it, so the random-number
+#'   stream is unchanged, and leaves only administrative censoring. The C++
+#'   chunk engines support only `FALSE`; with `TRUE` the R body runs.
 #'
 #' @return When `return_percentiles = FALSE` (default), a data frame with one row
 #'   per arm and columns summarising operating characteristics such as type I

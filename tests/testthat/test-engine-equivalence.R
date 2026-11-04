@@ -323,3 +323,39 @@ test_that("P6-off frame with a binding max_trial_time falls back and equals the 
   }
   expect_null(en$noted)
 })
+
+# ---- Codex review (P2): invalid priors and overflowed posterior scales ------------------------------------------------------
+# R01 with zero enrolment caps: the final analysis sees the prior only. (a) Negative prior shapes are outside the supported
+# set (item 13g): the default runs the R body, an explicit exact engine refuses. (b) A prior rate of 1e-310 makes w / rate
+# overflow: the exact engine reaches the R body's decision (final futility) instead of a silent inconclusive. (c) The same
+# with prior shape 0.01 is not resolved by the huge-scale rule: the exact engine stops with an error.
+test_that("Codex P2: invalid priors fall back to the R body; overflowed scales decide as the R body; unresolved tails stop", {
+  en <- ns(".exact_note_env"); en$noted <- NULL
+  on.exit(en$noted <- NULL, add = TRUE)
+  d <- fx("R01"); K <- length(d$base_args$prior_alpha_params_model)
+  zero <- d$base_args$max_total_patients_per_arm; zero[] <- 0
+  dec <- c("Pr_Final_Efficacy", "Pr_Final_Futility", "Pr_Final_Inconclusive")
+  # (a)
+  for (m in list(list(prior_alpha_params_model = rep(-1, K)), list(prior_alpha_params_model = rep(0, K)),
+                 list(prior_beta_params_model = c(0, rep(1, K - 1))))) {
+    mod <- c(list(max_total_patients_per_arm = zero), m)
+    # a zero prior rate makes the R body warn (posterior rate replaced by 1e-6) in every engine that runs it
+    expect_no_message(a <- suppressWarnings(run_design(d, 10L, seed = 3, base_mod = mod)))
+    expect_identical(a, suppressWarnings(run_design(d, 10L, seed = 3, use_cpp = FALSE, base_mod = mod)))
+    expect_identical(a, suppressWarnings(run_design(d, 10L, seed = 3, engine = "cpp", base_mod = mod)))
+    expect_error(run_design(d, 10L, seed = 3, engine = "exact", base_mod = mod), "13g well-formed design inputs")
+  }
+  neg <- run_design(d, 10L, seed = 3, use_cpp = FALSE,
+                    base_mod = list(max_total_patients_per_arm = zero, prior_alpha_params_model = rep(-1, K)))
+  expect_true(all(neg$tab$Pr_Final_Efficacy == 1))   # the R body's decision in the Codex reproduction
+  # (b)
+  mod <- list(max_total_patients_per_arm = zero, prior_alpha_params_model = rep(1, K),
+              prior_beta_params_model = c(1e-310, rep(1, K - 1)))
+  ex <- run_design(d, 10L, seed = 3, base_mod = mod)
+  rb <- run_design(d, 10L, seed = 3, use_cpp = FALSE, base_mod = mod)
+  expect_identical(ex$tab[, dec], rb$tab[, dec])
+  expect_true(all(ex$tab$Pr_Final_Futility == 1))
+  # (c)
+  mod$prior_alpha_params_model <- rep(0.01, K)
+  expect_error(run_design(d, 10L, seed = 3, base_mod = mod), "exact posterior probability is not finite")
+})

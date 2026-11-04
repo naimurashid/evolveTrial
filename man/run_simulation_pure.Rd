@@ -71,7 +71,8 @@ run_simulation_pure(
   progress = interactive(),
   return_percentiles = FALSE,
   percentile_probs = c(0, 0.25, 0.5, 0.75, 0.9, 1),
-  return_variance = FALSE
+  return_variance = FALSE,
+  random_dropout = TRUE
 )
 }
 \arguments{
@@ -306,6 +307,12 @@ gives min, 25th, median, 75th, 90th, and max.}
 for key operating characteristics (final events, final time, per-arm
 sample sizes) and return their variances as additional \verb{*_var} columns in
 the summary. Default \code{FALSE}.}
+
+\item{random_dropout}{Logical. \code{TRUE} (default) gives each patient a random
+dropout (censoring) time drawn uniformly on \code{(0, censor_max_time_sim)}.
+\code{FALSE} draws the same uniform and discards it, so the random-number
+stream is unchanged, and leaves only administrative censoring. The C++
+chunk engines support only \code{FALSE}; with \code{TRUE} the R body runs.}
 }
 \value{
 When \code{return_percentiles = FALSE} (default), a data frame with one row

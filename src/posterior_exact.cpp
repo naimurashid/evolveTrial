@@ -44,6 +44,11 @@ const double kBend = 0.5;          // beta_c: asymptotic slope of the contour, R
 const double kTolAbs = 1e-12;      // target absolute error of the probability (quadrature estimate)
 const double kTailTol = 1e-16;     // bound on the neglected integral beyond Y, as a probability
 const int kMaxPanels = 2000;
+// Largest scaled scale tau = scale / c handed to the contour integral. Above it the contour arithmetic (1 + tau s, tau y)
+// comes within a few decades of overflow; checked against an independent integrate() reference to 1e-11 up to
+// tau = 1e306 and found wrong (silently, converged = TRUE) from 1e307 (dev/perf/phase3/EDGEFIX_REPORT.md). Terms above it
+// go to huge_scale_tail() instead.
+const double kHugeTau = 1e300;
 
 // QUADPACK qk21 abscissae and weights (Kronrod 21 points; Gauss 10 points at the odd-indexed abscissae).
 const double xgk[11] = {0.995657163025808080735527280689003, 0.973906528517171720077964012084452,
@@ -268,6 +273,36 @@ double contour_tail(int n, const double* a, const double* tau, TailInfo* info) {
   return tail;
 }
 
+// Tail when at least one term has log tau_k > log(kHugeTau), with lt_k = log tau_k (finite) and a_k > 0, n >= 1. Nothing
+// here forms tau_k itself, so nothing overflows. With x_k = exp(-lt_k) <= 1e-300, the lower regularized gamma function is
+// P(a, x) = x^a / Gamma(a + 1) * M(a, a + 1, -x) with 1 - a x / (a + 1) <= M <= 1, so log P(a, x) = -a lt - lgamma(a + 1)
+// to a relative error below 1e-300.
+//   * One term: Pr(T > 1) = 1 - P(a, x), computed as -expm1(log P). Exact to rounding.
+//   * Two or more: T <= 1 requires tau_k G_k <= 1 for every huge term k, so Pr(T <= 1) <= B = prod_huge P(a_k, x_k) (the
+//     G_k are independent). If B <= kTolAbs the tail is 1 within the engine's error target and 1 is returned (err_est = B).
+//     Otherwise (a huge term with a posterior shape below about 0.04) the tail is not resolved: NaN with converged = FALSE,
+//     which the engine turns into an error (status 3 in median_probs).
+double huge_scale_tail(int n, const double* a, const double* lt, TailInfo* info) {
+  const double lhuge = std::log(kHugeTau);
+  double logB = 0.0;
+  for (int k = 0; k < n; k++) {
+    if (lt[k] > lhuge) logB += -a[k] * lt[k] - R::lgammafn(a[k] + 1.0);
+  }
+  if (info) {
+    info->method = 3;
+    info->n_terms = n;
+  }
+  if (n == 1) {
+    if (info) info->err_est = 0.0;
+    return -std::expm1(logB);
+  }
+  const double B = std::exp(logB);
+  if (info) info->err_est = B;
+  if (B <= kTolAbs) return 1.0;
+  if (info) info->converged = false;
+  return R_NaN;
+}
+
 }  // namespace
 
 double gamma_sum_upper_tail(const std::vector<double>& shape, const std::vector<double>& scale, double c,
@@ -302,8 +337,42 @@ double gamma_sum_upper_tail(const std::vector<double>& shape, const std::vector<
     if (info) info->method = 1;
     return R::pgamma(c, A[0], T[0], /*lower_tail=*/0, /*log_p=*/0);
   }
+  if (!(T[n - 1] / c <= kHugeTau)) {       // T is sorted: T[n - 1] is the largest scale (T / c may overflow here)
+    std::vector<double> lt(n);
+    const double lc = std::log(c);
+    for (int k = 0; k < n; k++) lt[k] = std::log(T[k]) - lc;
+    return huge_scale_tail(n, A.data(), lt.data(), info);
+  }
   for (int k = 0; k < n; k++) T[k] /= c;   // scale c to 1
   return contour_tail(n, A.data(), T.data(), info);
+}
+
+double gamma_sum_upper_tail_log(const std::vector<double>& shape, const std::vector<double>& log_scale, double c,
+                                TailInfo* info) {
+  if (info) *info = TailInfo();
+  if (shape.size() != log_scale.size() || !(c > 0) || !R_FINITE(c)) return R_NaN;
+  const double lc = std::log(c), lhuge = std::log(kHugeTau);
+  std::vector<double> A, LT;
+  double lmax = R_NegInf;
+  for (size_t k = 0; k < shape.size(); k++) {
+    const double a = shape[k], ls = log_scale[k];
+    if (ISNAN(a) || ISNAN(ls) || a < 0 || !R_FINITE(a) || ls == R_PosInf) return R_NaN;
+    if (a == 0 || ls == R_NegInf) continue;
+    A.push_back(a);
+    LT.push_back(ls - lc);
+    if (LT.back() > lmax) lmax = LT.back();
+  }
+  const int n = (int) A.size();
+  if (n == 0) {
+    if (info) info->method = 0;
+    return 0.0;
+  }
+  if (lmax <= lhuge) {                     // every scale representable well inside the range: the ordinary path
+    std::vector<double> sc(n);
+    for (int k = 0; k < n; k++) sc[k] = std::exp(LT[k] + lc);
+    return gamma_sum_upper_tail(A, sc, c, info);
+  }
+  return huge_scale_tail(n, A.data(), LT.data(), info);
 }
 
 MedianProbs median_probs(const int* E, const double* PT, const double* alpha, const double* beta, const double* lens,
@@ -346,9 +415,9 @@ MedianProbs median_probs(const int* E, const double* PT, const double* alpha, co
   }
   // weights: the part of interval k = [start_k, start_k + lens_k) below thr; the last interval is open-ended.
   // start_k by repeated addition, as current_time += delta_t_j in calculate_median_survival_piecewise_impl.
-  std::vector<double> sh, sc;
+  std::vector<double> sh, sc, ww, rr;
   double start = 0.0;
-  bool infinite = false;
+  bool infinite = false, overflow = false;
   for (int k = 0; k < K; k++) {
     const double end = start + lens[k];
     double w = 0.0;
@@ -362,6 +431,9 @@ MedianProbs median_probs(const int* E, const double* PT, const double* alpha, co
       } else {
         sh.push_back(shape[k]);
         sc.push_back(w / rate[k]);   // w_k lambda_k = (w_k / rate_k) Gamma(shape_k, 1)
+        ww.push_back(w);
+        rr.push_back(rate[k]);
+        if (!(sc.back() <= DBL_MAX)) overflow = true;   // tiny posterior rate: w / rate overflowed
       }
     }
     start = end;
@@ -370,9 +442,15 @@ MedianProbs median_probs(const int* E, const double* PT, const double* alpha, co
   if (infinite) {
     below = 1.0;
     out.info.method = 0;
+  } else if (overflow) {
+    // log scales, so no intermediate overflows (Codex review: w / rate = Inf made the tail NaN with status 0)
+    std::vector<double> ls(sh.size());
+    for (size_t i = 0; i < sh.size(); i++) ls[i] = std::log(ww[i]) - std::log(rr[i]);
+    below = gamma_sum_upper_tail_log(sh, ls, M_LN2, &out.info);
   } else {
     below = gamma_sum_upper_tail(sh, sc, M_LN2, &out.info);
   }
+  if (!R_FINITE(below)) out.status = 3;   // never a silent NaN: the engine stops on status 3
   out.below = below;
   out.above = 1.0 - below;
   return out;

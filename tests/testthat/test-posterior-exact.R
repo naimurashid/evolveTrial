@@ -138,3 +138,66 @@ test_that("between-arm probabilities are pnorm on the Laplace output, with rnorm
   expect_identical(unname(lp(0.2, 0, c(0.1, 0.2, 0.3))), cbind(c(1, 1, 0), c(0, 0, 1)))
   expect_identical(unname(lp(Inf, 1, 5)[1, ]), c(1, 0))
 })
+
+# ---- Codex review (P2): posterior scales near and beyond the double range ------------------------------------------------
+# Pr(S <= c) for S = sc1 G1 + sc2 G2 with sc1 given as its log, so a scale that overflows a double can be referenced:
+# Pr(S <= c) = (c / sc1)^a1 / Gamma(a1 + 1) * int_0^1 exp(-u c / sc1) P(a2, (1 - u) c / sc2) dv,  u = v^(1 / a1),
+# integrated in pieces with breakpoints crowding v = 1, where the inner factor can change sharply. Independent of the
+# C++ code (stats::integrate and pgamma only).
+ref_two_log <- function(sh, lsc1, sc2, c = log(2)) {
+  a1 <- sh[1]; lt1 <- lsc1 - log(c); t2 <- sc2 / c
+  g <- function(v) { u <- v^(1 / a1); exp(-u * exp(-lt1) + pgamma((1 - u) / t2, sh[2], log.p = TRUE)) }
+  br <- sort(unique(c(0, (1e-6 + 0:20 / 20)^a1, 1 - 10^-(1:14), 1)))
+  br <- br[br >= 0 & br <= 1]
+  I <- 0
+  for (j in seq_len(length(br) - 1L)) {
+    I <- I + stats::integrate(g, br[j], br[j + 1L], rel.tol = 1e-13, abs.tol = 1e-17, subdivisions = 5000L,
+                              stop.on.error = FALSE)$value
+  }
+  exp(-a1 * lt1 - lgamma(a1 + 1)) * I
+}
+
+test_that("Codex overflow case: a posterior scale w / rate that overflows gives the correct tail, not NaN", {
+  pm <- ns(".exact_pr_median")
+  # the reproduction: shape 1, rate 1e-310, no events or person-time, threshold 1 (one positive weight, w = 1)
+  g <- pm(c(0L, 0L, 0L), c(0, 0, 0), c(1, 1, 1), c(1e-310, 1, 1), c(2, 2, 2), 1)
+  expect_identical(g$status, 0L)
+  expect_identical(g$method, 3L)
+  expect_identical(c(g$below, g$above), c(1, 0))
+  expect_identical(g$below, pgamma(log(2) * 1e-310, 1, lower.tail = FALSE))   # R: Pr(G > c rate / w)
+  # one term, tiny shape: the closed form matches R's pgamma on the scaled (subnormal) argument
+  g <- pm(0L, 0, 0.01, 1e-310, 3, 2)
+  expect_identical(g$status, 0L)
+  expect_lt(abs(g$below - pgamma(log(2) * 1e-310 / 2, 0.01, lower.tail = FALSE)), 1e-15)
+  expect_lt(g$below, 1 - 1e-4)                                                 # not "effectively 1" for this shape
+  # several terms, one of them overflowed: Pr(S <= log 2) <= B = (c rate / w)^a / Gamma(a + 1) <= 1e-12, tail 1
+  g <- pm(c(0L, 2L, 1L), c(0, 4, 3), c(1, 1, 1), c(1e-310, 1, 1), c(0.5, 0.5, 2), 1.7)
+  expect_identical(g$status, 0L)
+  expect_identical(g$method, 3L)
+  expect_identical(c(g$below, g$above), c(1, 0))
+  expect_lte(g$err_est, 1e-12)
+  expect_lt(abs(g$below - (1 - ref_two_log(c(1, 3), log(0.5) - log(1e-310), 0.5 / 5))), 1e-12)
+  # several terms, a tiny shape on the overflowed term: the bound is not below the tolerance, status 3 and NaN
+  g <- pm(c(0L, 2L), c(0, 4), c(0.01, 0.01), c(1e-310, 1), c(0.5, 2), 1.7)
+  expect_identical(g$status, 3L)
+  expect_false(g$converged)
+  expect_true(is.nan(g$below) && is.nan(g$above))
+})
+
+test_that("extreme but valid scales: contour below 1e300, huge-scale rule above, against integrate", {
+  gst <- ns(".exact_gamma_sum_tail")
+  # contour path (scale / c up to 1e299), shapes down to 0.01; the contour was checked to 1e-11 up to 1e306
+  for (a1 in c(0.01, 1)) for (t1 in c(1e2, 1e150, 1e299)) for (sc2 in c(0.3, 2)) {
+    g <- gst(c(a1, 1), c(t1, sc2), 1)
+    expect_identical(g$method, 2L)
+    expect_lt(abs(g$tail - (1 - ref_two_log(c(a1, 1), log(t1), sc2, 1))), 1e-10)
+  }
+  # huge-scale rule (scale / c above 1e300): tail 1 within the bound, which is below 1e-12 for these shapes
+  for (a1 in c(0.05, 1)) for (t1 in c(1e301, 1e305)) {
+    g <- gst(c(a1, 1), c(t1, 0.3), 1)
+    expect_identical(g$method, 3L)
+    expect_identical(g$tail, 1)
+    expect_lte(g$err_est, 1e-12)
+    expect_lt(abs(g$tail - (1 - ref_two_log(c(a1, 1), log(t1), 0.3, 1))), 1e-12)
+  }
+})

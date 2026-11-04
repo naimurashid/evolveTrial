@@ -24,6 +24,14 @@ branch.
   engine. Default calls run the R body with the amd8 chronology.
 * `random_dropout` keeps its default `TRUE`, the uniform dropout censoring that
   main's chronology tests assume.
+* **Exact engine edge cases (Codex review, two P2 items).** The supported set
+  now requires every prior shape and rate (`prior_alpha_params_model`,
+  `prior_beta_params_model`) to be finite and `> 0`; other frames run the R body
+  under the default and stop under an explicit `engine = "exact"`. A posterior
+  scale `w / rate` that overflows (posterior rate near `1e-310`) is handled in
+  log space and gives the correct tail, and an exact probability that is not
+  finite now stops the run with an error instead of reading as inconclusive.
+  `random_dropout` is now documented in `?run_simulation_pure`.
 
 # evolveTrial 0.0.0.9002 (engine branch: exact engine as default)
 
