@@ -123,6 +123,17 @@ enrolment time is NaN, which needs both to be infinite. The difference of two fi
 frames have finite arrival times (a rate of 2 per month). The 12 goldens, layer 1 and the gate B subset are unchanged
 bit for bit after the fix.
 
+### 3a. Pre-set confirmation (p31c, PI ruling 2026-11-04)
+
+Sizes fixed at the extended readout's final sizes, new seeds 3140xxx (R body) and 3141xxx (exact), installed 0.0.0.9004
+(`p31c_gateS.sh`, `p31c_gateS_report.tsv`). Result 4 of 5 frames. B02, B07, B15 and B20 pass on every statistic (B20 EN0
+now z 7.1 and 4.5). B16 fails on EN under the alternative only: R body 4.981, exact 4.953, diff -0.028 against a margin
+of 0.050, se 0.018, z_lo 1.19, test power 0.72 at this size. The first readout's diff on the same statistic was +0.049,
+the opposite sign. Per the PI's rule the 0.0.0.9003 backup was restored into `~/R/library` and P3-1 reopened on this
+one frame. PI ruling: rerun B16 alone, sized in advance for test power at least 0.95 (`p31d_gateS_B16.sh`: R body
+200,000, exact 1,600,000, se about 0.013, test power about 0.97, seeds 3150xxx and 3151xxx, library built from 325c664).
+Reinstall 0.0.0.9004 only if it passes.
+
 ## 4. Mismatches with the brief or plan
 
 1. The stale comments P3-0 placed at merged lines 579 and 588 are at lines 584 and 593 of c936bde. Both
