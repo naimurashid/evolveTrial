@@ -311,7 +311,9 @@ run_simulation_pure <- function(
       is.na(looks_stop_at_final)) {
     stop("`looks_stop_at_final` must be TRUE or FALSE.", call. = FALSE)
   }
-  .warn_unset_final_success_threshold(arm_names, median_pfs_success_threshold_arms)
+  # The per-arm final success threshold is used only without a reference comparison (vs-reference final success
+  # uses the vs-reference probabilities instead).
+  if (!isTRUE(compare_arms_option)) .warn_unset_final_success_threshold(arm_names, median_pfs_success_threshold_arms)
 
   # Auto-detect optimal cluster type: FORK on Unix (faster), PSOCK on Windows
   if (cluster_type == "auto") {
