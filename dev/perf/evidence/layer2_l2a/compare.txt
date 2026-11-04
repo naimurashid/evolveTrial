@@ -1,0 +1,3 @@
+[layer2] 75 outputs, 75 in reference, 75 match, 75 pass; engine_ok 75, checks_ok 75, dev 75, force_r 0, duplicate 0, missing 0; engine 1c918711f48c411fecd1c1dad7e1bdd799171fd9; R R version 4.5.0 (2025-04-11)
+[layer2] PASS (75 of 75) 
+compare exit 0
