@@ -1,10 +1,15 @@
 # simulate_chunk_exact.R -- R side of the phase 2 chunk engine (engine speed-up phase 2, step P2-2; plan
 # dev/plans/2026-11-04-phase2-plan.md Section 1 items 2 and 3, report dev/perf/phase2/P2-2_REPORT.md).
 #
-# Selection: options(evolveTrial.engine = "cpp") (the default, phase 1, bit-identical to the R body) or "exact" (phase 2,
-# src/simulate_chunk_exact.cpp). evolveTrial.use_cpp_engine = FALSE still selects the R body whatever the engine option.
-# In "exact" mode run_simulation_pure():
-#   1. stops unless the frame is in the phase 1 supported set (.chunk_cpp_assert_supported; never falls back);
+# Selection: options(evolveTrial.engine = "exact") (phase 2, src/simulate_chunk_exact.cpp; the default since 0.0.0.9002,
+# PI ruling 2026-11-04) or "cpp" (phase 1, bit-identical to the R body). evolveTrial.use_cpp_engine = FALSE still selects
+# the R body whatever the engine option.
+# The option unset (NULL) means the default. Under the default, a frame outside the phase 1 supported set falls back
+# silently to the phase 1 dispatcher (C++ body or R body), exactly as "cpp" does, and the L2 notice stays silent. Only an
+# explicit options(evolveTrial.engine = "exact") makes an unsupported frame stop and makes the L2 notice fire.
+# In "exact" mode (explicit, or the default on a supported frame) run_simulation_pure():
+#   1. when the option is explicit, stops unless the frame is in the phase 1 supported set (.chunk_cpp_assert_supported;
+#      never falls back);
 #   2. draws the scenario seed with one call sample.int(.Machine$integer.max, 2L, replace = TRUE), so set.seed() before
 #      the call reproduces the result; nothing else is drawn from R's generator;
 #   3. runs trials 1..num_simulations through .simulate_chunk_exact in blocks of getOption("evolveTrial.exact_block_size")
@@ -17,20 +22,23 @@
 
 # TRUE when the phase 2 engine is selected. Reads options only (draws nothing).
 .exact_engine_selected <- function() {
-  eng <- getOption("evolveTrial.engine", "cpp")
+  eng <- getOption("evolveTrial.engine", "exact")
   if (!(is.character(eng) && length(eng) == 1L && !is.na(eng) && eng %in% c("cpp", "exact"))) {
     stop("options(evolveTrial.engine) must be \"cpp\" or \"exact\"", call. = FALSE)
   }
   identical(eng, "exact") && isTRUE(getOption("evolveTrial.use_cpp_engine", TRUE))
 }
 
+# TRUE when the caller set options(evolveTrial.engine) to any value; FALSE when it is unset (the default applies).
+.exact_engine_explicit <- function() !is.null(getOption("evolveTrial.engine"))
+
 # One-time notice (review L2) for a caller who set options(evolveTrial.engine = "exact") on a path that does not use the
 # exact engine: run_simulation_pure with use_cpp_engine = FALSE, and the other simulators (hybrid, binary). Reads options
-# and prints one message per R session; it draws nothing, so R's random stream is untouched. Silent in the default "cpp"
-# mode and whenever the exact engine is in use.
+# and prints one message per R session; it draws nothing, so R's random stream is untouched. Silent when the option is
+# unset (the default "exact" is not a request), in "cpp" mode, and whenever the exact engine is in use.
 .exact_note_env <- new.env(parent = emptyenv())
 .exact_requested <- function() {
-  eng <- getOption("evolveTrial.engine", "cpp")
+  eng <- getOption("evolveTrial.engine")   # no default on purpose: unset is not an explicit request
   is.character(eng) && length(eng) == 1L && !is.na(eng) && identical(eng, "exact")
 }
 .exact_note_unused <- function(reason) {

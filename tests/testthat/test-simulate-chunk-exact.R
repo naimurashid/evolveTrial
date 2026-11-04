@@ -349,7 +349,7 @@ test_that("L2: engine 'exact' on a path without the exact engine gives one messa
     ba <- d$base_args; ba$num_simulations <- 20L; ba$parallel_replicates <- FALSE
     run_scenarios(ba, d$scens, seed = 3, return_variance = TRUE)
   }
-  # default "cpp" engine: silent, and the notice stays armed
+  # explicit "cpp" engine (no longer the default since 0.0.0.9002): silent, and the notice stays armed
   expect_no_message(run())
   expect_null(en$noted)
   # exact engine in use: silent

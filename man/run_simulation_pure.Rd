@@ -318,3 +318,22 @@ will load the installed package version, not the development code. For
 testing development changes, either use \code{parallel_replicates = FALSE} or
 reinstall the package with \code{devtools::install()}.
 }
+\section{Simulation engine}{
+
+\code{options(evolveTrial.engine)} selects the chunk engine. The default
+(option unset) is \code{"exact"}: posterior stopping probabilities are
+computed in closed form instead of from Monte Carlo posterior draws, and
+each trial's result depends only on the scenario seed and the trial index,
+so results are identical for any \code{num_workers} and block size. On
+configurations outside the supported set of the C++ engines (and when
+\code{options(evolveTrial.use_cpp_engine = FALSE)}), the default falls back
+silently to the draw-based engine. The supported set requires
+\code{options(evolveTrial.looks_stop_at_final = TRUE)}, whose own default is
+\code{FALSE}. \code{options(evolveTrial.engine = "cpp")}
+selects the draw-based C++ engine, which is bit-identical to the R body
+(\code{options(evolveTrial.use_cpp_engine = FALSE)}). Setting
+\code{options(evolveTrial.engine = "exact")} explicitly makes an
+unsupported configuration an error rather than a fallback, and prints a
+one-time notice on paths that do not use the exact engine.
+}
+

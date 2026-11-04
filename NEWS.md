@@ -1,3 +1,35 @@
+# evolveTrial 0.0.0.9002
+
+## Changes to defaults
+
+* **The exact chunk engine is now the default.** With `options(evolveTrial.engine)`
+  unset, `run_simulation_pure()` and `run_scenarios()` compute posterior
+  stopping probabilities in closed form (the phase 2 engine,
+  `src/simulate_chunk_exact.cpp`) instead of from Monte Carlo posterior draws.
+  This is the infinite-draw limit of the previous rule, so operating
+  characteristics agree within Monte Carlo error; finite-draw runs stop slightly
+  more often for futility. Results at a given seed differ from 0.0.0.9001, and
+  they no longer depend on `num_workers` or the block size. PI ruling 2026-11-04.
+  The supported set requires `options(evolveTrial.looks_stop_at_final = TRUE)`;
+  that option still defaults to `FALSE`, so a call with every option at its
+  default still runs the R body, unchanged.
+* Configurations outside the supported set of the C++ engines (hybrid,
+  seamless, binary and unsupported single-arm or between-arm frames) fall back
+  silently to the draw-based engine under the default, as before. The one-time
+  "exact is set but unused" notice now fires only when the option was set
+  explicitly, and only an explicit `options(evolveTrial.engine = "exact")` turns
+  an unsupported configuration into an error.
+* `options(evolveTrial.engine = "cpp")` restores the draw-based C++ engine,
+  bit-identical to the R body (`options(evolveTrial.use_cpp_engine = FALSE)`).
+
+## Tests
+
+* New `tests/testthat/test-engine-equivalence.R`: draw-based engine against the
+  R body, exact tail probabilities against the original R posterior samplers,
+  exact against R-body operating characteristics within Monte Carlo
+  tolerances, golden-value snapshots of both engines, and default selection.
+  Larger versions run when `EVOLVETRIAL_LONG_TESTS` is set.
+
 # evolveTrial 0.0.0.9001
 
 ## Bug Fixes
